@@ -1,0 +1,1016 @@
+openapi: 3.1.0
+info:
+  title: LoomTable Server API
+  version: 0.1.0
+  description: |
+    LoomTable Server 的初版 REST API 合同。
+    Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
+  license:
+    name: AGPL-3.0
+servers:
+  - url: http://localhost:3000
+    description: Personal 本地服务示例
+  - url: '{serverUrl}'
+    description: 用户配置的 LoomTable Server
+    variables:
+      serverUrl:
+        default: http://localhost:3000
+tags:
+  - name: Meta
+  - name: Workspaces
+  - name: Bases
+  - name: Tables
+  - name: Fields
+  - name: Views
+  - name: Records
+  - name: Changes
+  - name: Attachments
+security:
+  - bearerAuth: []
+paths:
+  /v1/meta:
+    get:
+      tags: [Meta]
+      operationId: getServerMeta
+      security: []
+      responses:
+        '200':
+          description: Server capability and compatibility information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerMeta'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/workspaces:
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaces
+      responses:
+        '200':
+          description: Workspaces visible to the authenticated actor
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workspace'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Workspaces]
+      operationId: createWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceRequest'
+      responses:
+        '201':
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/bases:
+    get:
+      tags: [Bases]
+      operationId: listBases
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Bases in a Workspace
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Base'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Bases]
+      operationId: createBase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBaseRequest'
+      responses:
+        '201':
+          description: Base created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Base'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables:
+    get:
+      tags: [Tables]
+      operationId: listTables
+      parameters:
+        - $ref: '#/components/parameters/BaseId'
+      responses:
+        '200':
+          description: Tables in a Base
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Table'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Tables]
+      operationId: createTable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTableRequest'
+      responses:
+        '201':
+          description: Table created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Tables]
+      operationId: getTable
+      responses:
+        '200':
+          description: Table metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      tags: [Tables]
+      operationId: updateTable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNameRequest'
+      responses:
+        '200':
+          description: Table updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Tables]
+      operationId: deleteTable
+      responses:
+        '204':
+          description: Table moved to the recycle state
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/fields:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Fields]
+      operationId: listFields
+      responses:
+        '200':
+          description: Fields in a Table
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Field'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Fields]
+      operationId: createField
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFieldRequest'
+      responses:
+        '201':
+          description: Field created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Field'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/fields/{fieldId}:
+    parameters:
+      - $ref: '#/components/parameters/FieldId'
+    patch:
+      tags: [Fields]
+      operationId: updateField
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFieldRequest'
+      responses:
+        '200':
+          description: Field updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Field'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Fields]
+      operationId: deleteField
+      responses:
+        '204':
+          description: Field moved to the recycle state
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/views:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Views]
+      operationId: listViews
+      responses:
+        '200':
+          description: Views in a Table
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/View'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Views]
+      operationId: createView
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateViewRequest'
+      responses:
+        '201':
+          description: View created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    get:
+      tags: [Views]
+      operationId: getView
+      responses:
+        '200':
+          description: View configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      tags: [Views]
+      operationId: updateView
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateViewRequest'
+      responses:
+        '200':
+          description: View updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Views]
+      operationId: deleteView
+      responses:
+        '204':
+          description: View deleted
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/records/query:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Records]
+      operationId: queryRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: A cursor page of records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/records/mutate:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Records]
+      operationId: mutateRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MutationRequest'
+      responses:
+        '200':
+          description: Per-command mutation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResult'
+        '409':
+          description: At least one command has a revision conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/changes:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Changes]
+      operationId: pullChanges
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Changes after the supplied cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangePage'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/attachments/init:
+    post:
+      tags: [Attachments]
+      operationId: initializeAttachment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitializeAttachmentRequest'
+      responses:
+        '201':
+          description: Attachment metadata initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/attachments/{attachmentId}:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentId'
+    get:
+      tags: [Attachments]
+      operationId: getAttachment
+      responses:
+        '200':
+          description: Attachment metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Attachments]
+      operationId: deleteAttachment
+      responses:
+        '204':
+          description: Attachment reference removed; physical cleanup may be deferred
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/attachments/{attachmentId}/content:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentId'
+    put:
+      tags: [Attachments]
+      operationId: uploadAttachmentContent
+      requestBody:
+        required: true
+        content:
+          application/octet-stream: {}
+      responses:
+        '204':
+          description: Attachment content stored
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    get:
+      tags: [Attachments]
+      operationId: downloadAttachmentContent
+      responses:
+        '200':
+          description: Attachment content
+          content:
+            application/octet-stream: {}
+            image/*: {}
+            application/pdf: {}
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: query
+      required: true
+      schema:
+        type: string
+    BaseId:
+      name: baseId
+      in: query
+      required: true
+      schema:
+        type: string
+    TableId:
+      name: tableId
+      in: path
+      required: true
+      schema:
+        type: string
+    FieldId:
+      name: fieldId
+      in: path
+      required: true
+      schema:
+        type: string
+    ViewId:
+      name: viewId
+      in: path
+      required: true
+      schema:
+        type: string
+    AttachmentId:
+      name: attachmentId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    ErrorResponse:
+      description: LoomTable API error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ServerMeta:
+      type: object
+      required: [serverVersion, apiVersion, minPluginVersion, capabilities]
+      properties:
+        serverVersion:
+          type: string
+        apiVersion:
+          type: string
+          example: v1
+        minPluginVersion:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        migrationRequired:
+          type: boolean
+
+    Workspace:
+      type: object
+      required: [id, name, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Base:
+      type: object
+      required: [id, workspaceId, name, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Table:
+      type: object
+      required: [id, baseId, name, primaryFieldId, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        baseId: { type: string }
+        name: { type: string }
+        primaryFieldId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Field:
+      type: object
+      required: [id, tableId, name, type, position, schemaVersion, config]
+      properties:
+        id: { type: string }
+        tableId: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment, relation, email, noteLink, formula, lookup, rollup]
+        position:
+          type: integer
+          minimum: 0
+        schemaVersion:
+          type: integer
+          minimum: 1
+        config:
+          type: object
+          additionalProperties: true
+        deletedAt:
+          type: string
+          format: date-time
+
+    View:
+      type: object
+      required: [id, tableId, name, type, config, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tableId: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [grid, map, kanban, gallery, calendar, form]
+        config:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Record:
+      type: object
+      required: [id, tableId, revision, values, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tableId: { type: string }
+        revision:
+          type: integer
+          minimum: 1
+        values:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt:
+          type: string
+          format: date-time
+
+    Attachment:
+      type: object
+      required: [id, source, filename, createdAt]
+      properties:
+        id: { type: string }
+        source:
+          type: string
+          enum: [managed, vault]
+        filename: { type: string }
+        mimeType: { type: string }
+        size:
+          type: integer
+          minimum: 0
+        storageKey: { type: string }
+        vaultPath: { type: string }
+        hash: { type: string }
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        createdAt: { type: string, format: date-time }
+
+    CreateWorkspaceRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+
+    CreateBaseRequest:
+      type: object
+      required: [workspaceId, name]
+      properties:
+        workspaceId: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+
+    CreateTableRequest:
+      type: object
+      required: [baseId, name]
+      properties:
+        baseId: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        createDefaultView:
+          type: boolean
+          default: true
+
+    UpdateNameRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+
+    CreateFieldRequest:
+      type: object
+      required: [tableId, name, type]
+      properties:
+        tableId: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        type:
+          type: string
+          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment, relation, email, noteLink]
+        config:
+          type: object
+          additionalProperties: true
+
+    UpdateFieldRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        config:
+          type: object
+          additionalProperties: true
+        migrationToken:
+          type: string
+
+    CreateViewRequest:
+      type: object
+      required: [tableId, name, type]
+      properties:
+        tableId: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        type:
+          type: string
+          enum: [grid, map]
+        config:
+          type: object
+          additionalProperties: true
+
+    UpdateViewRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        config:
+          type: object
+          additionalProperties: true
+
+    QueryRequest:
+      type: object
+      properties:
+        viewId: { type: string }
+        cursor: { type: string }
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+        projection:
+          type: array
+          items: { type: string }
+        filter:
+          $ref: '#/components/schemas/FilterNode'
+        sort:
+          type: array
+          items:
+            $ref: '#/components/schemas/SortSpec'
+        search:
+          type: string
+
+    FilterNode:
+      oneOf:
+        - $ref: '#/components/schemas/FilterGroup'
+        - $ref: '#/components/schemas/FilterRule'
+
+    FilterGroup:
+      type: object
+      required: [kind, operator, children]
+      properties:
+        kind:
+          const: group
+        operator:
+          type: string
+          enum: [and, or]
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterNode'
+
+    FilterRule:
+      type: object
+      required: [kind, fieldId, operator]
+      properties:
+        kind:
+          const: rule
+        fieldId: { type: string }
+        operator:
+          type: string
+          enum: [is, isNot, isEmpty, isNotEmpty, contains, notContains, startsWith, endsWith, greaterThan, greaterOrEqual, lessThan, lessOrEqual, includes, excludes]
+        value: {}
+
+    SortSpec:
+      type: object
+      required: [fieldId, direction]
+      properties:
+        fieldId: { type: string }
+        direction:
+          type: string
+          enum: [asc, desc]
+        nulls:
+          type: string
+          enum: [first, last]
+          default: last
+
+    QueryResult:
+      type: object
+      required: [items, changeCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Record'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+        changeCursor:
+          type: string
+        totalEstimate:
+          type: integer
+
+    MutationRequest:
+      type: object
+      required: [clientMutationId, commands]
+      properties:
+        clientMutationId: { type: string }
+        commands:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/MutationCommand'
+
+    MutationCommand:
+      oneOf:
+        - $ref: '#/components/schemas/CreateRecordCommand'
+        - $ref: '#/components/schemas/UpdateRecordCommand'
+        - $ref: '#/components/schemas/DeleteRecordCommand'
+        - $ref: '#/components/schemas/RestoreRecordCommand'
+
+    CreateRecordCommand:
+      type: object
+      required: [kind, values]
+      properties:
+        kind: { const: createRecord }
+        values:
+          type: object
+          additionalProperties: true
+
+    UpdateRecordCommand:
+      type: object
+      required: [kind, recordId, expectedRevision, changes]
+      properties:
+        kind: { const: updateRecord }
+        recordId: { type: string }
+        expectedRevision:
+          type: integer
+          minimum: 1
+        changes:
+          type: object
+          additionalProperties: true
+
+    DeleteRecordCommand:
+      type: object
+      required: [kind, recordId, expectedRevision]
+      properties:
+        kind: { const: deleteRecord }
+        recordId: { type: string }
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    RestoreRecordCommand:
+      type: object
+      required: [kind, recordId, expectedRevision]
+      properties:
+        kind: { const: restoreRecord }
+        recordId: { type: string }
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    MutationResult:
+      type: object
+      required: [clientMutationId, results]
+      properties:
+        clientMutationId: { type: string }
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommandResult'
+
+    CommandResult:
+      type: object
+      required: [index, status]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [applied, rejected, conflict]
+        record:
+          $ref: '#/components/schemas/Record'
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+
+    ConflictResponse:
+      type: object
+      required: [code, conflicts]
+      properties:
+        code:
+          const: CONFLICT
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConflictBody'
+
+    ConflictBody:
+      type: object
+      required: [recordId, expectedRevision, currentRevision, currentValues]
+      properties:
+        recordId: { type: string }
+        expectedRevision:
+          type: integer
+        currentRevision:
+          type: integer
+        currentValues:
+          type: object
+          additionalProperties: true
+        submittedChanges:
+          type: object
+          additionalProperties: true
+
+    ChangePage:
+      type: object
+      required: [items, nextCursor, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Change'
+        nextCursor: { type: string }
+        hasMore: { type: boolean }
+
+    Change:
+      type: object
+      required: [id, kind, tableId, revision, occurredAt]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, schemaChanged, viewChanged]
+        tableId: { type: string }
+        recordId: { type: string }
+        revision: { type: integer }
+        actorId: { type: string }
+        occurredAt: { type: string, format: date-time }
+
+    InitializeAttachmentRequest:
+      type: object
+      required: [source, filename]
+      properties:
+        source:
+          type: string
+          enum: [managed, vault]
+        filename: { type: string }
+        mimeType: { type: string }
+        size:
+          type: integer
+          minimum: 0
+        vaultPath: { type: string }
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+        details:
+          type: object
+          additionalProperties: true
