@@ -26,5 +26,5 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 - 第一阶段不要求 Redis、Kafka、RabbitMQ 或独立对象存储。
 - API 合同由 `docs/api/openapi.yaml` 定义，并导入 Apifox。
 
-许可证：AGPL-3.0。
+许可证：GPL-3.0。
 

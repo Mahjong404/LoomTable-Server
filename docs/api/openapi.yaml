@@ -6,7 +6,7 @@ info:
     LoomTable Server 的初版 REST API 合同。
     Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
   license:
-    name: AGPL-3.0
+    name: GPL-3.0
 servers:
   - url: http://localhost:3000
     description: Personal 本地服务示例
