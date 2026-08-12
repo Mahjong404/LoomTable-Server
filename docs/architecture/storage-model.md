@@ -43,7 +43,9 @@ record
 ├── created_at
 ├── updated_at
 ├── deleted_at
-└── values JSONB
+├── values JSONB
+├── query_values JSONB（内部派生，不进入 API）
+└── search_text TEXT（内部派生，不进入 API）
 ```
 
 示例值：
@@ -64,6 +66,8 @@ record
 
 普通 Field 值使用 JSONB 作为第一阶段规范存储。Field Definition 单独保存类型、配置和版本。
 
+`query_values` 和 `search_text` 是由 Go Field Type Registry 从 Canonical `values` 生成的可重建查询投影，并与 Record Mutation 在同一事务内更新。它们保存统一 Unicode Case-Fold、类型化和坐标查询键，不成为新的事实来源，也不在 API 中返回。Select Option Rank 从当前 Field Config 取得，Option 重排无需重写全部 Record。
+
 `values` 对象的键必须是稳定的 Field ID，而不是 Field 名称。Field 改名只改变 Field Definition 的名称，不需要重写 Record 值。
 
 缺失的 Field ID 表示 Unset Cell；显式 `null`、空字符串、空数组等仍是已经写入的值，并按对应 Field Type 的规则校验。更新 Record 时，`set` 写入或替换值，`unsetFieldIds` 删除键；请求中未出现的 Field 保持不变。
@@ -80,11 +84,13 @@ Personal Server 的稳定 Actor 与 Access Token 哈希都保存在 PostgreSQL�
 
 Token Secret 默认由 32 字节 CSPRNG 生成并编码为 `ltp_` 加 Base64URL；数据库只保存 SHA-256，不保存明文。管理命令是 `loomtable-admin auth bootstrap/create/list/revoke`，明文仅在创建时显示一次。
 
-Token 名称保存规范化后的值及用于 Active 唯一性的 locale-neutral Unicode case-fold key；活动 Token 名称在同一 Actor 内唯一。Bootstrap 只负责首次 Actor 和首个 Token，后续 Token 由 Create 命令生成，撤销最后一个 Token也是合法操作。
+Token 名称保存规范化后的值及用于 Active 唯一性的 locale-neutral Unicode case-fold key；活动 Token 名称在同一 Actor 内唯一。Bootstrap 只负责首次 Actor 和首个 Token，后续 Token 由 Create 命令生成，撤销最后一个 Token 也是合法操作。
+
+Cursor/Query Snapshot Token 的 32 字节 CSPRNG HMAC Key 保存于 PostgreSQL `server_secrets`，随数据库备份恢复。Token 使用按用途隔离的版本化 HMAC-SHA256，Secret 不进入日志、API 或 Manifest 明文。
 
 ## 查询索引和空间边界
 
-普通 Record Query 使用 30 分钟 TTL 的无状态 Keyset Cursor；数据库不为分页持有长事务或成员快照。稳定 Sort 总是追加 `record.id ASC`。具体 Filter/Sort 使用参数化 SQL，JSONB 热点在 20k Records 基准后按需增加表达式或投影索引。
+普通 Record Query 使用 30 分钟 TTL 的无状态 Keyset Cursor；数据库不为分页持有长事务或成员快照。每页使用一个短期只读 Repeatable Read Transaction，使该页 Records、`changeCursor` 和首页面 `totalCount` 一致。稳定 Sort 总是追加 `record.id ASC`。具体 Filter/Sort 使用参数化 SQL，查询投影热点按实际基准增加表达式或投影索引。
 
 P0 不安装 PostGIS。Location 的 WGS 84 `lat`/`lng` 继续存入 JSONB，矩形视口查询通过安全的数值提取完成，Server 应用层执行最多 500 Feature 的自适应聚类。`geoWithin`、Polygon 等后续空间条件出现时再重新评估 PostGIS。
 
@@ -129,3 +135,5 @@ Attachment API 和存储模型在 P0 保留为扩展合同，但 `attachments` c
 - 物理清理需要引用计数、保留期和可恢复备份策略。
 
 Change 和幂等结果由 Server 启动时及每 24 小时运行的有界后台任务按配置保留期清理；`forever` 完全禁用该清理。该任务不依赖外部 Scheduler。
+
+清理任务使用 PostgreSQL Advisory Lock，按数据库时钟计算 Cutoff；每类数据每次最多 10 批、每批 10,000 条，并以短事务提交。Personal Workspace 保存 `actor_id`，所有后代通过祖先继承访问边界；P0 不建立资源级 ACL 或 Membership 表。

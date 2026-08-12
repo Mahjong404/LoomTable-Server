@@ -6,7 +6,7 @@
 
 | Canonical ID | English | 简体中文 | Avoid | 说明 |
 |---|---|---|---|---|
-| workspace | Workspace | 工作空间 | 账户、项目空间 | 用户或团队的数据容器 |
+| workspace | Workspace | 工作空间 | 账户、项目空间 | Base 及其数据的容器；Personal 中由一个 Actor 持有，后代继承访问边界 |
 | base | Base | Base（多维表） | 数据库、数据源 | 包含多张数据表的逻辑空间 |
 | table | Table | 数据表 | 表格、页面 | 由字段和记录组成的数据集合 |
 | view | View | 视图 | 页面、副本 | 同一数据表的查询和展示配置 |
@@ -58,6 +58,7 @@
 | recycle-state | Recycle State | 回收状态 | 硬删除、回收站副本 | 可发现并恢复的软删除对象状态 |
 | actor | Actor | 操作者身份 | Token、会话、用户账户 | 变更归属的稳定认证身份 |
 | access-token | Access Token | 访问令牌 | Actor ID、用户身份、密码 | 具名、可独立撤销且不改变 Actor 身份的秘密凭据 |
+| bootstrap-state | Bootstrap State | 初始化状态 | 就绪状态、Token 数量 | 表示 Personal Actor 尚需创建、已创建或当前无法判定的公开设置状态 |
 | backup-archive | Backup Archive | 备份归档 | 数据库转储、卷副本 | 包含数据库、托管附件和兼容性清单的版本化校验恢复单元 |
 | validation-preset | Validation Preset | 校验预设 | 特殊数字类型 | 针对 Text 等字段的区域化格式校验规则 |
 | server | Server | 服务端 | 后端程序 | LoomTable Server |

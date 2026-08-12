@@ -7,7 +7,7 @@ LoomTable is a self-hosted structured-data workspace whose primary client is an 
 ### Product structure
 
 **Workspace**:
-A personal or team-owned space that contains Bases and their data.
+A space that contains Bases and their data. In Personal, one Actor owns each Workspace and every descendant inherits that access boundary; Team may replace ownership with membership.
 _Avoid_: account, project space
 
 **Base**:
@@ -197,6 +197,10 @@ _Avoid_: Token, session, user account
 **Access Token**:
 A named secret credential that authorizes requests as an Actor. One Actor may have multiple independently revocable Access Tokens without changing its identity.
 _Avoid_: Actor ID, user identity, password
+
+**Bootstrap State**:
+The public setup state indicating whether a Personal Actor must still be created, has been created, or cannot currently be determined.
+_Avoid_: readiness, token count
 
 **Backup Archive**:
 A versioned, checksummed recovery unit containing the PostgreSQL dump, Managed Attachment content, and the manifest needed to validate their compatibility.

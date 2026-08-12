@@ -75,3 +75,14 @@
 ## P0 验收门槛
 
 20k Query/Map 基准是 Server P0 PR 转为 Ready 的必要条件，不是可延后的优化项。还必须通过 OpenAPI Contract、PostgreSQL Integration、Docker Compose Smoke、完整 Backup/Restore、Go Test/Vet；未达到任一门槛时 `agent/server-p0` 保持 Draft，不合并到 `main`。
+
+参考环境固定为 4 vCPU、8 GiB、本地 Docker Compose 和热缓存。每项先预热 5 次，再测量 30 次：
+
+| 场景 | p95 上限 |
+|---|---:|
+| 常规首屏 Query | 500 ms |
+| Search 或复合 Filter + Sort | 750 ms |
+| Map Viewport Query | 750 ms |
+| Map Summary | 1.5 s |
+| 单条 Mutation | 250 ms |
+| 100-command Mutation | 1.5 s |

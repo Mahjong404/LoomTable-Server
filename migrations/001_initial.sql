@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
     revoked_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS server_secrets (
+    name TEXT PRIMARY KEY,
+    secret BYTEA NOT NULL CHECK (octet_length(secret) = 32),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     actor_id TEXT NOT NULL REFERENCES actors(id),
@@ -81,6 +87,8 @@ CREATE TABLE IF NOT EXISTS records (
     table_id TEXT NOT NULL REFERENCES tables(id),
     revision BIGINT NOT NULL DEFAULT 1 CHECK (revision > 0),
     "values" JSONB NOT NULL DEFAULT '{}'::JSONB,
+    query_values JSONB NOT NULL DEFAULT '{}'::JSONB,
+    search_text TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ

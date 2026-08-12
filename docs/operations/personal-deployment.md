@@ -28,6 +28,8 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 9. Plugin 检查数据库迁移状态。
 10. 用户选择 Workspace。
 
+`/v1/meta.bootstrapState` 是公开的 `required | complete | unknown`：无 Personal Actor 时为 `required`，已有 Actor 时为 `complete`，数据库状态无法判定时为 `unknown`。它不暴露 Token 数量；即使最后一个 Token 已撤销，Actor 已存在时仍为 `complete`。`/readyz` 不因未 Bootstrap 而失败。
+
 ## 配置原则
 
 - 原生 Server 默认只监听 `127.0.0.1:31201`。Compose 的 Server 容器监听 `:31201`，宿主机仅发布 `127.0.0.1:31201:31201`；局域网或远程访问必须显式覆盖监听地址，并使用 TLS 反向代理或可信内网通道。
@@ -81,11 +83,13 @@ Server 至少提供：
 
 只备份 PostgreSQL 不算完整 LoomTable 备份。
 
-P0 提供经过测试的 PowerShell 与 Bash Docker Compose 脚本，不通过业务 REST API 暴露备份接口。脚本生成一个版本化归档，包含 PostgreSQL custom-format dump、Managed Attachment Volume、Server/Schema 版本、生成时间、文件清单及校验和；独立验证命令必须能在恢复前发现损坏或不兼容归档。
+P0 提供经过测试的 PowerShell 与 Bash Docker Compose 脚本，不通过业务 REST API 暴露备份接口。脚本生成一个跨平台 `.tar.gz` 版本化归档，包含 PostgreSQL custom-format dump、Managed Attachment Volume、Server/Schema 版本、生成时间、文件清单及 SHA-256 校验和；拒绝覆盖已有输出。独立验证命令必须能在恢复前发现损坏或不兼容归档。
+
+归档默认不加密，但创建时尽可能使用仅当前用户可读的权限，并明确提示数据库包含 Actor、Token Hash 和业务数据。Cursor HMAC Key 随数据库转储备份，不在 Manifest 中输出明文。
 
 ## 恢复
 
-恢复要求 Server 停止并由运维者显式确认，且必须先在隔离目录验证：
+恢复要求 Server 停止、目标为空并由运维者显式确认；只有传入 `--confirm` 才能覆盖非空目标。归档必须先在隔离目录验证：
 
 1. 启动指定版本的 PostgreSQL。
 2. 恢复数据库。
@@ -120,4 +124,8 @@ Server 日志使用结构化格式，并默认不包含 Record 内容、Attachme
 
 ## 保留期清理
 
-Server 在启动时及其后每 24 小时运行一次有界后台任务，按实际配置的保留期清理 Change 与幂等结果；`forever` 禁用清理。任务分批提交，避免长事务和持续锁表，不要求外部 Scheduler。
+Server 在启动时及其后每 24 小时运行一次有界后台任务，按实际配置的保留期清理 Change 与幂等结果；`forever` 禁用清理。任务使用 PostgreSQL Advisory Lock 和数据库时钟，每类数据每次最多 10 批、每批 10,000 条，以短事务提交并记录删除数量和耗时；不要求外部 Scheduler。
+
+## Migration 生命周期
+
+首个公开 P0 发布前允许把 Schema 调整折叠进 `001_initial.sql`，本阶段开发数据库视为可重建。P0 发布后冻结 001，只新增有序 Forward Migration；普通 Server 启动始终只报告 Migration 状态，不自动执行。

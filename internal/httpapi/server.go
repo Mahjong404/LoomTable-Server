@@ -29,6 +29,7 @@ type metaResponse struct {
 	ChangeRetention      string   `json:"changeRetention"`
 	IdempotencyRetention string   `json:"idempotencyRetention"`
 	MigrationRequired    bool     `json:"migrationRequired"`
+	BootstrapState       string   `json:"bootstrapState"`
 }
 
 type errorResponse struct {
@@ -111,6 +112,7 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 		ChangeRetention:      s.config.ChangeRetention,
 		IdempotencyRetention: s.config.IdempotencyRetention,
 		MigrationRequired:    migrationRequired,
+		BootstrapState:       "unknown",
 	})
 }
 

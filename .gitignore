@@ -33,6 +33,7 @@ go.work.sum
 
 bin/
 tmp/
+.tmp/
 coverage/
 .env.*
 !.env.example

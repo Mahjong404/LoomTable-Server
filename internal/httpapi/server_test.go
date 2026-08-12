@@ -86,6 +86,9 @@ func TestMetaReflectsMigrationState(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), `"migrationRequired":true`) {
 		t.Fatalf("meta body = %s, want migrationRequired=true", recorder.Body.String())
 	}
+	if !strings.Contains(recorder.Body.String(), `"bootstrapState":"unknown"`) {
+		t.Fatalf("meta body = %s, want bootstrapState=unknown", recorder.Body.String())
+	}
 }
 
 func TestReadyzReportsDependencyFailure(t *testing.T) {

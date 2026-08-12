@@ -21,3 +21,4 @@
 - [Personal 部署与运维](./operations/personal-deployment.md)
 - [ADR 目录](./adr/)
 - [P0 不引入 PostGIS](./adr/0009-defer-postgis-beyond-p0.md)
+- [Canonical Record 值与可重建查询投影分离](./adr/0010-canonical-values-with-query-projection.md)
