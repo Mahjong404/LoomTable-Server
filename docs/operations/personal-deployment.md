@@ -35,7 +35,7 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 - PostgreSQL 中未撤销的 Token 哈希是运行时认证的唯一事实来源；明文 Token 不落库。
 - 初始 Token 可以由环境变量提供给一次显式 Bootstrap 命令，或由管理命令生成。普通 Server 启动不读取环境变量作为长期认证旁路，也不隐式创建或轮换 Token。
 - P0 不提供公开 Token 生成 API，localhost 也不免认证。
-- Personal Server 使用一个持久化的稳定 Actor；Token 属于该 Actor。Token 更换、Server 重启和数据库恢复都不改变 Actor ID；P0 默认授予其所有 Workspace 权限，不实现登录、邀请或角色系统。
+- Personal Server 使用一个持久化的稳定 Actor；同一 Actor 可以拥有多个具名 Active Token。每个 Token 可独立撤销，P0 不设置到期时间。Token 更换、Server 重启和数据库恢复都不改变 Actor ID；P0 默认授予其所有 Workspace 权限，不实现登录、邀请或角色系统。
 - PostgreSQL 端口不应直接暴露到公网。
 - Attachment 文件卷（即使当前 capability 未启用，也作为预留卷）必须持久化。
 - Secret 不写入日志。
@@ -44,7 +44,9 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 ## Actor 和 Token 初始化
 
 - Bootstrap 必须是显式、可重复检查但不会重复创建身份的操作：已有 Personal Actor 时复用其 ID，除非运维者明确执行另一个 Token 管理动作，否则不新增或替换 Token。
-- Server 只在创建 Token 时向终端显示一次明文；后续只能校验、列出元数据或撤销哈希记录，不能还原明文。
+- 每个 Token 都有稳定的 `tok_...` ID 和必填名称；同一 Actor 可以同时保有多个未撤销 Token，便于按设备或用途独立轮换。
+- Server 只在创建 Token 时向终端显示一次明文；后续只能校验、列出 ID、名称、创建/撤销状态等元数据或撤销哈希记录，不能还原明文。
+- P0 Token 没有自动到期时间；撤销是终止其访问能力的唯一 P0 生命周期动作。
 - Token 管理是本机管理命令，不通过公开业务 REST API 暴露。
 - Actor、Token 哈希及撤销状态随 PostgreSQL 一起备份和恢复。
 

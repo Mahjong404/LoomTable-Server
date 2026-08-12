@@ -151,6 +151,7 @@ Tag 不是独立 Field Type：
 
 - 一个标签使用 `select`。
 - 多个标签使用 `multiSelect`。
+- Select/MultiSelect Option 使用 Server 生成且永不复用的 `opt_...` ID；Record 值引用 ID，不引用可变名称。
 - Chip、颜色和标签样式属于 Renderer。
 - 跨 Table 共享标签、标签层级和标签权限属于未来 Tag Domain，不属于第一阶段。
 

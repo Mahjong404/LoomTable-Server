@@ -74,7 +74,7 @@ P0 不执行 Field Type 迁移。类型变更必须等迁移预览和错误集�
 
 ## Personal Actor 和 Token
 
-Personal Server 的稳定 Actor 与 Access Token 哈希都保存在 PostgreSQL。显式 Bootstrap 或管理命令在事务中创建 Actor 和 Token 记录；运行时认证以未撤销的数据库 Token 记录为唯一事实来源。一个 Actor 可以拥有多个具名 Token，每个 Token 可以单独撤销；P0 不设置自动过期时间。更换或撤销 Token 不改变 Actor ID，Server 启动也不会隐式创建或轮换 Token。
+Personal Server 的稳定 Actor 与 Access Token 哈希都保存在 PostgreSQL。显式 Bootstrap 或管理命令在事务中创建 Actor 和 Token 记录；Token 使用稳定的 `tok_...` ID 和必填名称。运行时认证以未撤销的数据库 Token 记录为唯一事实来源。一个 Actor 可以拥有多个具名 Token，每个 Token 可以单独撤销；P0 不设置自动过期时间。更换或撤销 Token 不改变 Actor ID，Server 启动也不会隐式创建或轮换 Token。
 
 ## Relation（后续能力）
 

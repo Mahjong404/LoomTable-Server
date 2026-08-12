@@ -79,7 +79,7 @@ MutationRequest
 
 过期 Revision 返回 Conflict，不能自动覆盖。重复的 `clientMutationId` 返回第一次应用结果或明确的幂等结果。
 
-Record 更新使用 `set + unsetFieldIds`：`set` 中出现的 Field 被写入或替换，且可以显式写入合法的 `null`、空字符串或空数组；`unsetFieldIds` 才移除 `Record.values` 中的键。两者均未提及的 Field 保持不变，同一 Field 同时出现于两者返回 `422 VALIDATION_ERROR`。
+Record 更新使用 `set + unsetFieldIds`：`set` 中出现的 Field 被写入或替换，且可以显式写入合法的 `null`、空字符串或空数组；`unsetFieldIds` 才移除 `Record.values` 中的键。两者均未提及的 Field 保持不变，同一 Field 同时出现于两者返回 `422 VALIDATION_ERROR`。P0 九种 Field 都允许显式 `null`；Text/LongText 的 `""` 与 MultiSelect 的 `[]` 是合法自然空值，空 URL 字符串和空 Location 对象无效。
 
 ## 5. 存储事务
 
@@ -132,7 +132,7 @@ Change Log 用于：
 ## 9. 认证和安全
 
 - Personal 使用 Bearer Token。
-- Personal Server 通过显式 Bootstrap/管理命令在 PostgreSQL 中初始化一个稳定 `actor`；Token 属于该 Actor，P0 默认授予该 Actor 所有 Workspace 权限，不实现 User、Role 和登录体系。
+- Personal Server 通过显式 Bootstrap/管理命令在 PostgreSQL 中初始化一个稳定 `actor`；同一 Actor 可以拥有多个具名 Active Token，各 Token 可独立撤销。P0 Token 不设置到期时间，默认授予该 Actor 所有 Workspace 权限，不实现 User、Role 和登录体系。
 - PostgreSQL 中未撤销的 Token 哈希是认证事实来源。环境变量只可作为显式 Bootstrap 的输入；普通启动不把环境变量哈希当作旁路，也不隐式创建或轮换 Token。
 - Server 不向客户端返回数据库凭据。
 - Attachment Content 下载必须经过授权。
@@ -170,7 +170,9 @@ P0 不实现 Field Type 迁移。Field 只允许改名和修改不改变值语�
 
 `Record.values` 的键始终是稳定的 Field ID，不使用可变的字段名称。字段改名不会改变既有 Record 值的定位。
 
-创建 Table 时，Server 自动创建一个可重命名的 `text` Primary Field，并将其 ID 写入 `Table.primaryFieldId`。P0 的 Table 不允许没有 Primary Field。
+创建 Table 时，Server 在同一事务中自动创建一个可重命名的 `text` Primary Field 和一个 Grid View，并将 Field ID 写入 `Table.primaryFieldId`。请求可选传入 `primaryFieldName` 和 `initialViewName`；Plugin 负责提交本地化名称，未传时 Server 分别使用 `Name` 和 `Grid`。成功响应原子返回 `{ table, primaryField, initialView }`，P0 的 Table 不允许没有 Primary Field。
+
+Primary Field 值可以是 Unset、`null` 或空字符串，创建 Record 不要求先填写它。列表、详情和地图需要标签时由 Plugin 使用本地化的“无标题”或 Record ID 回退；Server 不把显示占位文本写入 Record 值。
 
 `date` 在 P0 中表示不带时区的纯日期，规范值为 `YYYY-MM-DD`；日期时间字段不属于 P0。
 
@@ -182,6 +184,8 @@ P0 不实现 Field Type 迁移。Field 只允许改名和修改不改变值语�
 
 一个 Mutation Request 内的所有 Command 使用同一个 PostgreSQL Transaction：全部通过才提交，任一校验失败、权限失败或 Revision Conflict 都回滚整个请求。`clientMutationId` 在事务边界外也必须保持幂等，重试返回第一次应用结果，不重复写入 Change。
 
+Workspace、Base、Table、Field 和 View 的创建请求必须携带 `Idempotency-Key: mut_...`。Key 在 Actor 范围内全局唯一；相同 Method、Path 和规范化 Body 的重试返回第一次 `201` 结果，不重复创建对象；不同请求复用同一 Key 返回 `409 IDEMPOTENCY_KEY_REUSED`。该结果遵循 Server 声明的幂等保留策略。
+
 Conflict 使用 `409`；认证、授权、输入校验、资源不存在、能力未启用和内部故障必须分别使用可识别的 HTTP 状态和错误码，不能全部折叠为同一个默认错误。
 
 ### 健康、认证和备份
@@ -189,7 +193,7 @@ Conflict 使用 `409`；认证、授权、输入校验、资源不存在、能�
 - `/healthz` 是无需认证的进程存活检查。
 - `/readyz` 是无需认证的可接收请求检查，至少检查数据库连接和迁移状态。
 - 业务 API 继续要求 Bearer Token。
-- P0 的初始 Token 由显式 Bootstrap/管理命令创建；环境变量只能提供给该命令作为一次性输入。Server 只保存 Token 哈希，不提供公开的 Token 生成 API，也不对 localhost 免认证。
+- P0 的初始 Token 由显式 Bootstrap/管理命令创建；环境变量只能提供给该命令作为一次性输入。Server 只保存 Token 哈希，不提供公开的 Token 生成 API，也不对 localhost 免认证。同一稳定 Actor 可以拥有多个具名 Active Token，各自独立撤销；P0 Token 不设置到期时间。
 - P0 的备份/恢复通过 Server 管理命令或运维脚本完成，必须同时覆盖 PostgreSQL、Managed Attachment 文件卷和版本清单。
 
 ## 12. Q93–Q102 已确认的实现合同
@@ -223,7 +227,7 @@ P0 的稳定 HTTP 状态映射为：
 | 401 | 缺少或无效 Bearer Token | `UNAUTHENTICATED` |
 | 403 | Actor 已认证但无权访问 | `FORBIDDEN` |
 | 404 | 资源不存在或不属于当前 Actor | `NOT_FOUND` |
-| 409 | Revision 冲突 | `CONFLICT` |
+| 409 | Revision 或幂等键冲突 | `CONFLICT`, `IDEMPOTENCY_KEY_REUSED` |
 | 410 | Cursor 或短期查询令牌已过期 | `CURSOR_EXPIRED` |
 | 422 | 字段值、Filter、Operator、View 配置或其他领域语义无效 | `VALIDATION_ERROR`, `UNSUPPORTED_OPERATOR`, `VIEW_CONFIGURATION_REQUIRED` |
 | 501 | 能力存在于合同但当前 Server 未启用 | `CAPABILITY_NOT_ENABLED` |
@@ -234,7 +238,7 @@ P0 的稳定 HTTP 状态映射为：
 
 ### Personal 认证
 
-P0 不提供公开 Token 生成 API，也不因使用 localhost 而免认证。一个 Personal Server 有一个持久化的稳定 Actor；显式 Bootstrap/管理命令创建或管理与其关联的 Token，数据库保存不可逆哈希及撤销状态。Token 更换、重启和恢复不改变 Actor ID，普通启动不会隐式轮换凭据。P0 不实现用户登录、Workspace 邀请、角色或细粒度权限。
+P0 不提供公开 Token 生成 API，也不因使用 localhost 而免认证。一个 Personal Server 有一个持久化的稳定 Actor；显式 Bootstrap/管理命令创建或管理与其关联的多个具名 Token，数据库保存 `tok_...` ID、名称、不可逆哈希及撤销状态。每个 Token 可独立撤销，P0 不设置到期时间。Token 更换、重启和恢复不改变 Actor ID，普通启动不会隐式轮换凭据。P0 不实现用户登录、Workspace 邀请、角色或细粒度权限。
 
 ### Query、Filter 和 Cursor
 
@@ -260,17 +264,18 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 - P0 保留 Attachment API 合同，但不声明 `attachments` capability。
 - P0 调用 Attachment API 返回 `501 CAPABILITY_NOT_ENABLED`；Plugin 必须隐藏 Attachment 入口，不把该响应当作普通资源不存在。
 
-## 13. Q103–Q127 已确认的字段和查询合同
+## 13. Q103–Q135 已确认的字段和查询合同
 
 ### ID、View 和 Select 配置
 
-- 服务端 ID 使用带类型前缀的 Crockford ULID：`ws_`、`base_`、`tbl_`、`fld_`、`view_`、`rec_`、`att_`、`chg_`、`act_`、`mut_`、`req_`。
+- 服务端 ID 使用带类型前缀的 Crockford ULID：`ws_`、`base_`、`tbl_`、`fld_`、`view_`、`rec_`、`att_`、`chg_`、`act_`、`tok_`、`opt_`、`mut_`、`req_`。
 - `/v1/meta` 与 `/healthz`、`/readyz` 一样无需认证；业务资源接口要求 Bearer Token。
 - P0 的 Select/MultiSelect Option 由 Server 生成稳定 ID，至少保存 `id`、`name`、`color`。删除 Option 不复用旧 ID；已有 Record 保留旧引用并显示为已删除。Option 变更消耗 Field Revision。
-- 创建 Table 时自动创建 Primary Field 和一个 Grid View；Map View 由用户显式创建。
+- 创建 Table 时在同一事务中自动创建 Primary Field 和一个 Grid View；请求可选提交本地化的 `primaryFieldName`、`initialViewName`，未传时 Server 使用 `Name`、`Grid`。响应必须同时返回完整的 Table、Primary Field 和初始 Grid View；Map View 由用户显式创建。
 - `View`、`CreateViewRequest` 和 `UpdateViewRequest` 使用 `type` 判别的 `oneOf`，Grid 与 Map 的 Config 不接受任意额外属性。P0 不允许改变已有 View 的 Type。
 - 创建 View 时提交完整 Config；更新时携带 `expectedRevision` 并完整替换 Config，Server 校验、规范化后返回完整 View。缺失的可选配置表示其合同规定的未设置/默认状态，不表示沿用旧值。
 - Field 更新保留顶层 PATCH 语义；`config` 省略时保留旧配置，一旦提供则完整替换。Server 必须按既有 Field Type 校验、规范化并返回完整 Field；P0 不接受 `migrationToken` 或类型变更。
+- `Field`、`CreateFieldRequest` 和 `UpdateFieldRequest` 必须最终使用 `type` 判别的严格联合；更新请求回显不可变 `type`，每种 Config 拒绝未声明属性。Select Option 的创建、删除和恢复输入合同需在下一层设计中先定案，再替换 OpenAPI 当前的过渡通用 Schema。
 - Grid View 的 P0 配置包含 `projection`、`columnOrder`、`columnWidths`、`frozenFieldIds`、`rowHeight`、`filter` 和 `sort`；Group 只预留，不在 P0 实现。
 - Map View 配置必须包含同一 Table 内有效的 `locationFieldId`，还可包含 `filter` 和 Default Camera `center + zoom`；瓦片提供方和 Credential 仅属于客户端本地配置。创建时没有 Location Field 则不能创建；配置的 Field 被软删除或不再可用时，Map Query 返回 `422 VIEW_CONFIGURATION_REQUIRED`，不自动改选其他 Field。
 - Map View 使用 `POST /v1/views/{viewId}/map/query`。请求只提交临时 Map Viewport（一个或两个不跨反经线的 WGS 84 Box）、Zoom 和 CSS Pixel 尺寸；Server 校验 Map View 并应用已保存的 Location Field 与 Filter，不接受临时覆盖。
@@ -293,16 +298,18 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 
 ### 幂等和 Change 保留
 
-- 幂等键按 `actorId + clientMutationId` 唯一。
+- Record Mutation 的幂等键按 `actorId + clientMutationId` 唯一。
 - 相同请求体重复使用该键返回历史结果；不同请求体复用该键返回 `409 IDEMPOTENCY_KEY_REUSED`。
+- Workspace、Base、Table、Field 和 View 的创建使用必填 `Idempotency-Key: mut_...` Header，并以 Method、Path 和规范化 Body 判定是否为同一请求；Key 在 Actor 范围内跨这些资源全局唯一。
 - 当前版本幂等结果保留 30 天；后续版本允许配置 `30d`、`90d`、`365d` 或 `forever`。
 - Change Cursor 按 Table 作用域保存，Change 当前保留 30 天；无 Cursor 时返回当前尾部位置和空 ChangePage。后续版本允许同样的保留策略选项。
 
 ### Record 更新、回收站和 Personal 认证
 
-- Record 更新使用 `set + unsetFieldIds`。`set` 可显式写入 Field Type 允许的 `null` 或空值；只有 `unsetFieldIds` 删除键，未提及的 Field 不变。Conflict 必须分别回显客户端提交的 Set 与 Unset 意图。
+- Record 更新使用 `set + unsetFieldIds`。`set` 可显式写入 Field Type 允许的 `null` 或空值；只有 `unsetFieldIds` 删除键，未提及的 Field 不变。P0 九种 Field 都允许 `null`；Text/LongText 的 `""` 与 MultiSelect 的 `[]` 是自然空值，空 URL 字符串和空 Location 对象无效。Conflict 必须分别回显客户端提交的 Set 与 Unset 意图。
+- Primary Field 可以为 Unset、`null` 或 `""`；Server 不因其为空拒绝创建 Record，也不持久化“无标题”占位。Plugin 在需要标签时使用本地化占位或 Record ID 回退。
 - Table、Field、View List 与 Record Query 的 Lifecycle Scope 是 `active`、`deleted` 或 `all`，默认 `active`；Record Query 会把它纳入 Cursor 绑定。`deleted` 按对象自身的软删除状态筛选，不把仅因祖先删除而暂时不可见的子对象改写为已删除。
-- Personal Actor、Token 哈希与撤销状态持久化在 PostgreSQL。首次 Bootstrap 或后续管理命令显式创建/管理 Token；普通 Server 启动不会隐式创建、替换或轮换。运行时认证只查询数据库中未撤销的 Token，Actor ID 在 Token 更换、重启和备份恢复后保持稳定。
+- Personal Actor、Token 哈希与撤销状态持久化在 PostgreSQL。首次 Bootstrap 或后续管理命令显式创建/管理多个具名 Token；各 Token 独立撤销，P0 不设置到期时间。普通 Server 启动不会隐式创建、替换或轮换。运行时认证只查询数据库中未撤销的 Token，Actor ID 在 Token 更换、重启和备份恢复后保持稳定。
 
 ### 后续字段扩展
 

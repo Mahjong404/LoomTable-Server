@@ -28,7 +28,9 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 
 ## 本地运行
 
-需要 Go 1.22+。配置 `LOOMTABLE_DATABASE_URL` 和 `LOOMTABLE_AUTH_TOKEN_HASH` 后运行：
+需要 Go 1.22+。当前骨架仍通过 `LOOMTABLE_AUTH_TOKEN_HASH` 注入单个开发用认证哈希；这是业务 Handler 接入前的过渡实现，不是最终 P0 认证合同。最终实现必须由显式 Bootstrap/管理命令在 PostgreSQL 中创建稳定 Actor 和具名 Token，普通启动不得把环境变量作为长期认证旁路。
+
+配置 `LOOMTABLE_DATABASE_URL` 和过渡用 `LOOMTABLE_AUTH_TOKEN_HASH` 后运行：
 
 ```text
 go run ./cmd/loomtable-server
@@ -43,3 +45,4 @@ go run ./cmd/loomtable-migrate -dir migrations
 Personal Docker Compose 的环境变量示例见 `.env.example`；Attachment 文件卷在 P0 只作为预留基础设施，`attachments` capability 默认未启用。
 
 许可证：GPL-3.0。
+

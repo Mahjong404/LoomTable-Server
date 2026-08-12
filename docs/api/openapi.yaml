@@ -111,6 +111,8 @@ paths:
     post:
       tags: [Workspaces]
       operationId: createWorkspace
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -124,6 +126,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -151,6 +163,8 @@ paths:
     post:
       tags: [Bases]
       operationId: createBase
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -164,6 +178,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Base'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -192,6 +218,8 @@ paths:
     post:
       tags: [Tables]
       operationId: createTable
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -200,11 +228,23 @@ paths:
               $ref: '#/components/schemas/CreateTableRequest'
       responses:
         '201':
-          description: Table created
+          description: Table, Primary Field, and initial Grid View created atomically
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Table'
+                $ref: '#/components/schemas/CreateTableResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -300,6 +340,8 @@ paths:
     post:
       tags: [Fields]
       operationId: createField
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -313,6 +355,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Field'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -396,6 +450,8 @@ paths:
     post:
       tags: [Views]
       operationId: createView
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -409,6 +465,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/View'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -446,823 +514,4 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
     delete:
-      tags: [Views]
-      operationId: deleteView
-      parameters:
-        - $ref: '#/components/parameters/ExpectedRevision'
-      responses:
-        '204':
-          description: View deleted
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/views/{viewId}/restore:
-    parameters:
-      - $ref: '#/components/parameters/ViewId'
-    post:
-      tags: [Views]
-      operationId: restoreView
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RestoreMetadataRequest'
-      responses:
-        '200':
-          description: View restored when its expected revision matches
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/View'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/views/{viewId}/map/query:
-    parameters:
-      - $ref: '#/components/parameters/ViewId'
-    post:
-      tags: [Views]
-      operationId: queryMap
-      description: Queries the saved Map View against the current client viewport. The Server always uses the View's saved Location Field and Filter; request-time overrides are not accepted.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MapQueryRequest'
-      responses:
-        '200':
-          description: At most 500 Map Points or Map Clusters that collectively represent every renderable matching Record in the viewport
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MapQueryResult'
-        '400':
-          description: Viewport, zoom, or pixel dimensions are invalid
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: The View is not a Map View or its saved Location Field is unavailable; an unavailable field returns VIEW_CONFIGURATION_REQUIRED
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/views/{viewId}/map/cluster-records/query:
-    parameters:
-      - $ref: '#/components/parameters/ViewId'
-    post:
-      tags: [Records]
-      operationId: queryMapClusterRecords
-      description: Pages through the Records represented by a Map Cluster. Cluster tokens and cursors are opaque, short-lived, and bound to the originating View revision, saved Filter, Location Field, and map-query snapshot.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MapClusterRecordsQueryRequest'
-      responses:
-        '200':
-          description: A cursor page of full Records represented by the cluster
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QueryResult'
-        '400':
-          description: Cluster token or cursor is invalid or bound to another query
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '410':
-          description: Cluster token or cursor expired; the client must refresh the viewport before opening the cluster again
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: The View is no longer a usable Map View
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/records/{recordId}:
-    parameters:
-      - $ref: '#/components/parameters/RecordId'
-    get:
-      tags: [Records]
-      operationId: getRecord
-      description: Returns one full Record for details opened from a lightweight Map Point or another direct reference.
-      responses:
-        '200':
-          description: Full Record
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Record'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/tables/{tableId}/records/query:
-    parameters:
-      - $ref: '#/components/parameters/TableId'
-    post:
-      tags: [Records]
-      operationId: queryRecords
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/QueryRequest'
-      responses:
-        '200':
-          description: A cursor page of records
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QueryResult'
-        '400':
-          description: Invalid request or cursor bound to a different query
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '410':
-          description: Cursor has expired and the client must restart from the first page
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: Filter, sort, projection, or field operator is invalid
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/tables/{tableId}/records/mutate:
-    parameters:
-      - $ref: '#/components/parameters/TableId'
-    post:
-      tags: [Records]
-      operationId: mutateRecords
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MutationRequest'
-      responses:
-        '200':
-          description: Per-command mutation results
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MutationResult'
-        '409':
-          description: At least one command has a revision conflict
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConflictResponse'
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Missing or invalid Bearer Token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Actor is authenticated but forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Table or referenced record was not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: Field value or command semantics are invalid
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/tables/{tableId}/changes:
-    parameters:
-      - $ref: '#/components/parameters/TableId'
-    get:
-      tags: [Changes]
-      operationId: pullChanges
-      parameters:
-        - nameâ€¦4166 tokens truncatedâ€¦es:
-        name: { type: string, minLength: 1, maxLength: 200 }
-        type:
-          type: string
-          const: grid
-        config:
-          $ref: '#/components/schemas/GridViewConfig'
-        expectedRevision:
-          type: integer
-          minimum: 1
-
-    UpdateMapViewRequest:
-      type: object
-      additionalProperties: false
-      required: [type, config, expectedRevision]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 200 }
-        type:
-          type: string
-          const: map
-        config:
-          $ref: '#/components/schemas/MapViewConfig'
-        expectedRevision:
-          type: integer
-          minimum: 1
-
-    GridViewConfig:
-      type: object
-      additionalProperties: false
-      description: P0 Grid configuration. Grouping is reserved and is not implemented in P0.
-      properties:
-        projection:
-          type: array
-          items: { type: string }
-        columnOrder:
-          type: array
-          items: { type: string }
-        columnWidths:
-          type: object
-          additionalProperties:
-            type: integer
-        frozenFieldIds:
-          type: array
-          items: { type: string }
-        rowHeight:
-          type: string
-        filter:
-          $ref: '#/components/schemas/FilterNode'
-        sort:
-          type: array
-          items:
-            $ref: '#/components/schemas/SortSpec'
-
-    MapViewConfig:
-      type: object
-      additionalProperties: false
-      description: P0 Map configuration for an active Location Field in the same Table. Center and zoom are an explicitly saved Default Camera, not a client's temporary viewport. Tile provider selection and credentials are client-local and never appear here.
-      required: [locationFieldId]
-      dependentRequired:
-        center: [zoom]
-        zoom: [center]
-      properties:
-        locationFieldId:
-          type: string
-        filter:
-          $ref: '#/components/schemas/FilterNode'
-        center:
-          type: object
-          additionalProperties: false
-          required: [lat, lng]
-          properties:
-            lat:
-              type: number
-              minimum: -85.0511287798066
-              maximum: 85.0511287798066
-            lng:
-              type: number
-              minimum: -180
-              maximum: 180
-        zoom:
-          type: number
-          minimum: 0
-
-    MapCoordinate:
-      type: object
-      additionalProperties: false
-      required: [lat, lng]
-      properties:
-        lat:
-          type: number
-          minimum: -85.0511287798066
-          maximum: 85.0511287798066
-        lng:
-          type: number
-          minimum: -180
-          maximum: 180
-
-    MapViewportBox:
-      type: object
-      additionalProperties: false
-      description: A non-wrapping WGS 84 box. West must not exceed east and south must not exceed north. A viewport that crosses the antimeridian is represented by two boxes; Records are de-duplicated by Record ID at the seam.
-      required: [west, south, east, north]
-      properties:
-        west:
-          type: number
-          minimum: -180
-          maximum: 180
-        south:
-          type: number
-          minimum: -85.0511287798066
-          maximum: 85.0511287798066
-        east:
-          type: number
-          minimum: -180
-          maximum: 180
-        north:
-          type: number
-          minimum: -85.0511287798066
-          maximum: 85.0511287798066
-
-    MapViewport:
-      type: object
-      additionalProperties: false
-      required: [boxes]
-      properties:
-        boxes:
-          type: array
-          minItems: 1
-          maxItems: 2
-          items:
-            $ref: '#/components/schemas/MapViewportBox'
-
-    MapQueryRequest:
-      type: object
-      additionalProperties: false
-      description: The current temporary camera is client state. Pixel dimensions are CSS pixels and let the Server choose an appropriate adaptive clustering density.
-      required: [viewport, zoom, pixelWidth, pixelHeight]
-      properties:
-        viewport:
-          $ref: '#/components/schemas/MapViewport'
-        zoom:
-          type: number
-          minimum: 0
-        pixelWidth:
-          type: integer
-          minimum: 1
-        pixelHeight:
-          type: integer
-          minimum: 1
-
-    MapFeature:
-      oneOf:
-        - $ref: '#/components/schemas/MapPoint'
-        - $ref: '#/components/schemas/MapCluster'
-      discriminator:
-        propertyName: kind
-        mapping:
-          point: '#/components/schemas/MapPoint'
-          cluster: '#/components/schemas/MapCluster'
-
-    MapPoint:
-      type: object
-      additionalProperties: false
-      description: Lightweight map presentation for one Record. Full field values are fetched only when the user opens Record details.
-      required: [kind, recordId, position, primaryFieldText]
-      properties:
-        kind:
-          type: string
-          const: point
-        recordId:
-          type: string
-        position:
-          $ref: '#/components/schemas/MapCoordinate'
-        primaryFieldText:
-          type: string
-          description: Server-formatted Primary Field display text; unset or null Primary Field values produce an empty string.
-
-    MapCluster:
-      type: object
-      additionalProperties: false
-      description: An ephemeral map-scale grouping. The clustering algorithm and cluster identity are internal and may change on every map query; clients must not persist clusterId.
-      required: [kind, clusterId, position, bounds, pointCount, recordsQueryToken]
-      properties:
-        kind:
-          type: string
-          const: cluster
-        clusterId:
-          type: string
-          description: Ephemeral identity for renderer reconciliation within this response only.
-        position:
-          $ref: '#/components/schemas/MapCoordinate'
-        bounds:
-          $ref: '#/components/schemas/MapViewport'
-        pointCount:
-          type: integer
-          minimum: 2
-        expansionZoom:
-          type: number
-          minimum: 0
-          description: Suggested zoom at which this cluster separates. If absent, or above the active renderer/provider maximum zoom, the client opens the paginated Record list instead.
-        recordsQueryToken:
-          type: string
-          description: Opaque short-lived token for paging through every Record represented by this cluster.
-
-    MapQuerySummary:
-      type: object
-      additionalProperties: false
-      description: Exact counts over all active Records matching the saved Map View Filter. matchedRecordCount equals renderableRecordCount plus unlocatedRecordCount plus unrenderableRecordCount. viewportRenderableRecordCount is a subset of renderableRecordCount.
-      required: [matchedRecordCount, renderableRecordCount, viewportRenderableRecordCount, unlocatedRecordCount, unrenderableRecordCount]
-      properties:
-        matchedRecordCount:
-          type: integer
-          format: int64
-          minimum: 0
-        renderableRecordCount:
-          type: integer
-          format: int64
-          minimum: 0
-        viewportRenderableRecordCount:
-          type: integer
-          format: int64
-          minimum: 0
-        unlocatedRecordCount:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Matching Records whose Location is missing or is not a valid WGS 84 coordinate.
-        unrenderableRecordCount:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Matching Records with a valid WGS 84 coordinate outside the EPSG:3857 renderable latitude range.
-        dataBounds:
-          $ref: '#/components/schemas/MapViewport'
-          description: Bounds of every renderable matching Record, omitted when renderableRecordCount is zero. It may contain two boxes when the minimal span crosses the antimeridian.
-
-    MapQueryResult:
-      type: object
-      additionalProperties: false
-      description: >-
-        The features collectively represent all viewportRenderableRecordCount Records:
-        each Point contributes one and each Cluster contributes pointCount. The Server
-        adaptively clusters until no more than 500 features remain and never silently
-        truncates Records.
-      required: [features, summary, viewRevision, changeCursor]
-      properties:
-        features:
-          type: array
-          maxItems: 500
-          items:
-            $ref: '#/components/schemas/MapFeature'
-        summary:
-          $ref: '#/components/schemas/MapQuerySummary'
-        viewRevision:
-          type: integer
-          minimum: 1
-        changeCursor:
-          type: string
-
-    MapClusterRecordsQueryRequest:
-      type: object
-      additionalProperties: false
-      required: [clusterToken]
-      properties:
-        clusterToken:
-          type: string
-        cursor:
-          type: string
-          description: Opaque next-page cursor bound to the cluster token and limit.
-        limit:
-          type: integer
-          minimum: 1
-          maximum: 500
-          default: 100
-
-    QueryRequest:
-      type: object
-      description: When viewId is supplied, the View configuration is the base query. Explicit filter, sort, projection, and pagination values temporarily override it for this request and are not persisted.
-      properties:
-        viewId: { type: string }
-        lifecycle:
-          $ref: '#/components/schemas/LifecycleScope'
-        cursor:
-          type: string
-          description: Opaque cursor bound to the equivalent table, view, lifecycle, filter, sort, projection, search, limit, and API version.
-        limit:
-          type: integer
-          minimum: 1
-          maximum: 500
-          default: 100
-        projection:
-          type: array
-          items: { type: string }
-        filter:
-          $ref: '#/components/schemas/FilterNode'
-        sort:
-          type: array
-          description: Temporary request override. If absent, the server uses createdAt ASC, id ASC for stable cursor pagination.
-          items:
-            $ref: '#/components/schemas/SortSpec'
-        search:
-          type: string
-          description: Case-insensitive contains search over the Primary Field, Text, LongText, and URL fields only.
-
-    FilterNode:
-      oneOf:
-        - $ref: '#/components/schemas/FilterGroup'
-        - $ref: '#/components/schemas/FilterRule'
-
-    FilterGroup:
-      type: object
-      description: Recursive AND/OR groups. Each group must contain at least one child and the maximum nesting depth is 8; invalid depth returns 422 VALIDATION_ERROR.
-      x-max-depth: 8
-      required: [kind, operator, children]
-      properties:
-        kind:
-          const: group
-        operator:
-          type: string
-          enum: [and, or]
-        children:
-          type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/FilterNode'
-
-    FilterRule:
-      type: object
-      description: Operator and value are validated against the referenced Field Type. Text, LongText, and URL support equality, inequality, contains, not-contains, prefix, suffix, empty, and not-empty. Number and Date support equality, inequality, all six ordered comparisons, empty, and not-empty. Checkbox supports equality and inequality; Select supports equality, inequality, empty, and not-empty; MultiSelect supports includes, excludes, empty, and not-empty; Location supports empty and not-empty. Null, missing, and empty string are distinct; text matching is case-insensitive.
-      required: [kind, fieldId, operator]
-      properties:
-        kind:
-          const: rule
-        fieldId: { type: string }
-        operator:
-          type: string
-          enum: [is, isNot, isEmpty, isNotEmpty, contains, notContains, startsWith, endsWith, greaterThan, greaterOrEqual, lessThan, lessOrEqual, includes, excludes]
-        value:
-          description: Field-type-specific value. Unsupported operators return 422 UNSUPPORTED_OPERATOR.
-
-    SortSpec:
-      type: object
-      required: [fieldId, direction]
-      properties:
-        fieldId: { type: string }
-        direction:
-          type: string
-          enum: [asc, desc]
-        nulls:
-          type: string
-          enum: [first, last]
-          default: last
-
-    QueryResult:
-      type: object
-      required: [items, changeCursor]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Record'
-        nextCursor:
-          type: string
-          description: Opaque cursor for the next page; it is bound to this equivalent query.
-        hasMore:
-          type: boolean
-        changeCursor:
-          type: string
-        totalEstimate:
-          type: integer
-
-    MutationRequest:
-      type: object
-      description: All commands are applied atomically in one transaction. If any command fails, the whole request rolls back. Reusing clientMutationId returns the first result without applying the mutation again.
-      required: [clientMutationId, commands]
-      properties:
-        clientMutationId:
-          type: string
-          minLength: 1
-          maxLength: 200
-          description: Unique with actorId. Reusing it with the same request body returns the historical result; a different body returns 409 IDEMPOTENCY_KEY_REUSED. P0 retains results for 30 days.
-        commands:
-          type: array
-          minItems: 1
-          maxItems: 500
-          items:
-            $ref: '#/components/schemas/MutationCommand'
-
-    MutationCommand:
-      oneOf:
-        - $ref: '#/components/schemas/CreateRecordCommand'
-        - $ref: '#/components/schemas/UpdateRecordCommand'
-        - $ref: '#/components/schemas/DeleteRecordCommand'
-        - $ref: '#/components/schemas/RestoreRecordCommand'
-
-    CreateRecordCommand:
-      type: object
-      additionalProperties: false
-      required: [kind, values]
-      properties:
-        kind: { const: createRecord }
-        values:
-          type: object
-          additionalProperties: true
-          description: Initial values keyed by Field ID. Explicit null or empty values are distinct from omitted, unset Fields.
-
-    UpdateRecordCommand:
-      type: object
-      additionalProperties: false
-      description: Writes fields in set and removes keys in unsetFieldIds. A Field present in both is invalid; omitted Fields are unchanged.
-      required: [kind, recordId, expectedRevision]
-      anyOf:
-        - required: [set]
-        - required: [unsetFieldIds]
-      properties:
-        kind: { const: updateRecord }
-        recordId: { type: string }
-        expectedRevision:
-          type: integer
-          minimum: 1
-        set:
-          type: object
-          additionalProperties: true
-          minProperties: 1
-          description: Values keyed by Field ID. Explicit null, empty string, or empty array is a write when valid for the Field Type.
-        unsetFieldIds:
-          type: array
-          minItems: 1
-          uniqueItems: true
-          items: { type: string }
-          description: Field IDs whose keys are removed from Record.values.
-
-    DeleteRecordCommand:
-      type: object
-      additionalProperties: false
-      required: [kind, recordId, expectedRevision]
-      properties:
-        kind: { const: deleteRecord }
-        recordId: { type: string }
-        expectedRevision:
-          type: integer
-          minimum: 1
-
-    RestoreRecordCommand:
-      type: object
-      additionalProperties: false
-      required: [kind, recordId, expectedRevision]
-      properties:
-        kind: { const: restoreRecord }
-        recordId: { type: string }
-        expectedRevision:
-          type: integer
-          minimum: 1
-
-    MutationResult:
-      type: object
-      description: The request is atomic. Any rejected or conflicting command rolls back every command in the request.
-      required: [clientMutationId, results]
-      properties:
-        clientMutationId: { type: string }
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/CommandResult'
-
-    CommandResult:
-      type: object
-      required: [index, status]
-      properties:
-        index:
-          type: integer
-          minimum: 0
-        status:
-          type: string
-          enum: [applied]
-        record:
-          $ref: '#/components/schemas/Record'
-        error:
-          $ref: '#/components/schemas/ErrorBody'
-
-    ConflictResponse:
-      type: object
-      additionalProperties: false
-      description: Revision conflict using the standard error envelope.
-      required: [error]
-      properties:
-        error:
-          $ref: '#/components/schemas/ConflictErrorBody'
-
-    ConflictErrorBody:
-      allOf:
-        - $ref: '#/components/schemas/ErrorBody'
-        - type: object
-          required: [clientMutationId, failedCommandIndex, conflicts]
-          properties:
-            code:
-              const: CONFLICT
-            clientMutationId:
-              type: string
-            failedCommandIndex:
-              type: integer
-              minimum: 0
-            conflicts:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConflictBody'
-
-    ConflictBody:
-      type: object
-      required: [recordId, expectedRevision, currentRevision, currentValues]
-      properties:
-        recordId: { type: string }
-        expectedRevision:
-          type: integer
-        currentRevision:
-          type: integer
-        currentValues:
-          type: object
-          additionalProperties: true
-        submittedSet:
-          type: object
-          additionalProperties: true
-        submittedUnsetFieldIds:
-          type: array
-          uniqueItems: true
-          items: { type: string }
-
-    ChangePage:
-      type: object
-      required: [items, nextCursor, hasMore]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Change'
-        nextCursor:
-          type: string
-          description: Table-scoped opaque Change Cursor. The current default retention is 30 days; without a cursor the server returns the current tail and an empty page.
-        hasMore: { type: boolean }
-
-    Change:
-      type: object
-      required: [id, kind, tableId, revision, occurredAt]
-      properties:
-        id: { type: string }
-        kind:
-          type: string
-          enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, schemaChanged, viewChanged]
-        tableId: { type: string }
-        recordId: { type: string }
-        objectId:
-          type: string
-          description: Field, View, Table, or other schema object ID for non-Record changes.
-        revision: { type: integer }
-        actorId: { type: string }
-        occurredAt: { type: string, format: date-time }
-
-    InitializeAttachmentRequest:
-      type: object
-      required: [source, filename]
-      properties:
-        source:
-          type: string
-          enum: [managed, vault]
-        filename: { type: string }
-        mimeType: { type: string }
-        size:
-          type: integer
-          minimum: 0
-        vaultPath: { type: string }
-
-    ErrorResponse:
-      type: object
-      description: Standard error envelope. HTTP status mapping is 400 BAD_REQUEST or INVALID_CURSOR, 401 UNAUTHENTICATED, 403 FORBIDDEN, 404 NOT_FOUND, 409 CONFLICT, 410 CURSOR_EXPIRED, 422 validation, unsupported operator, or VIEW_CONFIGURATION_REQUIRED, 501 CAPABILITY_NOT_ENABLED, 503 readiness/dependency failure, and 500 INTERNAL_ERROR.
-      required: [error]
-      properties:
-        error:
-          $ref: '#/components/schemas/ErrorBody'
-
-    ErrorBody:
-      type: object
-      description: Error details are safe for user display and diagnostics; requestId must be retained by clients.
-      required: [code, message, requestId]
-      properties:
-        code: { type: string }
-        message: { type: string }
-        requestId: { type: string }
-        details:
-          type: object
-          additionalProperties: true
+      tags:×^5êÚ$z{-®éÜj×G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢FW67&—F–öã¢âW†VÖW&ÂÖ×66ÆRw&÷W–ærâF†R6ÇW7FW&–ærÆv÷&—F†ÒæB6ÇW7FW"–FVçF—G’&R–çFW&æÂæBÖ’6†ævRöâWfW'’ÖVW'“²6Æ–VçG2×W7Bæ÷BW'6—7B6ÇW7FW$–Bà¢&WV—&VC¢¶¶–æBÂ6ÇW7FW$–BÂ÷6—F–öâÂ&÷VæG2Âö–çD6÷VçBÂ&V6÷&G5VW'•Fö¶VåĞ¢&÷W'F–W3 ¢¶–æC ¢G—S¢7G&–æp¢6öç7C¢6ÇW7FW ¢6ÇW7FW$–C ¢G—S¢7G&–æp¢FW67&—F–öã¢W†VÖW&Â–FVçF—G’f÷"&VæFW&W"&V6öæ6–Æ–F–öâv—F†–âF†—2&W7öç6RöæÇ’à¢÷6—F–öã ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôÖ6ö÷&F–æFRp¢&÷VæG3 ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôÖf–Ww÷'Bp¢ö–çD6÷VçC ¢G—S¢–çFVvW ¢Ö–æ–×VÓ¢ ¢W‡ç6–öå¦ööÓ ¢G—S¢çVÖ&W ¢Ö–æ–×VÓ¢ ¢FW67&—F–öã¢7VvvW7FVB¦ööÒBv†–6‚F†—26ÇW7FW"6W&FW2â–b'6VçBÂ÷"&÷fRF†R7F—fR&VæFW&W"÷&÷f–FW"Ö†–×VÒ¦ööÒÂF†R6Æ–VçB÷Vç2F†Rv–æFVB&V6÷&BÆ—7B–ç7FVBà¢&V6÷&G5VW'•Fö¶Vã ¢G—S¢7G&–æp¢FW67&—F–öã¢÷VR6†÷'BÖÆ—fVBFö¶Vâf÷"v–ærF‡&÷Vv‚WfW'’&V6÷&B&W&W6VçFVB'’F†—26ÇW7FW"à ¢ÖVW'•7VÖÖ'“ ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢FW67&—F–öã¢W†7B6÷VçG2÷fW"ÆÂ7F—fR&V6÷&G2ÖF6†–ærF†R6fVBÖf–Wrf–ÇFW"âÖF6†VE&V6÷&D6÷VçBWVÇ2&VæFW&&ÆU&V6÷&D6÷VçBÇW2VæÆö6FVE&V6÷&D6÷VçBÇW2Vç&VæFW&&ÆU&V6÷&D6÷VçBâf–Ww÷'E&VæFW&&ÆU&V6÷&D6÷VçB—27V'6WBöb&VæFW&&ÆU&V6÷&D6÷VçBà¢&WV—&VC¢¶ÖF6†VE&V6÷&D6÷VçBÂ&VæFW&&ÆU&V6÷&D6÷VçBÂf–Ww÷'E&VæFW&&ÆU&V6÷&D6÷VçBÂVæÆö6FVE&V6÷&D6÷VçBÂVç&VæFW&&ÆU&V6÷&D6÷VçEĞ¢&÷W'F–W3 ¢ÖF6†VE&V6÷&D6÷VçC ¢G—S¢–çFVvW ¢f÷&ÖC¢–çCc@¢Ö–æ–×VÓ¢ ¢&VæFW&&ÆU&V6÷&D6÷VçC ¢G—S¢–çFVvW ¢f÷&ÖC¢–çCc@¢Ö–æ–×VÓ¢ ¢f–Ww÷'E&VæFW&&ÆU&V6÷&D6÷VçC ¢G—S¢–çFVvW ¢f÷&ÖC¢–çCc@¢Ö–æ–×VÓ¢ ¢VæÆö6FVE&V6÷&D6÷VçC ¢G—S¢–çFVvW ¢f÷&ÖC¢–çCc@¢Ö–æ–×VÓ¢ ¢FW67&—F–öã¢ÖF6†–ær&V6÷&G2v†÷6RÆö6F–öâ—2Ö—76–ær÷"—2æ÷BfÆ–Btu2ƒB6ö÷&F–æFRà¢Vç&VæFW&&ÆU&V6÷&D6÷VçC ¢G—S¢–çFVvW ¢f÷&ÖC¢–çCc@¢Ö–æ–×VÓ¢ ¢FW67&—F–öã¢ÖF6†–ær&V6÷&G2v—F‚fÆ–Btu2ƒB6ö÷&F–æFR÷WG6–FRF†RU4s£3ƒSr&VæFW&&ÆRÆF—GVFR&ævRà¢FF&÷VæG3 ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôÖf–Ww÷'Bp¢FW67&—F–öã¢&÷VæG2öbWfW'’&VæFW&&ÆRÖF6†–ær&V6÷&BÂöÖ—GFVBv†Vâ&VæFW&&ÆU&V6÷&D6÷VçB—2¦W&òâ—BÖ’6öçF–âGvò&÷†W2v†VâF†RÖ–æ–ÖÂ7â7&÷76W2F†RçF–ÖW&–F–âà ¢ÖVW'•&W7VÇC ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢FW67&—F–öã¢âĞ¢F†RfVGW&W26öÆÆV7F—fVÇ’&W&W6VçBÆÂf–Ww÷'E&VæFW&&ÆU&V6÷&D6÷VçB&V6÷&G3 ¢V6‚ö–çB6öçG&–'WFW2öæRæBV6‚6ÇW7FW"6öçG&–'WFW2ö–çD6÷VçBâF†R6W'fW ¢FF—fVÇ’6ÇW7FW'2VçF–ÂæòÖ÷&RF†âSfVGW&W2&VÖ–âæBæWfW"6–ÆVçFÇ¢G'Væ6FW2&V6÷&G2à¢&WV—&VC¢¶fVGW&W2Â7VÖÖ'’Âf–Wu&Wf—6–öâÂ6†ævT7W'6÷%Ğ¢&÷W'F–W3 ¢fVGW&W3 ¢G—S¢'&¢Ö„—FV×3¢S ¢—FV×3 ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôÖfVGW&Rp¢7VÖÖ'“ ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôÖVW'•7VÖÖ'’p¢f–Wu&Wf—6–öã ¢G—S¢–çFVvW ¢Ö–æ–×VÓ¢¢6†ævT7W'6÷# ¢G—S¢7G&–æp ¢Ö6ÇW7FW%&V6÷&G5VW'•&WVW7C ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢&WV—&VC¢¶6ÇW7FW%Fö¶VåĞ¢&÷W'F–W3 ¢6ÇW7FW%Fö¶Vã ¢G—S¢7G&–æp¢7W'6÷# ¢G—S¢7G&–æp¢FW67&—F–öã¢÷VRæW‡B×vR7W'6÷"&÷VæBFòF†R6ÇW7FW"Fö¶VâæBÆ–Ö—Bà¢Æ–Ö—C ¢G—S¢–çFVvW ¢Ö–æ–×VÓ¢¢Ö†–×VÓ¢S ¢FVfVÇC¢  ¢VW'•&WVW7C ¢G—S¢ö&¦V7@¢FW67&—F–öã¢v†Vâf–Wt–B—27WÆ–VBÂF†Rf–Wr6öæf–wW&F–öâ—2F†R&6RVW'’âW‡Æ–6—Bf–ÇFW"Â6÷'BÂ&ö¦V7F–öâÂæBv–æF–öâfÇVW2FV×÷&&–Ç’÷fW'&–FR—Bf÷"F†—2&WVW7BæB&Ræ÷BW'6—7FVBà¢&÷W'F–W3 ¢f–Wt–C¢²G—S¢7G&–ærĞ¢Æ–fV7–6ÆS ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôÆ–fV7–6ÆU66÷Rp¢7W'6÷# ¢G—S¢7G&–æp¢FW67&—F–öã¢÷VR7W'6÷"&÷VæBFòF†RWV—fÆVçBF&ÆRÂf–WrÂÆ–fV7–6ÆRÂf–ÇFW"Â6÷'BÂ&ö¦V7F–öâÂ6V&6‚ÂÆ–Ö—BÂæB’fW'6–öâà¢Æ–Ö—C Ğ¢G—S¢–çFVvW Ğ¢Ö–æ–×VÓ¢Ğ¢Ö†–×VÓ¢S Ğ¢FVfVÇC¢ Ğ¢&ö¦V7F–öã Ğ¢G—S¢'&Ğ¢—FV×3¢²G—S¢7G&–ærĞĞ¢f–ÇFW# Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôf–ÇFW$æöFRpĞ¢6÷'C ¢G—S¢'&¢FW67&—F–öã¢FV×÷&'’&WVW7B÷fW'&–FRâ–b'6VçBÂF†R6W'fW"W6W27&VFVDB42Â–B42f÷"7F&ÆR7W'6÷"v–æF–öâà¢—FV×3 Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2õ6÷'E7V2pĞ¢6V&6ƒ ¢G—S¢7G&–æp¢FW67&—F–öã¢66RÖ–ç6Vç6—F—fR6öçF–ç26V&6‚÷fW"F†R&–Ö'’f–VÆBÂFW‡BÂÆöæuFW‡BÂæBU$Âf–VÆG2öæÇ’à Ğ¢f–ÇFW$æöFS Ğ¢öæTöc Ğ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôf–ÇFW$w&÷WpĞ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôf–ÇFW%'VÆRpĞ Ğ¢f–ÇFW$w&÷W ¢G—S¢ö&¦V7@¢FW67&—F–öã¢&V7W'6—fRäBôõ"w&÷W2âV6‚w&÷W×W7B6öçF–âBÆV7BöæR6†–ÆBæBF†RÖ†–×VÒæW7F–ærFWF‚—2ƒ²–çfÆ–BFWF‚&WGW&ç2C#"dÄ”DD”ôåôU%$õ"à¢‚ÖÖ‚ÖFWFƒ¢€¢&WV—&VC¢¶¶–æBÂ÷W&F÷"Â6†–ÆG&VåĞ¢&÷W'F–W3 Ğ¢¶–æC Ğ¢6öç7C¢w&÷W Ğ¢÷W&F÷# Ğ¢G—S¢7G&–æpĞ¢VçVÓ¢¶æBÂ÷%ĞĞ¢6†–ÆG&Vã ¢G—S¢'&¢Ö–ä—FV×3¢¢—FV×3 ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôf–ÇFW$æöFRp Ğ¢f–ÇFW%'VÆS ¢G—S¢ö&¦V7@¢FW67&—F–öã¢÷W&F÷"æBfÇVR&RfÆ–FFVBv–ç7BF†R&VfW&Væ6VBf–VÆBG—RâFW‡BÂÆöæuFW‡BÂæBU$Â7W÷'BWVÆ—G’Â–æWVÆ—G’Â6öçF–ç2Âæ÷BÖ6öçF–ç2Â&Vf—‚Â7Vff—‚ÂV×G’ÂæBæ÷BÖV×G’âçVÖ&W"æBFFR7W÷'BWVÆ—G’Â–æWVÆ—G’ÂÆÂ6—‚÷&FW&VB6ö×&—6öç2ÂV×G’ÂæBæ÷BÖV×G’â6†V6¶&÷‚7W÷'G2WVÆ—G’æB–æWVÆ—G“²6VÆV7B7W÷'G2WVÆ—G’Â–æWVÆ—G’ÂV×G’ÂæBæ÷BÖV×G“²×VÇF•6VÆV7B7W÷'G2–æ6ÇVFW2ÂW†6ÇVFW2ÂV×G’ÂæBæ÷BÖV×G“²Æö6F–öâ7W÷'G2V×G’æBæ÷BÖV×G’âçVÆÂÂÖ—76–ærÂæBV×G’7G&–ær&RF—7F–æ7C²FW‡BÖF6†–ær—266RÖ–ç6Vç6—F—fRà¢&WV—&VC¢¶¶–æBÂf–VÆD–BÂ÷W&F÷%ĞĞ¢&÷W'F–W3 Ğ¢¶–æC Ğ¢6öç7C¢'VÆPĞ¢f–VÆD–C¢²G—S¢7G&–ærĞĞ¢÷W&F÷# Ğ¢G—S¢7G&–æpĞ¢VçVÓ¢¶—2Â—4æ÷BÂ—4V×G’Â—4æ÷DV×G’Â6öçF–ç2Âæ÷D6öçF–ç2Â7F'G5v—F‚ÂVæG5v—F‚Âw&VFW%F†âÂw&VFW$÷$WVÂÂÆW75F†âÂÆW74÷$WVÂÂ–æ6ÇVFW2ÂW†6ÇVFW5ĞĞ¢fÇVS ¢FW67&—F–öã¢f–VÆB×G—R×7V6–f–2fÇVRâVç7W÷'FVB÷W&F÷'2&WGW&âC#"Tå5Uõ%DTEôõU$Dõ"à Ğ¢6÷'E7V3 Ğ¢G—S¢ö&¦V7@Ğ¢&WV—&VC¢¶f–VÆD–BÂF—&V7F–öåĞĞ¢&÷W'F–W3 Ğ¢f–VÆD–C¢²G—S¢7G&–ærĞĞ¢F—&V7F–öã Ğ¢G—S¢7G&–æpĞ¢VçVÓ¢¶62ÂFW65ĞĞ¢çVÆÇ3 Ğ¢G—S¢7G&–æpĞ¢VçVÓ¢¶f—'7BÂÆ7EĞĞ¢FVfVÇC¢Æ7@Ğ Ğ¢VW'•&W7VÇC Ğ¢G—S¢ö&¦V7@Ğ¢&WV—&VC¢¶—FV×2Â6†ævT7W'6÷%ĞĞ¢&÷W'F–W3 Ğ¢—FV×3 Ğ¢G—S¢'&Ğ¢—FV×3 Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2õ&V6÷&BpĞ¢æW‡D7W'6÷# ¢G—S¢7G&–æp¢FW67&—F–öã¢÷VR7W'6÷"f÷"F†RæW‡BvS²—B—2&÷VæBFòF†—2WV—fÆVçBVW'’à¢†4Ö÷&S Ğ¢G—S¢&ööÆVàĞ¢6†ævT7W'6÷# Ğ¢G—S¢7G&–æpĞ¢F÷FÄW7F–ÖFS Ğ¢G—S¢–çFVvW Ğ Ğ¢×WFF–öå&WVW7C ¢G—S¢ö&¦V7@¢FW67&—F–öã¢ÆÂ6öÖÖæG2&RÆ–VBFöÖ–6ÆÇ’–âöæRG&ç67F–öââ–bç’6öÖÖæBf–Ç2ÂF†Rv†öÆR&WVW7B&öÆÇ2&6²â&WW6–ær6Æ–VçD×WFF–öä–B&WGW&ç2F†Rf—'7B&W7VÇBv—F†÷WBÇ––ærF†R×WFF–öâv–âà¢&WV—&VC¢¶6Æ–VçD×WFF–öä–BÂ6öÖÖæG5Ğ¢&÷W'F–W3 ¢6Æ–VçD×WFF–öä–C ¢G—S¢7G&–æp¢GFW&ã¢uæ×WEõ³Ó”Ô„¤´ÔåÕEbÕ¥×³#gÒBp¢FW67&—F–öã¢Væ—VRv—F‚7F÷$–Bâ&WW6–ær—Bv—F‚F†R6ÖR&WVW7B&öG’&WGW&ç2F†R†—7F÷&–6Â&W7VÇC²F–ffW&VçB&öG’&WGW&ç2C’”DTÕõDTä5•ô´U•õ$UU4TBâ&WF–ç2&W7VÇG2f÷"3F—2à¢6öÖÖæG3 Ğ¢G—S¢'&Ğ¢Ö–ä—FV×3¢Ğ¢Ö„—FV×3¢S Ğ¢—FV×3 Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ô×WFF–öä6öÖÖæBpĞ Ğ¢×WFF–öä6öÖÖæC Ğ¢öæTöc Ğ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ô7&VFU&V6÷&D6öÖÖæBpĞ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2õWFFU&V6÷&D6öÖÖæBpĞ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôFVÆWFU&V6÷&D6öÖÖæBpĞ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2õ&W7F÷&U&V6÷&D6öÖÖæBpĞ Ğ¢7&VFU&V6÷&D6öÖÖæC ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢&WV—&VC¢¶¶–æBÂfÇVW5Ğ¢&÷W'F–W3 ¢¶–æC¢²6öç7C¢7&VFU&V6÷&BĞ¢fÇVW3 ¢ÆÄöc ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2õ&V6÷&EfÇVW2p¢FW67&—F–öã¢Ö’&RâV×G’ö&¦V7C²&–Ö'’f–VÆBfÇVR—2æ÷B&WV—&VBâW‡Æ–6—BçVÆÂ÷"æGW&ÂV×G’fÇVW2&RF—7F–æ7Bg&öÒöÖ—GFVBÂVç6WBf–VÆG2à ¢WFFU&V6÷&D6öÖÖæC ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢FW67&—F–öã¢w&—FW2f–VÆG2–â6WBæB&VÖ÷fW2¶W—2–âVç6WDf–VÆD–G2âf–VÆB&W6VçB–â&÷F‚—2–çfÆ–C²öÖ—GFVBf–VÆG2&RVæ6†ævVBà¢&WV—&VC¢¶¶–æBÂ&V6÷&D–BÂW‡V7FVE&Wf—6–öåĞ¢ç”öc ¢Ò&WV—&VC¢·6WEĞ¢Ò&WV—&VC¢·Vç6WDf–VÆD–G5Ğ¢&÷W'F–W3 ¢¶–æC¢²6öç7C¢WFFU&V6÷&BĞ¢&V6÷&D–C¢²G—S¢7G&–ærĞ¢W‡V7FVE&Wf—6–öã ¢G—S¢–çFVvW ¢Ö–æ–×VÓ¢¢6WC ¢ÆÄöc ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2õ&V6÷&EfÇVW2p¢Ö–å&÷W'F–W3¢¢FW67&—F–öã¢fÇVW2¶W–VB'’f–VÆB”BâW‡Æ–6—BçVÆÂÂV×G’7G&–ærÂ÷"V×G’'&’—2w&—FRv†VâfÆ–Bf÷"F†Rf–VÆBG—Rà¢Vç6WDf–VÆD–G3 ¢G—S¢'&¢Ö–ä—FV×3¢¢Væ—VT—FV×3¢G'VP¢—FV×3¢²G—S¢7G&–ærĞ¢FW67&—F–öã¢f–VÆB”G2v†÷6R¶W—2&R&VÖ÷fVBg&öÒ&V6÷&BçfÇVW2à ¢FVÆWFU&V6÷&D6öÖÖæC ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢&WV—&VC¢¶¶–æBÂ&V6÷&D–BÂW‡V7FVE&Wf—6–öåĞĞ¢&÷W'F–W3 Ğ¢¶–æC¢²6öç7C¢FVÆWFU&V6÷&BĞĞ¢&V6÷&D–C¢²G—S¢7G&–ærĞĞ¢W‡V7FVE&Wf—6–öã Ğ¢G—S¢–çFVvW Ğ¢Ö–æ–×VÓ¢Ğ Ğ¢&W7F÷&U&V6÷&D6öÖÖæC ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢&WV—&VC¢¶¶–æBÂ&V6÷&D–BÂW‡V7FVE&Wf—6–öåĞĞ¢&÷W'F–W3 Ğ¢¶–æC¢²6öç7C¢&W7F÷&U&V6÷&BĞĞ¢&V6÷&D–C¢²G—S¢7G&–ærĞĞ¢W‡V7FVE&Wf—6–öã Ğ¢G—S¢–çFVvW Ğ¢Ö–æ–×VÓ¢Ğ Ğ¢×WFF–öå&W7VÇC ¢G—S¢ö&¦V7@¢FW67&—F–öã¢F†R&WVW7B—2FöÖ–2âç’&V¦V7FVB÷"6öæfÆ–7F–ær6öÖÖæB&öÆÇ2&6²WfW'’6öÖÖæB–âF†R&WVW7Bà¢&WV—&VC¢¶6Æ–VçD×WFF–öä–BÂ&W7VÇG5ĞĞ¢&÷W'F–W3 Ğ¢6Æ–VçD×WFF–öä–C¢²G—S¢7G&–ærĞĞ¢&W7VÇG3 Ğ¢G—S¢'&Ğ¢—FV×3 Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ô6öÖÖæE&W7VÇBpĞ Ğ¢6öÖÖæE&W7VÇC Ğ¢G—S¢ö&¦V7@Ğ¢&WV—&VC¢¶–æFW‚Â7FGW5ĞĞ¢&÷W'F–W3 Ğ¢–æFWƒ Ğ¢G—S¢–çFVvW Ğ¢Ö–æ–×VÓ¢ Ğ¢7FGW3 ¢G—S¢7G&–æp¢VçVÓ¢¶Æ–VEĞ¢&V6÷&C Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2õ&V6÷&BpĞ¢W'&÷# Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôW'&÷$&öG’pĞ Ğ¢6öæfÆ–7E&W7öç6S ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢fÇ6P¢FW67&—F–öã¢&Wf—6–öâ6öæfÆ–7BW6–ærF†R7FæF&BW'&÷"VçfVÆ÷Rà¢&WV—&VC¢¶W'&÷%Ğ¢&÷W'F–W3 ¢W'&÷# ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ô6öæfÆ–7DW'&÷$&öG’p ¢6öæfÆ–7DW'&÷$&öG“ ¢ÆÄöc ¢ÒG&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôW'&÷$&öG’p¢ÒG—S¢ö&¦V7@¢&WV—&VC¢¶6Æ–VçD×WFF–öä–BÂf–ÆVD6öÖÖæD–æFW‚Â6öæfÆ–7G5Ğ¢&÷W'F–W3 ¢6öFS ¢6öç7C¢4ôädÄ”5@¢6Æ–VçD×WFF–öä–C ¢G—S¢7G&–æp¢f–ÆVD6öÖÖæD–æFWƒ ¢G—S¢–çFVvW ¢Ö–æ–×VÓ¢ ¢6öæfÆ–7G3 ¢G—S¢'&¢—FV×3 ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ô6öæfÆ–7D&öG’p Ğ¢6öæfÆ–7D&öG“ Ğ¢G—S¢ö&¦V7@Ğ¢&WV—&VC¢·&V6÷&D–BÂW‡V7FVE&Wf—6–öâÂ7W'&VçE&Wf—6–öâÂ7W'&VçEfÇVW5ĞĞ¢&÷W'F–W3 Ğ¢&V6÷&D–C¢²G—S¢7G&–ærĞĞ¢W‡V7FVE&Wf—6–öã Ğ¢G—S¢–çFVvW Ğ¢7W'&VçE&Wf—6–öã Ğ¢G—S¢–çFVvW Ğ¢7W'&VçEfÇVW3 Ğ¢G—S¢ö&¦V7@Ğ¢FF—F–öæÅ&÷W'F–W3¢G'VPĞ¢7V&Ö—GFVE6WC ¢G—S¢ö&¦V7@¢FF—F–öæÅ&÷W'F–W3¢G'VP¢7V&Ö—GFVEVç6WDf–VÆD–G3 ¢G—S¢'&¢Væ—VT—FV×3¢G'VP¢—FV×3¢²G—S¢7G&–ærĞ Ğ¢6†ævUvS ¢G—S¢ö&¦V7@¢&WV—&VC¢¶—FV×2ÂæW‡D7W'6÷"Â†4Ö÷&UĞĞ¢&÷W'F–W3 Ğ¢—FV×3 Ğ¢G—S¢'&Ğ¢—FV×3 Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ô6†ævRpĞ¢æW‡D7W'6÷# ¢G—S¢7G&–æp¢FW67&—F–öã¢F&ÆR×66÷VB÷VR6†ævR7W'6÷"âF†R7W'&VçBFVfVÇB&WFVçF–öâ—23F—3²v—F†÷WB7W'6÷"F†R6W'fW"&WGW&ç2F†R7W'&VçBF–ÂæBâV×G’vRà¢†4Ö÷&S¢²G—S¢&ööÆVâĞĞ Ğ¢6†ævS Ğ¢G—S¢ö&¦V7@Ğ¢&WV—&VC¢¶–BÂ¶–æBÂF&ÆT–BÂ&Wf—6–öâÂö67W'&VDEĞĞ¢&÷W'F–W3 Ğ¢–C¢²G—S¢7G&–ærĞĞ¢¶–æC Ğ¢G—S¢7G&–æpĞ¢VçVÓ¢·&V6÷&D7&VFVBÂ&V6÷&EWFFVBÂ&V6÷&DFVÆWFVBÂ&V6÷&E&W7F÷&VBÂ66†VÖ6†ævVBÂf–Wt6†ævVEĞĞ¢F&ÆT–C¢²G—S¢7G&–ærĞĞ¢&V6÷&D–C¢²G—S¢7G&–ærĞ¢ö&¦V7D–C ¢G—S¢7G&–æp¢FW67&—F–öã¢f–VÆBÂf–WrÂF&ÆRÂ÷"÷F†W"66†VÖö&¦V7B”Bf÷"æöâÕ&V6÷&B6†ævW2à¢&Wf—6–öã¢²G—S¢–çFVvW"Ğ¢7F÷$–C¢²G—S¢7G&–ærĞĞ¢ö67W'&VDC¢²G—S¢7G&–ærÂf÷&ÖC¢FFR×F–ÖRĞĞ Ğ¢–æ—F–Æ—¦TGF6†ÖVçE&WVW7C Ğ¢G—S¢ö&¦V7@Ğ¢&WV—&VC¢·6÷W&6RÂf–ÆVæÖUĞĞ¢&÷W'F–W3 Ğ¢6÷W&6S Ğ¢G—S¢7G&–æpĞ¢VçVÓ¢¶ÖævVBÂfVÇEĞĞ¢f–ÆVæÖS¢²G—S¢7G&–ærĞĞ¢Ö–ÖUG—S¢²G—S¢7G&–ærĞĞ¢6—¦S Ğ¢G—S¢–çFVvW Ğ¢Ö–æ–×VÓ¢ Ğ¢fVÇEFƒ¢²G—S¢7G&–ærĞĞ Ğ¢W'&÷%&W7öç6S ¢G—S¢ö&¦V7@¢FW67&—F–öã¢7FæF&BW'&÷"VçfVÆ÷Râ…EE7FGW2Ö–ær—2C$Eõ$UTU5B÷"”ådÄ”Eô5U%4õ"ÂCTäUD„TåD”4DTBÂC2dõ$$”DDTâÂCBäõEôdõTäBÂC’4ôädÄ”5BÂC5U%4õ%ôU…•$TBÂC#"fÆ–FF–öâÂVç7W÷'FVB÷W&F÷"Â÷"d”Uuô4ôäd”uU$D”ôåõ$UT•$TBÂS4$”Ä•E•ôäõEôTä$ÄTBÂS2&VF–æW72öFWVæFVæ7’f–ÇW&RÂæBS”åDU$äÅôU%$õ"à¢&WV—&VC¢¶W'&÷%Ğ¢&÷W'F–W3 Ğ¢W'&÷# Ğ¢G&Vc¢r2ö6ö×öæVçG2÷66†VÖ2ôW'&÷$&öG’pĞ Ğ¢W'&÷$&öG“ ¢G—S¢ö&¦V7@¢FW67&—F–öã¢W'&÷"FWF–Ç2&R6fRf÷"W6W"F—7Æ’æBF–væ÷7F–73²&WVW7D–B×W7B&R&WF–æVB'’6Æ–VçG2à¢&WV—&VC¢¶6öFRÂÖW76vRÂ&WVW7D–EĞ¢&÷W'F–W3 Ğ¢6öFS¢²G—S¢7G&–ærĞĞ¢ÖW76vS¢²G—S¢7G&–ærĞĞ¢&WVW7D–C¢²G—S¢7G&–ærĞĞ¢FWF–Ç3 Ğ¢G—S¢ö&¦V7@Ğ¢FF—F–öæÅ&÷W'F–W3¢G'VPĞ
