@@ -3,6 +3,7 @@ package id
 import (
 	"crypto/rand"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -18,9 +19,23 @@ const (
 	AttachmentPrefix = "att_"
 	ChangePrefix     = "chg_"
 	ActorPrefix      = "act_"
+	TokenPrefix      = "tok_"
+	OptionPrefix     = "opt_"
 	MutationPrefix   = "mut_"
 	RequestPrefix    = "req_"
 )
+
+func Valid(prefix, value string) bool {
+	if prefix == "" || len(value) != len(prefix)+26 || value[:len(prefix)] != prefix {
+		return false
+	}
+	for _, current := range value[len(prefix):] {
+		if current > 127 || !strings.ContainsRune(encoding, current) {
+			return false
+		}
+	}
+	return true
+}
 
 func New(prefix string) (string, error) {
 	if prefix == "" {

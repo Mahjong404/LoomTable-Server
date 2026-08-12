@@ -12,14 +12,21 @@ func HashToken(token string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func VerifyBearer(header, expectedHash string) bool {
+func BearerToken(header string) (string, bool) {
 	const prefix = "Bearer "
-	if !strings.HasPrefix(header, prefix) || strings.TrimSpace(expectedHash) == "" {
+	if !strings.HasPrefix(header, prefix) {
+		return "", false
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(header, prefix))
+	return token, token != ""
+}
+
+func VerifyBearer(header, expectedHash string) bool {
+	if strings.TrimSpace(expectedHash) == "" {
 		return false
 	}
-
-	token := strings.TrimSpace(strings.TrimPrefix(header, prefix))
-	if token == "" {
+	token, ok := BearerToken(header)
+	if !ok {
 		return false
 	}
 

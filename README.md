@@ -4,7 +4,7 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 
 ## 当前状态
 
-当前仓库已开始 P0 Server 实现。当前增量包括 HTTP 运行骨架、认证边界、健康检查、Server Meta、PostgreSQL 迁移入口和初始存储模型；Workspace、Table、Record 的业务 Handler 将在此基础上继续接入。
+当前仓库处于 P0 实现阶段。已接入 PostgreSQL 认证与 Bootstrap 状态、严格 JSON 请求边界，以及 Workspace/Base/Table 的列表、读取、创建和并发控制；Table 创建会原子生成 Primary Field 与初始 Grid View。Record 已实现直接读取和原子批量 Mutation，包括九种 P0 值校验、幂等、冲突、No-op、回收状态、Change 与查询投影。Field/View 管理、Record Query/Change 拉取、运维脚本和完整集成验收仍在继续。
 
 ## 文档
 

@@ -115,7 +115,13 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     PRIMARY KEY (actor_id, client_mutation_id)
 );
 
+ALTER TABLE tables
+    ADD CONSTRAINT tables_primary_field_fk
+    FOREIGN KEY (primary_field_id) REFERENCES fields(id)
+    DEFERRABLE INITIALLY DEFERRED;
+
 CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_actor_active_name_idx ON auth_tokens (actor_id, name_key) WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS fields_table_primary_idx ON fields (table_id) WHERE is_primary;
 CREATE INDEX IF NOT EXISTS workspaces_actor_idx ON workspaces (actor_id, created_at, id);
 CREATE INDEX IF NOT EXISTS bases_workspace_live_idx ON bases (workspace_id, created_at, id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS tables_base_live_idx ON tables (base_id, created_at, id) WHERE deleted_at IS NULL;
