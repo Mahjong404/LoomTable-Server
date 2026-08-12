@@ -38,6 +38,10 @@ _Avoid_: marker record, GeoPoint
 A map-scale summary of multiple Map Points that are too dense to present individually.
 _Avoid_: grouped Record, aggregate Record
 
+**Map Summary**:
+The exact global counts and geographic bounds for the active Records matched by a saved Map View, independent of one temporary Map Viewport.
+_Avoid_: viewport count, Map Cluster
+
 **Default Camera**:
 The saved initial center and zoom of a Map View; it is distinct from a client's temporary browsing position.
 _Avoid_: current viewport, last pan position
@@ -84,9 +88,17 @@ _Avoid_: field value slot
 A Field-and-Record intersection for which no value has been supplied; it is distinct from an explicit null or a type-specific empty value.
 _Avoid_: null Cell, empty string
 
+**Natural Empty Value**:
+A stored, non-null value that a Field Type treats as empty for filtering, such as an empty Text string or an empty MultiSelect list.
+_Avoid_: Unset Cell, null
+
 **Primary Field**:
 The user-facing Field used to identify a Record in lists, selectors, and summaries.
 _Avoid_: ID field, title column
+
+**Select Option**:
+A stable server-owned choice in a Select or MultiSelect Field; Records reference its ID rather than its mutable display name.
+_Avoid_: tag text, label string
 
 **Location**:
 A place value that may contain a label, address, and geographic coordinates.
@@ -139,7 +151,7 @@ A requested change to one or more Records or schema objects.
 _Avoid_: write event, database update
 
 **Revision**:
-The version of a Record used to determine whether a Mutation is based on current data.
+The version of a mutable Record or metadata object used to determine whether a change is based on its current state.
 _Avoid_: timestamp, sync version
 
 **Change**:
@@ -151,8 +163,16 @@ A position from which a client can request later Changes.
 _Avoid_: page number, sync token
 
 **Conflict**:
-A rejected Mutation whose expected Revision is older than the current Revision.
+A rejected change whose expected Revision does not equal the object's current Revision.
 _Avoid_: merge error, overwrite warning
+
+**Lifecycle Scope**:
+A query choice that selects objects in Active, Recycle, or both states according to the object's own deletion state.
+_Avoid_: ancestor visibility, permission scope
+
+**Query Snapshot**:
+A short-lived, bound query context whose membership must remain stable while its continuation token is used.
+_Avoid_: saved View, live page
 
 **Recycle State**:
 The retained state of a soft-deleted LoomTable object that can still be discovered and restored.

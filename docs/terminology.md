@@ -14,6 +14,7 @@
 | map-view | Map View | 地图视图 | GIS 页面 | 将带坐标记录显示在地图上的视图 |
 | map-point | Map Point | 地图点 | Marker Record、GeoPoint | Map View 中一条已定位 Record 的呈现 |
 | map-cluster | Map Cluster | 地图聚类 | 分组 Record、聚合 Record | 当前比例尺下多个密集 Map Point 的汇总呈现 |
+| map-summary | Map Summary | 地图汇总 | 视口数量、地图聚类 | 与临时视口无关、针对已保存 Map View 匹配集的精确全局计数与地理范围 |
 | default-camera | Default Camera | 默认相机 | 当前视口、上次平移位置 | Map View 共享保存的初始中心点和缩放级别 |
 | map-viewport | Map Viewport | 地图视口 | 默认相机、Map View 配置 | 一个 Map View 实例当前可见、不会自动保存的地理范围 |
 | unlocated-record | Unlocated Record | 未定位记录 | 隐藏记录、不可渲染地点 | Map View 命中但缺少合法 WGS 84 坐标的 Record |
@@ -25,7 +26,9 @@
 | record | Record | 记录 | 行、数据项 | 数据表中的独立数据项 |
 | cell | Cell | 单元格 | 字段值槽 | 记录与字段交叉位置的值 |
 | unset-cell | Unset Cell | 未设置单元格 | null、空字符串 | 尚未提供值、与显式空值不同的单元格 |
+| natural-empty-value | Natural Empty Value | 自然空值 | 未设置、null | 已存储且非 null、但该 Field Type 在空值筛选中视为空的值 |
 | primary-field | Primary Field | 主字段 | ID 字段、标题列 | 用于识别记录的用户可见字段 |
+| select-option | Select Option | 选项 | 标签文本、显示名称 | Select/MultiSelect 中由 Server 持有稳定 ID 的可选值 |
 | relation | Relation | 关联 | 外键字段、链接文本 | 对其他数据表记录的引用 |
 | computed-field | Computed Field | 计算字段 | 公式列 | 由其他数据派生且只读的字段 |
 | location | Location | 地点 | GeoPoint 字段、地点文本 | 可包含名称、地址和坐标的地点值 |
@@ -43,10 +46,12 @@
 | Canonical ID | English | 简体中文 | Avoid | 说明 |
 |---|---|---|---|---|
 | mutation | Mutation | 变更请求 | 写事件、数据库更新 | 客户端请求的数据或结构修改 |
-| revision | Revision | 记录版本 | 时间戳、同步版本 | 用于并发控制的记录版本 |
+| revision | Revision | 对象版本 | 时间戳、同步版本 | 用于 Record 或可变元数据对象并发控制的版本 |
 | change | Change | 变更 | 请求、操作 | 已持久化的数据变化事实 |
 | change-cursor | Change Cursor | 变更游标 | 页码、同步令牌 | 拉取后续变更的位置 |
-| conflict | Conflict | 冲突 | 合并错误、覆盖警告 | 基于过期版本的变更被拒绝 |
+| conflict | Conflict | 冲突 | 合并错误、覆盖警告 | expected Revision 与对象当前 Revision 不相等的变更被拒绝 |
+| lifecycle-scope | Lifecycle Scope | 生命周期范围 | 祖先可见性、权限范围 | 按对象自身状态选择 Active、Recycle 或两者的查询范围 |
+| query-snapshot | Query Snapshot | 查询快照 | 保存视图、实时分页 | Continuation Token 使用期间成员必须稳定的短期绑定查询上下文 |
 | recycle-state | Recycle State | 回收状态 | 硬删除、回收站副本 | 可发现并恢复的软删除对象状态 |
 | actor | Actor | 操作者身份 | Token、会话、用户账户 | 变更归属的稳定认证身份 |
 | access-token | Access Token | 访问令牌 | Actor ID、用户身份、密码 | 具名、可独立撤销且不改变 Actor 身份的秘密凭据 |
