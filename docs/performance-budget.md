@@ -12,7 +12,7 @@
 | XL | 20,000 | 50 | 产品基线 |
 | Stress | 50,000+ | 50 | 压力测试 |
 
-测试值需要包含空值、长文本、多选、Location、Attachment 引用和不同长度的主字段。
+测试值需要包含空值、长文本、多选、Location 和不同长度的主字段；Attachment 引用作为后续 capability 的扩展夹具。
 
 ## 临时目标
 
@@ -52,8 +52,9 @@
 - 使用游标分页。
 - 只缓存当前窗口和相邻页面。
 - Grid 行虚拟化。
-- Attachment 使用缩略图、懒加载和缓存。
-- Map View 使用视口查询或聚类，不能一次创建所有复杂 Popup。
+- 启用 Attachment capability 后使用缩略图、懒加载和缓存。
+- Map View 使用服务端视口查询返回最多 500 个 Map Point/Map Cluster；Server 自适应聚类并完整代表视口内结果，不能下载完整匹配集、静默截断或一次创建所有复杂 Popup。
+- Map Point 只携带 Record ID、坐标和 Primary Field 文本；详情按需直查。全局计数和 Data Bounds 由数据库聚合产生，不把完整 Record 集传给 Plugin。
 - 对热点 Field 增加针对性的 PostgreSQL 索引，而不是为所有 Field 盲目建索引。
 
 ## 回归场景
@@ -68,4 +69,3 @@
 8. 模拟服务不可用和恢复。
 9. 模拟 Revision Conflict。
 10. 在窄桌面 Pane、平板和手机布局下运行。
-

@@ -4,7 +4,7 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 
 ## 当前状态
 
-当前仓库处于设计和工程准备阶段，尚未开始 P0 功能实现。
+当前仓库已开始 P0 Server 实现。当前增量包括 HTTP 运行骨架、认证边界、健康检查、Server Meta、PostgreSQL 迁移入口和初始存储模型；Workspace、Table、Record 的业务 Handler 将在此基础上继续接入。
 
 ## 文档
 
@@ -26,5 +26,20 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 - 第一阶段不要求 Redis、Kafka、RabbitMQ 或独立对象存储。
 - API 合同由 `docs/api/openapi.yaml` 定义，并导入 Apifox。
 
-许可证：GPL-3.0。
+## 本地运行
 
+需要 Go 1.22+。配置 `LOOMTABLE_DATABASE_URL` 和 `LOOMTABLE_AUTH_TOKEN_HASH` 后运行：
+
+```text
+go run ./cmd/loomtable-server
+```
+
+首次初始化数据库时，先执行显式 Migration：
+
+```text
+go run ./cmd/loomtable-migrate -dir migrations
+```
+
+Personal Docker Compose 的环境变量示例见 `.env.example`；Attachment 文件卷在 P0 只作为预留基础设施，`attachments` capability 默认未启用。
+
+许可证：GPL-3.0。

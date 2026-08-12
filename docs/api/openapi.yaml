@@ -28,6 +28,52 @@ tags:
 security:
   - bearerAuth: []
 paths:
+  /healthz:
+    get:
+      tags: [Meta]
+      operationId: healthz
+      security: []
+      responses:
+        '200':
+          description: Server process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /readyz:
+    get:
+      tags: [Meta]
+      operationId: readyz
+      security: []
+      responses:
+        '200':
+          description: Server is ready to accept business requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+        '503':
+          description: Server is alive but not ready; pending migrations return MIGRATION_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /v1/meta:
     get:
       tags: [Meta]
@@ -127,6 +173,7 @@ paths:
       operationId: listTables
       parameters:
         - $ref: '#/components/parameters/BaseId'
+        - $ref: '#/components/parameters/Lifecycle'
       responses:
         '200':
           description: Tables in a Base
@@ -197,9 +244,33 @@ paths:
     delete:
       tags: [Tables]
       operationId: deleteTable
+      parameters:
+        - $ref: '#/components/parameters/ExpectedRevision'
       responses:
         '204':
           description: Table moved to the recycle state
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Tables]
+      operationId: restoreTable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreMetadataRequest'
+      responses:
+        '200':
+          description: Table restored when its expected revision matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -209,6 +280,8 @@ paths:
     get:
       tags: [Fields]
       operationId: listFields
+      parameters:
+        - $ref: '#/components/parameters/Lifecycle'
       responses:
         '200':
           description: Fields in a Table
@@ -267,9 +340,33 @@ paths:
     delete:
       tags: [Fields]
       operationId: deleteField
+      parameters:
+        - $ref: '#/components/parameters/ExpectedRevision'
       responses:
         '204':
           description: Field moved to the recycle state
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/fields/{fieldId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/FieldId'
+    post:
+      tags: [Fields]
+      operationId: restoreField
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreMetadataRequest'
+      responses:
+        '200':
+          description: Field restored when its expected revision matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Field'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -279,6 +376,8 @@ paths:
     get:
       tags: [Views]
       operationId: listViews
+      parameters:
+        - $ref: '#/components/parameters/Lifecycle'
       responses:
         '200':
           description: Views in a Table
@@ -349,9 +448,126 @@ paths:
     delete:
       tags: [Views]
       operationId: deleteView
+      parameters:
+        - $ref: '#/components/parameters/ExpectedRevision'
       responses:
         '204':
           description: View deleted
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Views]
+      operationId: restoreView
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreMetadataRequest'
+      responses:
+        '200':
+          description: View restored when its expected revision matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}/map/query:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Views]
+      operationId: queryMap
+      description: Queries the saved Map View against the current client viewport. The Server always uses the View's saved Location Field and Filter; request-time overrides are not accepted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MapQueryRequest'
+      responses:
+        '200':
+          description: At most 500 Map Points or Map Clusters that collectively represent every renderable matching Record in the viewport
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapQueryResult'
+        '400':
+          description: Viewport, zoom, or pixel dimensions are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The View is not a Map View or its saved Location Field is unavailable; an unavailable field returns VIEW_CONFIGURATION_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}/map/cluster-records/query:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Records]
+      operationId: queryMapClusterRecords
+      description: Pages through the Records represented by a Map Cluster. Cluster tokens and cursors are opaque, short-lived, and bound to the originating View revision, saved Filter, Location Field, and map-query snapshot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MapClusterRecordsQueryRequest'
+      responses:
+        '200':
+          description: A cursor page of full Records represented by the cluster
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '400':
+          description: Cluster token or cursor is invalid or bound to another query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Cluster token or cursor expired; the client must refresh the viewport before opening the cluster again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The View is no longer a usable Map View
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/records/{recordId}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      tags: [Records]
+      operationId: getRecord
+      description: Returns one full Record for details opened from a lightweight Map Point or another direct reference.
+      responses:
+        '200':
+          description: Full Record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Record'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -374,6 +590,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueryResult'
+        '400':
+          description: Invalid request or cursor bound to a different query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Cursor has expired and the client must restart from the first page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Filter, sort, projection, or field operator is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -402,6 +636,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConflictResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Bearer Token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Actor is authenticated but forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Table or referenced record was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Field value or command semantics are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -412,361 +676,291 @@ paths:
       tags: [Changes]
       operationId: pullChanges
       parameters:
-        - name: cursor
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-            default: 100
-      responses:
-        '200':
-          description: Changes after the supplied cursor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChangePage'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
+        - name…4166 tokens truncated…es:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        type:
+          type: string
+          const: grid
+        config:
+          $ref: '#/components/schemas/GridViewConfig'
+        expectedRevision:
+          type: integer
+          minimum: 1
 
-  /v1/attachments/init:
-    post:
-      tags: [Attachments]
-      operationId: initializeAttachment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InitializeAttachmentRequest'
-      responses:
-        '201':
-          description: Attachment metadata initialized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Attachment'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/attachments/{attachmentId}:
-    parameters:
-      - $ref: '#/components/parameters/AttachmentId'
-    get:
-      tags: [Attachments]
-      operationId: getAttachment
-      responses:
-        '200':
-          description: Attachment metadata
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Attachment'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-    delete:
-      tags: [Attachments]
-      operationId: deleteAttachment
-      responses:
-        '204':
-          description: Attachment reference removed; physical cleanup may be deferred
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-  /v1/attachments/{attachmentId}/content:
-    parameters:
-      - $ref: '#/components/parameters/AttachmentId'
-    put:
-      tags: [Attachments]
-      operationId: uploadAttachmentContent
-      requestBody:
-        required: true
-        content:
-          application/octet-stream: {}
-      responses:
-        '204':
-          description: Attachment content stored
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-    get:
-      tags: [Attachments]
-      operationId: downloadAttachmentContent
-      responses:
-        '200':
-          description: Attachment content
-          content:
-            application/octet-stream: {}
-            image/*: {}
-            application/pdf: {}
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-
-  parameters:
-    WorkspaceId:
-      name: workspaceId
-      in: query
-      required: true
-      schema:
-        type: string
-    BaseId:
-      name: baseId
-      in: query
-      required: true
-      schema:
-        type: string
-    TableId:
-      name: tableId
-      in: path
-      required: true
-      schema:
-        type: string
-    FieldId:
-      name: fieldId
-      in: path
-      required: true
-      schema:
-        type: string
-    ViewId:
-      name: viewId
-      in: path
-      required: true
-      schema:
-        type: string
-    AttachmentId:
-      name: attachmentId
-      in: path
-      required: true
-      schema:
-        type: string
-
-  responses:
-    ErrorResponse:
-      description: LoomTable API error
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-
-  schemas:
-    ServerMeta:
+    UpdateMapViewRequest:
       type: object
-      required: [serverVersion, apiVersion, minPluginVersion, capabilities]
+      additionalProperties: false
+      required: [type, config, expectedRevision]
       properties:
-        serverVersion:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        type:
           type: string
-        apiVersion:
+          const: map
+        config:
+          $ref: '#/components/schemas/MapViewConfig'
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    GridViewConfig:
+      type: object
+      additionalProperties: false
+      description: P0 Grid configuration. Grouping is reserved and is not implemented in P0.
+      properties:
+        projection:
+          type: array
+          items: { type: string }
+        columnOrder:
+          type: array
+          items: { type: string }
+        columnWidths:
+          type: object
+          additionalProperties:
+            type: integer
+        frozenFieldIds:
+          type: array
+          items: { type: string }
+        rowHeight:
           type: string
-          example: v1
-        minPluginVersion:
-          type: string
-        capabilities:
+        filter:
+          $ref: '#/components/schemas/FilterNode'
+        sort:
           type: array
           items:
-            type: string
-        migrationRequired:
-          type: boolean
+            $ref: '#/components/schemas/SortSpec'
 
-    Workspace:
+    MapViewConfig:
       type: object
-      required: [id, name, createdAt, updatedAt]
+      additionalProperties: false
+      description: P0 Map configuration for an active Location Field in the same Table. Center and zoom are an explicitly saved Default Camera, not a client's temporary viewport. Tile provider selection and credentials are client-local and never appear here.
+      required: [locationFieldId]
+      dependentRequired:
+        center: [zoom]
+        zoom: [center]
       properties:
-        id: { type: string }
-        name: { type: string }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    Base:
-      type: object
-      required: [id, workspaceId, name, createdAt, updatedAt]
-      properties:
-        id: { type: string }
-        workspaceId: { type: string }
-        name: { type: string }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    Table:
-      type: object
-      required: [id, baseId, name, primaryFieldId, createdAt, updatedAt]
-      properties:
-        id: { type: string }
-        baseId: { type: string }
-        name: { type: string }
-        primaryFieldId: { type: string }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    Field:
-      type: object
-      required: [id, tableId, name, type, position, schemaVersion, config]
-      properties:
-        id: { type: string }
-        tableId: { type: string }
-        name: { type: string }
-        type:
+        locationFieldId:
           type: string
-          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment, relation, email, noteLink, formula, lookup, rollup]
+        filter:
+          $ref: '#/components/schemas/FilterNode'
+        center:
+          type: object
+          additionalProperties: false
+          required: [lat, lng]
+          properties:
+            lat:
+              type: number
+              minimum: -85.0511287798066
+              maximum: 85.0511287798066
+            lng:
+              type: number
+              minimum: -180
+              maximum: 180
+        zoom:
+          type: number
+          minimum: 0
+
+    MapCoordinate:
+      type: object
+      additionalProperties: false
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          minimum: -85.0511287798066
+          maximum: 85.0511287798066
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+
+    MapViewportBox:
+      type: object
+      additionalProperties: false
+      description: A non-wrapping WGS 84 box. West must not exceed east and south must not exceed north. A viewport that crosses the antimeridian is represented by two boxes; Records are de-duplicated by Record ID at the seam.
+      required: [west, south, east, north]
+      properties:
+        west:
+          type: number
+          minimum: -180
+          maximum: 180
+        south:
+          type: number
+          minimum: -85.0511287798066
+          maximum: 85.0511287798066
+        east:
+          type: number
+          minimum: -180
+          maximum: 180
+        north:
+          type: number
+          minimum: -85.0511287798066
+          maximum: 85.0511287798066
+
+    MapViewport:
+      type: object
+      additionalProperties: false
+      required: [boxes]
+      properties:
+        boxes:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/MapViewportBox'
+
+    MapQueryRequest:
+      type: object
+      additionalProperties: false
+      description: The current temporary camera is client state. Pixel dimensions are CSS pixels and let the Server choose an appropriate adaptive clustering density.
+      required: [viewport, zoom, pixelWidth, pixelHeight]
+      properties:
+        viewport:
+          $ref: '#/components/schemas/MapViewport'
+        zoom:
+          type: number
+          minimum: 0
+        pixelWidth:
+          type: integer
+          minimum: 1
+        pixelHeight:
+          type: integer
+          minimum: 1
+
+    MapFeature:
+      oneOf:
+        - $ref: '#/components/schemas/MapPoint'
+        - $ref: '#/components/schemas/MapCluster'
+      discriminator:
+        propertyName: kind
+        mapping:
+          point: '#/components/schemas/MapPoint'
+          cluster: '#/components/schemas/MapCluster'
+
+    MapPoint:
+      type: object
+      additionalProperties: false
+      description: Lightweight map presentation for one Record. Full field values are fetched only when the user opens Record details.
+      required: [kind, recordId, position, primaryFieldText]
+      properties:
+        kind:
+          type: string
+          const: point
+        recordId:
+          type: string
         position:
+          $ref: '#/components/schemas/MapCoordinate'
+        primaryFieldText:
+          type: string
+          description: Server-formatted Primary Field display text; unset or null Primary Field values produce an empty string.
+
+    MapCluster:
+      type: object
+      additionalProperties: false
+      description: An ephemeral map-scale grouping. The clustering algorithm and cluster identity are internal and may change on every map query; clients must not persist clusterId.
+      required: [kind, clusterId, position, bounds, pointCount, recordsQueryToken]
+      properties:
+        kind:
+          type: string
+          const: cluster
+        clusterId:
+          type: string
+          description: Ephemeral identity for renderer reconciliation within this response only.
+        position:
+          $ref: '#/components/schemas/MapCoordinate'
+        bounds:
+          $ref: '#/components/schemas/MapViewport'
+        pointCount:
           type: integer
+          minimum: 2
+        expansionZoom:
+          type: number
           minimum: 0
-        schemaVersion:
-          type: integer
-          minimum: 1
-        config:
-          type: object
-          additionalProperties: true
-        deletedAt:
+          description: Suggested zoom at which this cluster separates. If absent, or above the active renderer/provider maximum zoom, the client opens the paginated Record list instead.
+        recordsQueryToken:
           type: string
-          format: date-time
+          description: Opaque short-lived token for paging through every Record represented by this cluster.
 
-    View:
+    MapQuerySummary:
       type: object
-      required: [id, tableId, name, type, config, createdAt, updatedAt]
+      additionalProperties: false
+      description: Exact counts over all active Records matching the saved Map View Filter. matchedRecordCount equals renderableRecordCount plus unlocatedRecordCount plus unrenderableRecordCount. viewportRenderableRecordCount is a subset of renderableRecordCount.
+      required: [matchedRecordCount, renderableRecordCount, viewportRenderableRecordCount, unlocatedRecordCount, unrenderableRecordCount]
       properties:
-        id: { type: string }
-        tableId: { type: string }
-        name: { type: string }
-        type:
-          type: string
-          enum: [grid, map, kanban, gallery, calendar, form]
-        config:
-          type: object
-          additionalProperties: true
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    Record:
-      type: object
-      required: [id, tableId, revision, values, createdAt, updatedAt]
-      properties:
-        id: { type: string }
-        tableId: { type: string }
-        revision:
+        matchedRecordCount:
           type: integer
-          minimum: 1
-        values:
-          type: object
-          additionalProperties: true
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-        deletedAt:
-          type: string
-          format: date-time
-
-    Attachment:
-      type: object
-      required: [id, source, filename, createdAt]
-      properties:
-        id: { type: string }
-        source:
-          type: string
-          enum: [managed, vault]
-        filename: { type: string }
-        mimeType: { type: string }
-        size:
-          type: integer
+          format: int64
           minimum: 0
-        storageKey: { type: string }
-        vaultPath: { type: string }
-        hash: { type: string }
-        width:
+        renderableRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+        viewportRenderableRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+        unlocatedRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Matching Records whose Location is missing or is not a valid WGS 84 coordinate.
+        unrenderableRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Matching Records with a valid WGS 84 coordinate outside the EPSG:3857 renderable latitude range.
+        dataBounds:
+          $ref: '#/components/schemas/MapViewport'
+          description: Bounds of every renderable matching Record, omitted when renderableRecordCount is zero. It may contain two boxes when the minimal span crosses the antimeridian.
+
+    MapQueryResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        The features collectively represent all viewportRenderableRecordCount Records:
+        each Point contributes one and each Cluster contributes pointCount. The Server
+        adaptively clusters until no more than 500 features remain and never silently
+        truncates Records.
+      required: [features, summary, viewRevision, changeCursor]
+      properties:
+        features:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/MapFeature'
+        summary:
+          $ref: '#/components/schemas/MapQuerySummary'
+        viewRevision:
           type: integer
           minimum: 1
-        height:
+        changeCursor:
+          type: string
+
+    MapClusterRecordsQueryRequest:
+      type: object
+      additionalProperties: false
+      required: [clusterToken]
+      properties:
+        clusterToken:
+          type: string
+        cursor:
+          type: string
+          description: Opaque next-page cursor bound to the cluster token and limit.
+        limit:
           type: integer
           minimum: 1
-        createdAt: { type: string, format: date-time }
-
-    CreateWorkspaceRequest:
-      type: object
-      required: [name]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 200 }
-
-    CreateBaseRequest:
-      type: object
-      required: [workspaceId, name]
-      properties:
-        workspaceId: { type: string }
-        name: { type: string, minLength: 1, maxLength: 200 }
-
-    CreateTableRequest:
-      type: object
-      required: [baseId, name]
-      properties:
-        baseId: { type: string }
-        name: { type: string, minLength: 1, maxLength: 200 }
-        createDefaultView:
-          type: boolean
-          default: true
-
-    UpdateNameRequest:
-      type: object
-      required: [name]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 200 }
-
-    CreateFieldRequest:
-      type: object
-      required: [tableId, name, type]
-      properties:
-        tableId: { type: string }
-        name: { type: string, minLength: 1, maxLength: 200 }
-        type:
-          type: string
-          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment, relation, email, noteLink]
-        config:
-          type: object
-          additionalProperties: true
-
-    UpdateFieldRequest:
-      type: object
-      properties:
-        name: { type: string, minLength: 1, maxLength: 200 }
-        config:
-          type: object
-          additionalProperties: true
-        migrationToken:
-          type: string
-
-    CreateViewRequest:
-      type: object
-      required: [tableId, name, type]
-      properties:
-        tableId: { type: string }
-        name: { type: string, minLength: 1, maxLength: 200 }
-        type:
-          type: string
-          enum: [grid, map]
-        config:
-          type: object
-          additionalProperties: true
-
-    UpdateViewRequest:
-      type: object
-      properties:
-        name: { type: string, minLength: 1, maxLength: 200 }
-        config:
-          type: object
-          additionalProperties: true
+          maximum: 500
+          default: 100
 
     QueryRequest:
       type: object
+      description: When viewId is supplied, the View configuration is the base query. Explicit filter, sort, projection, and pagination values temporarily override it for this request and are not persisted.
       properties:
         viewId: { type: string }
-        cursor: { type: string }
+        lifecycle:
+          $ref: '#/components/schemas/LifecycleScope'
+        cursor:
+          type: string
+          description: Opaque cursor bound to the equivalent table, view, lifecycle, filter, sort, projection, search, limit, and API version.
         limit:
           type: integer
           minimum: 1
@@ -779,10 +973,12 @@ components:
           $ref: '#/components/schemas/FilterNode'
         sort:
           type: array
+          description: Temporary request override. If absent, the server uses createdAt ASC, id ASC for stable cursor pagination.
           items:
             $ref: '#/components/schemas/SortSpec'
         search:
           type: string
+          description: Case-insensitive contains search over the Primary Field, Text, LongText, and URL fields only.
 
     FilterNode:
       oneOf:
@@ -791,6 +987,8 @@ components:
 
     FilterGroup:
       type: object
+      description: Recursive AND/OR groups. Each group must contain at least one child and the maximum nesting depth is 8; invalid depth returns 422 VALIDATION_ERROR.
+      x-max-depth: 8
       required: [kind, operator, children]
       properties:
         kind:
@@ -800,11 +998,13 @@ components:
           enum: [and, or]
         children:
           type: array
+          minItems: 1
           items:
             $ref: '#/components/schemas/FilterNode'
 
     FilterRule:
       type: object
+      description: Operator and value are validated against the referenced Field Type. Text, LongText, and URL support equality, inequality, contains, not-contains, prefix, suffix, empty, and not-empty. Number and Date support equality, inequality, all six ordered comparisons, empty, and not-empty. Checkbox supports equality and inequality; Select supports equality, inequality, empty, and not-empty; MultiSelect supports includes, excludes, empty, and not-empty; Location supports empty and not-empty. Null, missing, and empty string are distinct; text matching is case-insensitive.
       required: [kind, fieldId, operator]
       properties:
         kind:
@@ -813,7 +1013,8 @@ components:
         operator:
           type: string
           enum: [is, isNot, isEmpty, isNotEmpty, contains, notContains, startsWith, endsWith, greaterThan, greaterOrEqual, lessThan, lessOrEqual, includes, excludes]
-        value: {}
+        value:
+          description: Field-type-specific value. Unsupported operators return 422 UNSUPPORTED_OPERATOR.
 
     SortSpec:
       type: object
@@ -838,6 +1039,7 @@ components:
             $ref: '#/components/schemas/Record'
         nextCursor:
           type: string
+          description: Opaque cursor for the next page; it is bound to this equivalent query.
         hasMore:
           type: boolean
         changeCursor:
@@ -847,9 +1049,14 @@ components:
 
     MutationRequest:
       type: object
+      description: All commands are applied atomically in one transaction. If any command fails, the whole request rolls back. Reusing clientMutationId returns the first result without applying the mutation again.
       required: [clientMutationId, commands]
       properties:
-        clientMutationId: { type: string }
+        clientMutationId:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Unique with actorId. Reusing it with the same request body returns the historical result; a different body returns 409 IDEMPOTENCY_KEY_REUSED. P0 retains results for 30 days.
         commands:
           type: array
           minItems: 1
@@ -866,28 +1073,44 @@ components:
 
     CreateRecordCommand:
       type: object
+      additionalProperties: false
       required: [kind, values]
       properties:
         kind: { const: createRecord }
         values:
           type: object
           additionalProperties: true
+          description: Initial values keyed by Field ID. Explicit null or empty values are distinct from omitted, unset Fields.
 
     UpdateRecordCommand:
       type: object
-      required: [kind, recordId, expectedRevision, changes]
+      additionalProperties: false
+      description: Writes fields in set and removes keys in unsetFieldIds. A Field present in both is invalid; omitted Fields are unchanged.
+      required: [kind, recordId, expectedRevision]
+      anyOf:
+        - required: [set]
+        - required: [unsetFieldIds]
       properties:
         kind: { const: updateRecord }
         recordId: { type: string }
         expectedRevision:
           type: integer
           minimum: 1
-        changes:
+        set:
           type: object
           additionalProperties: true
+          minProperties: 1
+          description: Values keyed by Field ID. Explicit null, empty string, or empty array is a write when valid for the Field Type.
+        unsetFieldIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string }
+          description: Field IDs whose keys are removed from Record.values.
 
     DeleteRecordCommand:
       type: object
+      additionalProperties: false
       required: [kind, recordId, expectedRevision]
       properties:
         kind: { const: deleteRecord }
@@ -898,6 +1121,7 @@ components:
 
     RestoreRecordCommand:
       type: object
+      additionalProperties: false
       required: [kind, recordId, expectedRevision]
       properties:
         kind: { const: restoreRecord }
@@ -908,6 +1132,7 @@ components:
 
     MutationResult:
       type: object
+      description: The request is atomic. Any rejected or conflicting command rolls back every command in the request.
       required: [clientMutationId, results]
       properties:
         clientMutationId: { type: string }
@@ -925,7 +1150,7 @@ components:
           minimum: 0
         status:
           type: string
-          enum: [applied, rejected, conflict]
+          enum: [applied]
         record:
           $ref: '#/components/schemas/Record'
         error:
@@ -933,14 +1158,30 @@ components:
 
     ConflictResponse:
       type: object
-      required: [code, conflicts]
+      additionalProperties: false
+      description: Revision conflict using the standard error envelope.
+      required: [error]
       properties:
-        code:
-          const: CONFLICT
-        conflicts:
-          type: array
-          items:
-            $ref: '#/components/schemas/ConflictBody'
+        error:
+          $ref: '#/components/schemas/ConflictErrorBody'
+
+    ConflictErrorBody:
+      allOf:
+        - $ref: '#/components/schemas/ErrorBody'
+        - type: object
+          required: [clientMutationId, failedCommandIndex, conflicts]
+          properties:
+            code:
+              const: CONFLICT
+            clientMutationId:
+              type: string
+            failedCommandIndex:
+              type: integer
+              minimum: 0
+            conflicts:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConflictBody'
 
     ConflictBody:
       type: object
@@ -954,9 +1195,13 @@ components:
         currentValues:
           type: object
           additionalProperties: true
-        submittedChanges:
+        submittedSet:
           type: object
           additionalProperties: true
+        submittedUnsetFieldIds:
+          type: array
+          uniqueItems: true
+          items: { type: string }
 
     ChangePage:
       type: object
@@ -966,7 +1211,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Change'
-        nextCursor: { type: string }
+        nextCursor:
+          type: string
+          description: Table-scoped opaque Change Cursor. The current default retention is 30 days; without a cursor the server returns the current tail and an empty page.
         hasMore: { type: boolean }
 
     Change:
@@ -979,6 +1226,9 @@ components:
           enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, schemaChanged, viewChanged]
         tableId: { type: string }
         recordId: { type: string }
+        objectId:
+          type: string
+          description: Field, View, Table, or other schema object ID for non-Record changes.
         revision: { type: integer }
         actorId: { type: string }
         occurredAt: { type: string, format: date-time }
@@ -999,6 +1249,7 @@ components:
 
     ErrorResponse:
       type: object
+      description: Standard error envelope. HTTP status mapping is 400 BAD_REQUEST or INVALID_CURSOR, 401 UNAUTHENTICATED, 403 FORBIDDEN, 404 NOT_FOUND, 409 CONFLICT, 410 CURSOR_EXPIRED, 422 validation, unsupported operator, or VIEW_CONFIGURATION_REQUIRED, 501 CAPABILITY_NOT_ENABLED, 503 readiness/dependency failure, and 500 INTERNAL_ERROR.
       required: [error]
       properties:
         error:
@@ -1006,6 +1257,7 @@ components:
 
     ErrorBody:
       type: object
+      description: Error details are safe for user display and diagnostics; requestId must be retained by clients.
       required: [code, message, requestId]
       properties:
         code: { type: string }

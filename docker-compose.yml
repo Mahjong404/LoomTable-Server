@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: loomtable
+      POSTGRES_USER: loomtable
+      POSTGRES_PASSWORD: ${LOOMTABLE_POSTGRES_PASSWORD:?set LOOMTABLE_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loomtable -d loomtable"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LOOMTABLE_HTTP_ADDR: :3000
+      LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
+      LOOMTABLE_AUTH_TOKEN_HASH: ${LOOMTABLE_AUTH_TOKEN_HASH:?set LOOMTABLE_AUTH_TOKEN_HASH}
+    ports:
+      - "3000:3000"
+    volumes:
+      - attachment-data:/var/lib/loomtable/attachments
+
+  migrate:
+    build: .
+    profiles: ["ops"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/app/loomtable-migrate"]
+    environment:
+      LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
+
+volumes:
+  postgres-data:
+  attachment-data:

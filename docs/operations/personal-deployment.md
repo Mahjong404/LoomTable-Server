@@ -13,38 +13,55 @@ managed-attachment-volume
 ```
 
 第一阶段不要求 Redis、Kafka、RabbitMQ 或独立对象存储服务。Managed Attachment 使用 Docker 挂载文件卷。
+P0 不启用 Attachment capability，但保留文件卷和备份清单位置，便于后续启用时不改变部署拓扑。
 
 ## 连接流程
 
 1. 用户启动 Docker Compose。
-2. Plugin 打开连接向导。
-3. 用户选择本地或远程 URL。
-4. 输入或粘贴 Token。
-5. Plugin 请求健康检查和 Server Meta。
-6. Plugin 检查 API 版本和最低兼容版本。
-7. Plugin 检查数据库迁移状态。
-8. 用户选择 Workspace。
+2. 运维者显式执行 Server Migration 命令。
+3. 首次部署时，运维者显式执行 Bootstrap/管理命令，创建稳定 Actor 和初始 Token 哈希。
+4. Plugin 打开连接向导。
+5. 用户选择本地或远程 URL。
+6. 输入或粘贴 Token。
+7. Plugin 请求健康检查和 Server Meta。
+8. Plugin 检查 API 版本和最低兼容版本。
+9. Plugin 检查数据库迁移状态。
+10. 用户选择 Workspace。
 
 ## 配置原则
 
 - PostgreSQL 凭据只存在 Server 环境中。
 - Plugin 只保存 Server URL 和访问 Token。
+- PostgreSQL 中未撤销的 Token 哈希是运行时认证的唯一事实来源；明文 Token 不落库。
+- 初始 Token 可以由环境变量提供给一次显式 Bootstrap 命令，或由管理命令生成。普通 Server 启动不读取环境变量作为长期认证旁路，也不隐式创建或轮换 Token。
+- P0 不提供公开 Token 生成 API，localhost 也不免认证。
+- Personal Server 使用一个持久化的稳定 Actor；Token 属于该 Actor。Token 更换、Server 重启和数据库恢复都不改变 Actor ID；P0 默认授予其所有 Workspace 权限，不实现登录、邀请或角色系统。
 - PostgreSQL 端口不应直接暴露到公网。
-- Attachment 文件卷必须持久化。
+- Attachment 文件卷（即使当前 capability 未启用，也作为预留卷）必须持久化。
 - Secret 不写入日志。
 - 生产远程部署应使用 HTTPS 或可信内网通道。
+
+## Actor 和 Token 初始化
+
+- Bootstrap 必须是显式、可重复检查但不会重复创建身份的操作：已有 Personal Actor 时复用其 ID，除非运维者明确执行另一个 Token 管理动作，否则不新增或替换 Token。
+- Server 只在创建 Token 时向终端显示一次明文；后续只能校验、列出元数据或撤销哈希记录，不能还原明文。
+- Token 管理是本机管理命令，不通过公开业务 REST API 暴露。
+- Actor、Token 哈希及撤销状态随 PostgreSQL 一起备份和恢复。
 
 ## 健康检查
 
 Server 至少提供：
 
+- `/healthz`：无需认证的进程存活检查。
+- `/readyz`：无需认证的数据库、迁移和必要存储就绪检查。
+- 有待执行 Migration 时，Server 保持存活但 `/readyz` 返回 `503 MIGRATION_REQUIRED`。
 - 存活检查。
 - 数据库连接检查。
 - 迁移状态。
 - API 版本。
 - Server 版本。
 - 能力列表。
-- Attachment 存储可写性检查。
+- Attachment capability 启用时的存储可写性检查；未启用时不因预留卷不可写阻塞 P0 ready。
 
 ## 备份
 
@@ -58,6 +75,8 @@ Server 至少提供：
 - 恢复所需的元数据。
 
 只备份 PostgreSQL 不算完整 LoomTable 备份。
+
+P0 通过 Server 管理命令或运维脚本执行备份和恢复，不通过业务 REST API 暴露备份接口。备份必须带有 Server 版本、Schema 版本和生成时间等版本清单。
 
 ## 恢复
 
@@ -75,6 +94,7 @@ Server 至少提供：
 
 - Server 升级前检查数据库和附件备份。
 - Migration 只允许明确的 forward migration。
+- Migration 通过显式 Server 管理命令执行；Server 不在启动时自动执行未知 Migration。
 - Server 启动时报告所需迁移。
 - 不支持自动删除未知字段或未知数据。
 - Plugin 连接时检查 API 版本和能力列表。
@@ -92,4 +112,3 @@ Plugin 应能展示：
 - Request ID 或诊断 ID。
 
 Server 日志使用结构化格式，并默认不包含 Record 内容、Attachment 内容或 Token。
-
