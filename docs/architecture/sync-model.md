@@ -52,6 +52,8 @@ expectedRevision == currentRevision
 
 Workspace、Base、Table、Field 和 View 的创建请求使用必填的 `Idempotency-Key: mut_...` Header。Key 在 Actor 范围内全局唯一；相同 Method、Path 和规范化 Body 的重试返回第一次 `201` 结果，不重复创建对象。不同请求复用同一 Key 返回 `409 IDEMPOTENCY_KEY_REUSED`。元数据创建与 Record Mutation 共用 Server 声明的幂等保留策略。
 
+规范化 Body 使用通过严格 Schema 校验后的领域输入，而不是原始 JSON 字节：未知属性先被拒绝，资源名称完成 Unicode Trim/NFC 后再进入幂等 Hash。CreateField/CreateView 的父级 Table ID 只取自路径参数并参与 Hash，Body 不重复提交该 ID。
+
 Mutation 的失败原因必须可区分。至少包括输入无效、未认证、无权访问、资源不存在、能力未启用、Revision Conflict 和 Server 内部错误；HTTP 状态与 `ErrorBody.code` 必须保持稳定映射。
 
 Record、Field、Table 和 View 都使用软删除和 Revision。Record 的删除/恢复，以及 Field、Table、View 的更新/删除，都必须带有 `expectedRevision`；P0 不提供硬删除。元数据冲突与 Record 冲突一样返回 `409 CONFLICT`。
@@ -72,6 +74,8 @@ Pull → 提交 cursor，返回 ChangePage 和 nextCursor
 ```
 
 Map Query 同样返回查询快照的 `changeCursor`。活动 Map View 发现 Record、Field 或 View Change 后保留当前临时 Map Viewport 并重新查询；Change 本身不被客户端解释成增量 Marker 补丁，因为 Filter、聚类、计数和 Data Bounds 都可能联动变化。
+
+Map 全局 Summary 使用独立查询，不随每次相机移动重复计算。Cluster Record Query Token 有效 5 分钟并绑定原 Map Query、View Revision 与 Table Change Cursor；超时或相关 Change 后返回 `410 QUERY_SNAPSHOT_EXPIRED`，不提供漂移的实时分页。
 
 Change 至少包含：
 

@@ -54,7 +54,7 @@
 - Grid 行虚拟化。
 - 启用 Attachment capability 后使用缩略图、懒加载和缓存。
 - Map View 使用服务端视口查询返回最多 500 个 Map Point/Map Cluster；Server 自适应聚类并完整代表视口内结果，不能下载完整匹配集、静默截断或一次创建所有复杂 Popup。
-- Map Point 只携带 Record ID、坐标和 Primary Field 文本；详情按需直查。全局计数和 Data Bounds 由数据库聚合产生，不把完整 Record 集传给 Plugin。
+- Map Point 只携带 Record ID、坐标和 Primary Field 文本；详情按需直查。全局计数和 Data Bounds 由独立 Summary 查询聚合，只在首次打开、Filter 变化或显式“适配全部”时请求；普通平移/缩放不重复全局聚合，也不把完整 Record 集传给 Plugin。
 - 对热点 Field 增加针对性的 PostgreSQL 索引，而不是为所有 Field 盲目建索引。
 
 ## 回归场景

@@ -9,17 +9,17 @@ import (
 const encoding = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 const (
-	WorkspacePrefix = "ws_"
-	BasePrefix      = "base_"
-	TablePrefix     = "tbl_"
-	FieldPrefix     = "fld_"
-	ViewPrefix      = "view_"
-	RecordPrefix    = "rec_"
+	WorkspacePrefix  = "ws_"
+	BasePrefix       = "base_"
+	TablePrefix      = "tbl_"
+	FieldPrefix      = "fld_"
+	ViewPrefix       = "view_"
+	RecordPrefix     = "rec_"
 	AttachmentPrefix = "att_"
-	ChangePrefix    = "chg_"
-	ActorPrefix     = "act_"
-	MutationPrefix  = "mut_"
-	RequestPrefix   = "req_"
+	ChangePrefix     = "chg_"
+	ActorPrefix      = "act_"
+	MutationPrefix   = "mut_"
+	RequestPrefix    = "req_"
 )
 
 func New(prefix string) (string, error) {

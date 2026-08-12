@@ -16,8 +16,8 @@ import (
 type ReadyChecker func(context.Context) error
 
 type Server struct {
-	config config.Config
-	ready  ReadyChecker
+	config  config.Config
+	ready   ReadyChecker
 	handler http.Handler
 }
 

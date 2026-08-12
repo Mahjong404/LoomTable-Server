@@ -48,6 +48,7 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 - Server 只在创建 Token 时向终端显示一次明文；后续只能校验、列出 ID、名称、创建/撤销状态等元数据或撤销哈希记录，不能还原明文。
 - P0 Token 没有自动到期时间；撤销是终止其访问能力的唯一 P0 生命周期动作。
 - Token 管理是本机管理命令，不通过公开业务 REST API 暴露。
+- 管理入口固定为 `loomtable-admin auth bootstrap/create/list/revoke`。默认 Secret 为 `ltp_` 加 32 字节 CSPRNG Base64URL；数据库保存 SHA-256，`tok_...` 仅作为 Token 元数据 ID。
 - Actor、Token 哈希及撤销状态随 PostgreSQL 一起备份和恢复。
 
 ## 健康检查

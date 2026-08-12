@@ -66,7 +66,7 @@ record
 
 缺失的 Field ID 表示 Unset Cell；显式 `null`、空字符串、空数组等仍是已经写入的值，并按对应 Field Type 的规则校验。更新 Record 时，`set` 写入或替换值，`unsetFieldIds` 删除键；请求中未出现的 Field 保持不变。
 
-创建 Table 时，Server 自动创建一个可重命名的 `text` Primary Field，并将其 ID 保存为 `table.primary_field_id`。P0 的 Table 始终有 Primary Field。
+创建 Table 时，Server 在同一事务中创建 Table、可重命名的 `text` Primary Field 和初始 Grid View，并将 Field ID 保存为 `table.primary_field_id`。初始 View 只包含 Primary Field，使用 `standard` 行高且无 Filter/Sort。P0 的 Table 始终有 Primary Field。
 
 P0 的 `date` 值是 `YYYY-MM-DD` 形式的纯日期，不携带时区；日期时间值属于后续字段能力。
 
@@ -75,6 +75,8 @@ P0 不执行 Field Type 迁移。类型变更必须等迁移预览和错误集�
 ## Personal Actor 和 Token
 
 Personal Server 的稳定 Actor 与 Access Token 哈希都保存在 PostgreSQL。显式 Bootstrap 或管理命令在事务中创建 Actor 和 Token 记录；Token 使用稳定的 `tok_...` ID 和必填名称。运行时认证以未撤销的数据库 Token 记录为唯一事实来源。一个 Actor 可以拥有多个具名 Token，每个 Token 可以单独撤销；P0 不设置自动过期时间。更换或撤销 Token 不改变 Actor ID，Server 启动也不会隐式创建或轮换 Token。
+
+Token Secret 默认由 32 字节 CSPRNG 生成并编码为 `ltp_` 加 Base64URL；数据库只保存 SHA-256，不保存明文。管理命令是 `loomtable-admin auth bootstrap/create/list/revoke`，明文仅在创建时显示一次。
 
 ## Relation（后续能力）
 
@@ -109,6 +111,7 @@ Attachment API 和存储模型在 P0 保留为扩展合同，但 `attachments` c
 - Record、Field、Table 和 Attachment 引用默认使用软删除或回收站。
 - Record、Field、Table 和 View 的当前 Revision 用于并发控制；Record 的删除/恢复以及 Field、Table、View 的更新/删除都必须携带 `expectedRevision`。
 - Table、Field、View List 与 Record Query 使用统一的 Lifecycle Scope：`active`、`deleted` 或 `all`，默认 `active`。该范围按对象自身的软删除状态筛选；祖先对象的可访问性规则仍然适用。P0 不为 Workspace/Base 提供删除能力，因此其 List 不接受该范围。
+- Workspace、Base、Table 和 View List 默认按 `created_at ASC, id ASC`；Field List 按 `position_index ASC, id ASC`。同一父对象内允许同名。
 - 恢复操作保留原 ID。
 - P0 不提供硬删除 API。
 - Managed Attachment 的物理文件不能因为一次普通删除立即清理。

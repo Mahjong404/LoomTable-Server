@@ -22,6 +22,10 @@ Field Type 是领域行为，不只是一个 UI 控件。服务端和 Plugin 必
 
 P0 的九种 Field 都允许显式 `null`，表示该 Cell 已被明确清空；`Record.values` 中缺少 Field ID 则表示 Unset Cell。Text/LongText 的 `""` 与 MultiSelect 的 `[]` 是合法且与 `null`、Unset 不同的自然空值。空 URL 字符串和不含任何有效成员的 Location 对象无有效语义，返回 `422 VALIDATION_ERROR`，不得静默规范化成其他状态。
 
+Filter 的 `isEmpty` 同时匹配 Unset、`null` 和该类型的自然空值；`isNotEmpty` 是其反集。这只定义查询集合，不合并三种存储状态。
+
+P0 值限制：Text 最多 10,000、LongText 最多 100,000 个 Unicode 码点；URL 最多 2,048 个字符且必须是绝对 HTTP/HTTPS URL；Number 必须是有限 IEEE-754 数；Date 必须是有效 Gregorian `YYYY-MM-DD`；MultiSelect 最多包含 100 个互异 Option ID。Location 的 `label`、`address`、`provider` 精确上限在下一层合同中确定。
+
 ## 第一阶段字段
 
 | Type ID | 中文 | 值形态 | 第一阶段状态 |
@@ -152,6 +156,8 @@ Tag 不是独立 Field Type：
 - 一个标签使用 `select`。
 - 多个标签使用 `multiSelect`。
 - Select/MultiSelect Option 使用 Server 生成且永不复用的 `opt_...` ID；Record 值引用 ID，不引用可变名称。
+- Option 配置输入是期望的 Active 列表：无 ID 创建，当前 Active ID 更新，Deleted ID 恢复，遗漏 Active ID 软删除；响应分别返回 Active 与 Deleted Option，Active 数组顺序即显示顺序。
+- Option `color` 是 Server 定义的语义色板 Token，不接受 CSS 颜色值；固定 Token 枚举在下一层合同中确定。
 - Chip、颜色和标签样式属于 Renderer。
 - 跨 Table 共享标签、标签层级和标签权限属于未来 Tag Domain，不属于第一阶段。
 
@@ -160,7 +166,7 @@ Tag 不是独立 Field Type：
 - Field ID 永久稳定。
 - 改名不改变 Field ID 和 Cell 值。
 - 删除先进入回收站或标记为 deleted。
-- P0 不允许类型变更；只允许改名和不改变值语义的 Config 完整替换。
+- P0 不允许类型变更；只允许改名和不改变值语义的 Config 完整替换。Text、LongText、Number、Checkbox、Date、URL、Location 的 Config 固定为 `{}`；Select/MultiSelect 只接受 Option 生命周期配置。
 - Field、CreateFieldRequest 和 UpdateFieldRequest 使用 `type` 判别的 P0 Field 联合类型；更新请求必须回显不可变的 `type`。每种 Config 都拒绝未声明属性，不能让任意 JSON 穿透到领域层。
 - `Field.schemaVersion` 标识服务端规范化配置的 Schema 版本；版本不嵌套在 Config 对象中。
 - 后续开放类型变更时，必须先提供迁移预览，并把无法转换的值放入明确的迁移错误列表。

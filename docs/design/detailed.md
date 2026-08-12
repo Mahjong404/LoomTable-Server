@@ -55,6 +55,7 @@ QueryRequest
 约束：
 
 - Table、Field、View List 与 Record Query 使用统一 Lifecycle Scope：`active`、`deleted` 或 `all`，默认 `active`；该范围按对象自身的软删除状态筛选。P0 不删除 Workspace/Base，因此其 List 不接受该参数。
+- Workspace、Base、Table 和 View List 的稳定默认顺序是 `createdAt ASC, id ASC`；Field List 使用 `position ASC, id ASC`。名称不参与默认排序。
 - Filter 和 Sort 不在 Plugin 重算。
 - Cursor 必须绑定 Lifecycle Scope、Search 和稳定排序所需的全部等价 Query 信息。
 - 空值和空字符串按领域规则区分。
@@ -186,6 +187,8 @@ Primary Field 值可以是 Unset、`null` 或空字符串，创建 Record 不要
 
 Workspace、Base、Table、Field 和 View 的创建请求必须携带 `Idempotency-Key: mut_...`。Key 在 Actor 范围内全局唯一；相同 Method、Path 和规范化 Body 的重试返回第一次 `201` 结果，不重复创建对象；不同请求复用同一 Key 返回 `409 IDEMPOTENCY_KEY_REUSED`。该结果遵循 Server 声明的幂等保留策略。
 
+所有 P0 Request、Command、Filter 和 Config 都拒绝未声明属性。Field/View 创建的父级身份只来自嵌套路由中的 `tableId`，Body 不重复提交。资源名称先去除首尾 Unicode 空白并规范化为 NFC，再拒绝控制字符、空名称和超过 200 个 Unicode 码点的名称；同一父对象内允许同名，身份始终由 ID 决定。
+
 Conflict 使用 `409`；认证、授权、输入校验、资源不存在、能力未启用和内部故障必须分别使用可识别的 HTTP 状态和错误码，不能全部折叠为同一个默认错误。
 
 ### 健康、认证和备份
@@ -228,7 +231,7 @@ P0 的稳定 HTTP 状态映射为：
 | 403 | Actor 已认证但无权访问 | `FORBIDDEN` |
 | 404 | 资源不存在或不属于当前 Actor | `NOT_FOUND` |
 | 409 | Revision 或幂等键冲突 | `CONFLICT`, `IDEMPOTENCY_KEY_REUSED` |
-| 410 | Cursor 或短期查询令牌已过期 | `CURSOR_EXPIRED` |
+| 410 | Cursor 或短期查询快照已过期/失效 | `CURSOR_EXPIRED`, `QUERY_SNAPSHOT_EXPIRED` |
 | 422 | 字段值、Filter、Operator、View 配置或其他领域语义无效 | `VALIDATION_ERROR`, `UNSUPPORTED_OPERATOR`, `VIEW_CONFIGURATION_REQUIRED` |
 | 501 | 能力存在于合同但当前 Server 未启用 | `CAPABILITY_NOT_ENABLED` |
 | 503 | Server 尚未就绪或依赖不可用 | `MIGRATION_REQUIRED`, `DEPENDENCY_UNAVAILABLE` |
@@ -275,14 +278,19 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 - `View`、`CreateViewRequest` 和 `UpdateViewRequest` 使用 `type` 判别的 `oneOf`，Grid 与 Map 的 Config 不接受任意额外属性。P0 不允许改变已有 View 的 Type。
 - 创建 View 时提交完整 Config；更新时携带 `expectedRevision` 并完整替换 Config，Server 校验、规范化后返回完整 View。缺失的可选配置表示其合同规定的未设置/默认状态，不表示沿用旧值。
 - Field 更新保留顶层 PATCH 语义；`config` 省略时保留旧配置，一旦提供则完整替换。Server 必须按既有 Field Type 校验、规范化并返回完整 Field；P0 不接受 `migrationToken` 或类型变更。
-- `Field`、`CreateFieldRequest` 和 `UpdateFieldRequest` 必须最终使用 `type` 判别的严格联合；更新请求回显不可变 `type`，每种 Config 拒绝未声明属性。Select Option 的创建、删除和恢复输入合同需在下一层设计中先定案，再替换 OpenAPI 当前的过渡通用 Schema。
+- `Field`、`CreateFieldRequest` 和 `UpdateFieldRequest` 使用 `type` 判别的严格联合；更新请求回显不可变 `type`，每种 Config 拒绝未声明属性。Select Option 使用期望 Active 列表完成创建、更新、软删除与恢复，OpenAPI 不再保留通用 Config 过渡 Schema。
+- Text、LongText、Number、Checkbox、Date、URL 和 Location 的 P0 Config 固定为严格空对象 `{}`；Select/MultiSelect Config 只包含 Option 生命周期数据，不接受显示或校验扩展属性。
+- Select/MultiSelect 更新提交期望的 Active Option 列表：无 ID 表示新建，当前 Field 的 Active ID 表示更新，Deleted ID 表示恢复，遗漏的 Active Option 软删除。响应分别返回 Active 与 Deleted Option；Active 数组顺序就是显示顺序。Option ID 由 Server 生成，其他 Field 的 ID 或未知 ID 返回 `422 VALIDATION_ERROR`。
 - Grid View 的 P0 配置包含 `projection`、`columnOrder`、`columnWidths`、`frozenFieldIds`、`rowHeight`、`filter` 和 `sort`；Group 只预留，不在 P0 实现。
+- 初始 Grid View 仅投影并排列 Primary Field，`columnWidths` 和 `frozenFieldIds` 为空、无 Filter、Sort 为空、`rowHeight` 为 `standard`。行高只允许 `compact`、`standard`、`comfortable`；显式列宽是 80–1000 CSS px。
 - Map View 配置必须包含同一 Table 内有效的 `locationFieldId`，还可包含 `filter` 和 Default Camera `center + zoom`；瓦片提供方和 Credential 仅属于客户端本地配置。创建时没有 Location Field 则不能创建；配置的 Field 被软删除或不再可用时，Map Query 返回 `422 VIEW_CONFIGURATION_REQUIRED`，不自动改选其他 Field。
 - Map View 使用 `POST /v1/views/{viewId}/map/query`。请求只提交临时 Map Viewport（一个或两个不跨反经线的 WGS 84 Box）、Zoom 和 CSS Pixel 尺寸；Server 校验 Map View 并应用已保存的 Location Field 与 Filter，不接受临时覆盖。
 - Map Query 最多返回 500 个 Map Point/Map Cluster，并自适应聚类直到满足上限；Feature 必须完整代表视口内全部可渲染匹配 Record，不能静默截断。聚类算法属于内部实现，不成为 API 兼容合同。
 - Map Point 只返回 Record ID、坐标和服务端格式化的 Primary Field 文本；用户打开详情时再调用 `GET /v1/records/{recordId}`。Map Cluster 返回中心、范围、数量、可选展开 Zoom 和短期 Record Query Token。
 - 可展开 Cluster 点击后适配其范围；到达最大 Zoom、坐标重合或没有可用展开 Zoom 时，使用 `POST /v1/views/{viewId}/map/cluster-records/query` 分页显示完整 Record。Cluster ID 和 Token 都不可持久化。
-- Map Query Summary 对已保存 Filter 的全部 Active Record 返回精确且互斥的匹配、可渲染、未定位和不可渲染数量，并返回全部可渲染匹配 Record 的 Data Bounds；视口可渲染数量是其子集。跨反经线范围使用两个不跨越 Box。
+- Map 全局 Summary 对已保存 Filter 的全部 Active Record 返回精确且互斥的匹配、可渲染、未定位和不可渲染数量，并返回全部可渲染匹配 Record 的 Data Bounds；Viewport Query 单独返回的视口可渲染数量是其子集。跨反经线范围使用两个不跨越 Box。
+- 全局精确 Summary 和 Data Bounds 由独立的 `POST /v1/views/{viewId}/map/summary` 返回，只在首次打开、保存的 Filter 变化或用户显式“适配全部”时请求。普通 Map Viewport Query 只返回当前视口 Feature、视口可渲染数量、View Revision 和 Change Cursor，不在每次平移/缩放时重复全局聚合。
+- Map Cluster Record Query Token 有效 5 分钟，并绑定 View Revision、Location Field、保存的 Filter、原 Map Query 和当时的 Table Change Cursor。任何相关变化或超时都返回 `410 QUERY_SNAPSHOT_EXPIRED`；客户端刷新视口。P0 不保存大型 Record ID 快照，也不在翻页时实时漂移成员。
 - Location 仍按 `lat -90..90`、`lng -180..180` 保存；超出 EPSG:3857 纬度 `±85.0511287798066` 的合法 WGS 84 坐标保留原值但归入不可渲染数量。无效或缺失坐标归入未定位数量。
 
 ### Filter、Search 和 Operator
@@ -308,8 +316,21 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 
 - Record 更新使用 `set + unsetFieldIds`。`set` 可显式写入 Field Type 允许的 `null` 或空值；只有 `unsetFieldIds` 删除键，未提及的 Field 不变。P0 九种 Field 都允许 `null`；Text/LongText 的 `""` 与 MultiSelect 的 `[]` 是自然空值，空 URL 字符串和空 Location 对象无效。Conflict 必须分别回显客户端提交的 Set 与 Unset 意图。
 - Primary Field 可以为 Unset、`null` 或 `""`；Server 不因其为空拒绝创建 Record，也不持久化“无标题”占位。Plugin 在需要标签时使用本地化占位或 Record ID 回退。
+- Unknown、属于其他 Table 或 Deleted Field 不能写入，返回 `422 VALIDATION_ERROR`。Deleted Option 不得被新引入，但同一 Record 已保存的 Deleted Option 引用可以原样保留；删除 Field/Option 不清除历史值，恢复后重新可用。Server 不静默删除无效输入。
+- Text 最多 10,000、LongText 最多 100,000 个 Unicode 码点；URL 最多 2,048 个字符且必须是绝对 HTTP/HTTPS URL；Number 必须是有限 IEEE-754 数；Date 必须是有效 Gregorian `YYYY-MM-DD`；MultiSelect 最多 100 个互异 Option ID。Location 文本成员的精确上限在下一层合同中固定。
 - Table、Field、View List 与 Record Query 的 Lifecycle Scope 是 `active`、`deleted` 或 `all`，默认 `active`；Record Query 会把它纳入 Cursor 绑定。`deleted` 按对象自身的软删除状态筛选，不把仅因祖先删除而暂时不可见的子对象改写为已删除。
 - Personal Actor、Token 哈希与撤销状态持久化在 PostgreSQL。首次 Bootstrap 或后续管理命令显式创建/管理多个具名 Token；各 Token 独立撤销，P0 不设置到期时间。普通 Server 启动不会隐式创建、替换或轮换。运行时认证只查询数据库中未撤销的 Token，Actor ID 在 Token 更换、重启和备份恢复后保持稳定。
+
+## 14. Q136–Q148 已确认的实现边界
+
+- CreateField/CreateView Body 不重复 `tableId`；嵌套路由参数是唯一父级身份来源。
+- 所有 P0 Request、Command、Filter 和 Config 对额外属性关闭；错误拼写不得被忽略。
+- 名称执行 Unicode Trim + NFC + 控制字符/空值/200 码点校验；同一父对象内允许同名。
+- P0 Field 使用严格 `type` 判别联合；七种无配置 Field 使用 `{}`，Select/MultiSelect 使用完整 Option 生命周期合同。
+- `isEmpty` 匹配 Unset、`null` 及该类型的自然空值，`isNotEmpty` 是其反集；存储层仍保留三者差异。
+- 初始 Grid、Deleted Field/Option 写入限制、Cell 值上限和元数据 List 顺序按本章前述规则执行。
+- 本机管理程序提供 `loomtable-admin auth bootstrap/create/list/revoke`。Token Secret 默认使用 `ltp_` 加 32 字节 CSPRNG Base64URL，明文仅显示一次，数据库保存 SHA-256；`tok_...` 是元数据 ID，不是 Secret。
+- Map 全局 Summary 与 Viewport Query 分离；Cluster Token 使用 5 分钟、View/Table Change 绑定的无状态失效合同。
 
 ### 后续字段扩展
 
