@@ -55,18 +55,14 @@ Server 是模块化单体，第一阶段作为一个 Go 进程部署：
 LoomTable Server
 ├── API Module
 ├── Auth Module
-├── Workspace Module
-├── Base Module
-├── Table Module
-├── View Module
-├── Schema Module
-├── Query Module
-├── Mutation Module
+├── Catalog Module
+├── Record Module
 ├── Attachment Module
-└── Sync Module
+├── Operations Module
+└── PostgreSQL Adapter
 ```
 
-模块是代码组织和职责边界，不是独立进程。只有在 Team 模式出现明确的吞吐或隔离需求时，才考虑拆分后台任务或实时协作进程。
+Catalog Module 统一承载 Workspace、Base、Table、Field 与 View 的元数据不变量；Record Module 统一承载 Mutation、Query、Change 与 Map 的数据语义。模块是代码组织和职责边界，不是独立进程，HTTP 与 PostgreSQL 位于模块 seam 的 adapter 侧。详细依赖规则见[源码结构](./source-layout.md)。只有在 Team 模式出现明确的吞吐或隔离需求时，才考虑拆分后台任务或实时协作进程。
 
 ## 关键 Seam
 

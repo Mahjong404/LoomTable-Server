@@ -8,10 +8,12 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 
 ## 文档
 
+- [贡献与分支规范](./CONTRIBUTING.md)
 - [Server 文档索引](./docs/README.md)
 - [领域上下文](./CONTEXT.md)
 - [术语对照表](./docs/terminology.md)
 - [架构总览](./docs/architecture/overview.md)
+- [源码结构](./docs/architecture/source-layout.md)
 - [存储模型](./docs/architecture/storage-model.md)
 - [同步模型](./docs/architecture/sync-model.md)
 - [Field Type 规范](./docs/field-types.md)

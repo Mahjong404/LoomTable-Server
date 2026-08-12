@@ -12,6 +12,7 @@
 ## 架构
 
 - [架构总览](./architecture/overview.md)
+- [源码结构](./architecture/source-layout.md)
 - [存储模型](./architecture/storage-model.md)
 - [同步模型](./architecture/sync-model.md)
 - [性能预算](./performance-budget.md)
