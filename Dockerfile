@@ -16,5 +16,5 @@ COPY --from=build /out/loomtable-migrate /app/loomtable-migrate
 COPY migrations /app/migrations
 RUN mkdir -p /var/lib/loomtable/attachments && chown -R loomtable:loomtable /app /var/lib/loomtable
 USER loomtable
-EXPOSE 3000
+EXPOSE 31201
 ENTRYPOINT ["/app/loomtable-server"]

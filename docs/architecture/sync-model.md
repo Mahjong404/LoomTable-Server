@@ -50,6 +50,8 @@ expectedRevision == currentRevision
 
 一个 `MutationRequest` 中的多个 Command 采用全有或全无语义：所有 Command 在同一个 PostgreSQL Transaction 中校验和提交；任一 Command 失败时整个请求回滚，不返回部分持久化成功的结果。`clientMutationId` 用于请求级幂等，重复请求返回第一次应用结果，不再次增加 Revision 或 Change。
 
+同一 MutationRequest 不允许多个 Command 指向同一已有 Record。每个成功 Command 返回完整操作后 Record，删除返回 Tombstone；MutationResult 返回最终 Table `changeCursor`。`expectedRevision` 先校验；若规范化后的目标状态与当前状态相同，结果为 `unchanged`，Revision 和 Change 都不增加。重复删除已删除 Record 或恢复 Active Record 是 `422` 非法状态转换，而不是 no-op；网络重试由幂等合同处理。
+
 Workspace、Base、Table、Field 和 View 的创建请求使用必填的 `Idempotency-Key: mut_...` Header。Key 在 Actor 范围内全局唯一；相同 Method、Path 和规范化 Body 的重试返回第一次 `201` 结果，不重复创建对象。不同请求复用同一 Key 返回 `409 IDEMPOTENCY_KEY_REUSED`。元数据创建与 Record Mutation 共用 Server 声明的幂等保留策略。
 
 规范化 Body 使用通过严格 Schema 校验后的领域输入，而不是原始 JSON 字节：未知属性先被拒绝，资源名称完成 Unicode Trim/NFC 后再进入幂等 Hash。CreateField/CreateView 的父级 Table ID 只取自路径参数并参与 Hash，Body 不重复提交该 ID。
@@ -58,7 +60,9 @@ Mutation 的失败原因必须可区分。至少包括输入无效、未认证�
 
 Record、Field、Table 和 View 都使用软删除和 Revision。Record 的删除/恢复，以及 Field、Table、View 的更新/删除，都必须带有 `expectedRevision`；P0 不提供硬删除。元数据冲突与 Record 冲突一样返回 `409 CONFLICT`。
 
-P0 的 Cursor 是不透明且与 Query 参数绑定的值。Query 参数或排序不匹配时返回 `400 INVALID_CURSOR`；服务端无法再接受过期 Cursor 时返回 `410 CURSOR_EXPIRED`。
+P0 的普通 Record Query Cursor 是有效期 30 分钟的不透明无状态 Keyset 位置，并与完整等价 Query、排序和 API 版本绑定。它不是 Query Snapshot；并发写入可以影响后续页，Plugin 使用 `changeCursor` 发现变化并按需重启。Query 参数或排序不匹配时返回 `400 INVALID_CURSOR`；过期返回 `410 CURSOR_EXPIRED`。
+
+QueryResult 必须返回 `hasMore`，仅在有续页时返回 `nextCursor`；第一页返回精确 `totalCount`，续页不重复计算。Filter 最大深度 8、总节点 100，Sort 最多 10 个唯一 Field，Projection 最多 500 个唯一 Field，Search 最长 500 码点，JSON 请求体最大 8 MiB。
 
 Table、Field、View List 与 Record Query 默认只返回 `active` 对象；调用方可显式请求 `deleted` 或 `all` 以发现回收站内容。Record Lifecycle Scope 是 Cursor 绑定的一部分，不能在续页时改变。
 

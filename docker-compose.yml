@@ -19,11 +19,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      LOOMTABLE_HTTP_ADDR: :3000
+      LOOMTABLE_HTTP_ADDR: :31201
       LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
       LOOMTABLE_AUTH_TOKEN_HASH: ${LOOMTABLE_AUTH_TOKEN_HASH:?set LOOMTABLE_AUTH_TOKEN_HASH}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:31201:31201"
     volumes:
       - attachment-data:/var/lib/loomtable/attachments
 

@@ -100,6 +100,14 @@ _Avoid_: ID field, title column
 A stable server-owned choice in a Select or MultiSelect Field; Records reference its ID rather than its mutable display name.
 _Avoid_: tag text, label string
 
+**Active Option**:
+A Select Option currently available for new Record values and ordered as part of its Field's visible choice list.
+_Avoid_: enabled tag, undeleted label
+
+**Deleted Option**:
+A retained Select Option no longer available for new references but still meaningful to historical Record values and explicit restoration.
+_Avoid_: invalid option, removed string
+
 **Location**:
 A place value that may contain a label, address, and geographic coordinates.
 _Avoid_: place text, GeoPoint field
@@ -174,6 +182,10 @@ _Avoid_: ancestor visibility, permission scope
 A short-lived, bound query context whose membership must remain stable while its continuation token is used.
 _Avoid_: saved View, live page
 
+**Record Query Cursor**:
+A short-lived continuation position for a regular Record Query whose equivalent parameters and ordering remain bound, but whose membership is allowed to reflect concurrent Changes.
+_Avoid_: Query Snapshot, page number
+
 **Recycle State**:
 The retained state of a soft-deleted LoomTable object that can still be discovered and restored.
 _Avoid_: hard deletion, trash copy
@@ -185,6 +197,10 @@ _Avoid_: Token, session, user account
 **Access Token**:
 A named secret credential that authorizes requests as an Actor. One Actor may have multiple independently revocable Access Tokens without changing its identity.
 _Avoid_: Actor ID, user identity, password
+
+**Backup Archive**:
+A versioned, checksummed recovery unit containing the PostgreSQL dump, Managed Attachment content, and the manifest needed to validate their compatibility.
+_Avoid_: database dump, volume copy
 
 **Personal**:
 A single-user deployment profile that may be local or remote and does not include real-time collaboration.

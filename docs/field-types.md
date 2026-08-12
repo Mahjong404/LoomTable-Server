@@ -24,7 +24,7 @@ P0 的九种 Field 都允许显式 `null`，表示该 Cell 已被明确清空；
 
 Filter 的 `isEmpty` 同时匹配 Unset、`null` 和该类型的自然空值；`isNotEmpty` 是其反集。这只定义查询集合，不合并三种存储状态。
 
-P0 值限制：Text 最多 10,000、LongText 最多 100,000 个 Unicode 码点；URL 最多 2,048 个字符且必须是绝对 HTTP/HTTPS URL；Number 必须是有限 IEEE-754 数；Date 必须是有效 Gregorian `YYYY-MM-DD`；MultiSelect 最多包含 100 个互异 Option ID。Location 的 `label`、`address`、`provider` 精确上限在下一层合同中确定。
+P0 值限制：Text 最多 10,000、LongText 最多 100,000 个 Unicode 码点；URL 最多 2,048 个字符且必须是绝对 HTTP/HTTPS URL；Number 必须是有限 IEEE-754 数；Date 必须是有效 Gregorian `YYYY-MM-DD`；MultiSelect 最多包含 100 个互异 Option ID；Location 的 `label`、`address`、`provider` 分别最多 500、2,000、100 个 Unicode 码点。
 
 ## 第一阶段字段
 
@@ -116,6 +116,7 @@ type LocationValue = {
 - `lng` 范围为 `-180..180`。
 - P0 的 `lat` 和 `lng` 使用 WGS 84 经纬度语义；Server 和 Plugin 都不得隐式转换为 GCJ-02、BD-09 或其他坐标系。
 - `lat` 和 `lng` 必须同时存在才可在 Map View 显示 Marker。
+- `label`、`address`、`provider` 执行 Unicode Trim、NFC 和控制字符拒绝；规范化为空的成员被省略。省略后 Location 至少保留 `label`、`address`、`provider` 或完整坐标对之一，不能只保存 `precision`。
 - 有效 WGS 84 坐标超出 EPSG:3857 的可渲染纬度 `±85.0511287798066` 时仍原样保存，但 Map View 不创建 Marker，并将其计入不可渲染数量而不是未定位数量。
 - `label` 或 `address` 可以在没有坐标时独立存在。
 - 用户可以手动输入文本、输入坐标或在地图上选点。
@@ -157,7 +158,9 @@ Tag 不是独立 Field Type：
 - 多个标签使用 `multiSelect`。
 - Select/MultiSelect Option 使用 Server 生成且永不复用的 `opt_...` ID；Record 值引用 ID，不引用可变名称。
 - Option 配置输入是期望的 Active 列表：无 ID 创建，当前 Active ID 更新，Deleted ID 恢复，遗漏 Active ID 软删除；响应分别返回 Active 与 Deleted Option，Active 数组顺序即显示顺序。
-- Option `color` 是 Server 定义的语义色板 Token，不接受 CSS 颜色值；固定 Token 枚举在下一层合同中确定。
+- Option 名称最多 100 个 Unicode 码点并执行 Unicode Trim、NFC 和控制字符拒绝；Active 名称按 locale-neutral Unicode Default Case Folding 后唯一，Deleted Option 可以与 Active Option 同名。
+- 每个 Field 最多 500 个 Active Option、5,000 个 Active + Deleted Option；Deleted Option 按 `deletedAt ASC, id ASC` 返回。
+- Option `color` 是必填的 Server 语义色板 Token，只允许 `gray`、`red`、`orange`、`yellow`、`green`、`cyan`、`blue`、`purple`、`pink`，不接受 CSS 颜色值。
 - Chip、颜色和标签样式属于 Renderer。
 - 跨 Table 共享标签、标签层级和标签权限属于未来 Tag Domain，不属于第一阶段。
 

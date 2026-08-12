@@ -19,7 +19,7 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 
 1. 用户启动 Docker Compose。
 2. 运维者显式执行 Server Migration 命令。
-3. 首次部署时，运维者显式执行 Bootstrap/管理命令，创建稳定 Actor 和初始 Token 哈希。
+3. 首次部署时，运维者显式执行 Bootstrap/管理命令，创建稳定 Actor 和随机初始 Token；终端只显示一次 Secret，数据库只保存哈希。
 4. Plugin 打开连接向导。
 5. 用户选择本地或远程 URL。
 6. 输入或粘贴 Token。
@@ -30,10 +30,11 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 
 ## 配置原则
 
+- 原生 Server 默认只监听 `127.0.0.1:31201`。Compose 的 Server 容器监听 `:31201`，宿主机仅发布 `127.0.0.1:31201:31201`；局域网或远程访问必须显式覆盖监听地址，并使用 TLS 反向代理或可信内网通道。
 - PostgreSQL 凭据只存在 Server 环境中。
 - Plugin 只保存 Server URL 和访问 Token。
 - PostgreSQL 中未撤销的 Token 哈希是运行时认证的唯一事实来源；明文 Token 不落库。
-- 初始 Token 可以由环境变量提供给一次显式 Bootstrap 命令，或由管理命令生成。普通 Server 启动不读取环境变量作为长期认证旁路，也不隐式创建或轮换 Token。
+- Token Secret 只由管理命令生成；最终 P0 不接受调用者通过参数、stdin 或环境变量指定 Secret。普通 Server 启动不读取环境变量作为长期认证旁路，也不隐式创建或轮换 Token。
 - P0 不提供公开 Token 生成 API，localhost 也不免认证。
 - Personal Server 使用一个持久化的稳定 Actor；同一 Actor 可以拥有多个具名 Active Token。每个 Token 可独立撤销，P0 不设置到期时间。Token 更换、Server 重启和数据库恢复都不改变 Actor ID；P0 默认授予其所有 Workspace 权限，不实现登录、邀请或角色系统。
 - PostgreSQL 端口不应直接暴露到公网。
@@ -43,12 +44,13 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 
 ## Actor 和 Token 初始化
 
-- Bootstrap 必须是显式、可重复检查但不会重复创建身份的操作：已有 Personal Actor 时复用其 ID，除非运维者明确执行另一个 Token 管理动作，否则不新增或替换 Token。
+- `bootstrap --name` 必须是显式、可重复检查但不会重复创建身份的操作：只在尚未初始化时创建 Personal Actor 和首个 Token；已有 Actor 时报告现有状态，不新增 Token，也不显示任何 Secret。
 - 每个 Token 都有稳定的 `tok_...` ID 和必填名称；同一 Actor 可以同时保有多个未撤销 Token，便于按设备或用途独立轮换。
 - Server 只在创建 Token 时向终端显示一次明文；后续只能校验、列出 ID、名称、创建/撤销状态等元数据或撤销哈希记录，不能还原明文。
 - P0 Token 没有自动到期时间；撤销是终止其访问能力的唯一 P0 生命周期动作。
 - Token 管理是本机管理命令，不通过公开业务 REST API 暴露。
 - 管理入口固定为 `loomtable-admin auth bootstrap/create/list/revoke`。默认 Secret 为 `ltp_` 加 32 字节 CSPRNG Base64URL；数据库保存 SHA-256，`tok_...` 仅作为 Token 元数据 ID。
+- Token 名称执行 Unicode Trim、NFC、控制字符拒绝和 100 码点上限；同一 Actor 的 Active Token 名称按 locale-neutral Unicode Default Case Folding 后唯一。`create --name` 只生成随机 Secret，`list` 只显示元数据，`revoke` 接收 `tok_...` ID，并允许撤销最后一个 Token。
 - Actor、Token 哈希及撤销状态随 PostgreSQL 一起备份和恢复。
 
 ## 健康检查
@@ -79,11 +81,11 @@ Server 至少提供：
 
 只备份 PostgreSQL 不算完整 LoomTable 备份。
 
-P0 通过 Server 管理命令或运维脚本执行备份和恢复，不通过业务 REST API 暴露备份接口。备份必须带有 Server 版本、Schema 版本和生成时间等版本清单。
+P0 提供经过测试的 PowerShell 与 Bash Docker Compose 脚本，不通过业务 REST API 暴露备份接口。脚本生成一个版本化归档，包含 PostgreSQL custom-format dump、Managed Attachment Volume、Server/Schema 版本、生成时间、文件清单及校验和；独立验证命令必须能在恢复前发现损坏或不兼容归档。
 
 ## 恢复
 
-恢复流程必须先在隔离目录验证：
+恢复要求 Server 停止并由运维者显式确认，且必须先在隔离目录验证：
 
 1. 启动指定版本的 PostgreSQL。
 2. 恢复数据库。
@@ -115,3 +117,7 @@ Plugin 应能展示：
 - Request ID 或诊断 ID。
 
 Server 日志使用结构化格式，并默认不包含 Record 内容、Attachment 内容或 Token。
+
+## 保留期清理
+
+Server 在启动时及其后每 24 小时运行一次有界后台任务，按实际配置的保留期清理 Change 与幂等结果；`forever` 禁用清理。任务分批提交，避免长事务和持续锁表，不要求外部 Scheduler。

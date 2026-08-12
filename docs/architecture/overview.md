@@ -84,7 +84,7 @@ Map View 自己控制交互和 Marker 生命周期。地图瓦片通过客户端
 
 ### Map Query Seam
 
-Server 只负责基于已保存 Map View 配置查询业务数据：验证 Location Field、执行 Filter、计算精确计数和 Data Bounds，并把当前 Map Viewport 归并为最多 500 个 Map Point/Map Cluster。Server 不选择瓦片提供方、不保存临时相机，也不把内部聚类算法暴露成稳定领域合同。
+Server 只负责基于已保存 Map View 配置查询业务数据：验证 Location Field、执行 Filter、计算精确计数和 Data Bounds，并把当前 Map Viewport 归并为最多 500 个 Map Point/Map Cluster。P0 从 PostgreSQL JSONB 安全提取 WGS 84 数值并在应用层聚类，不引入 PostGIS；Server 不选择瓦片提供方、不保存临时相机，也不把内部聚类算法暴露成稳定领域合同。
 
 ### Database Access
 

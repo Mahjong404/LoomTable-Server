@@ -55,7 +55,7 @@
 - 启用 Attachment capability 后使用缩略图、懒加载和缓存。
 - Map View 使用服务端视口查询返回最多 500 个 Map Point/Map Cluster；Server 自适应聚类并完整代表视口内结果，不能下载完整匹配集、静默截断或一次创建所有复杂 Popup。
 - Map Point 只携带 Record ID、坐标和 Primary Field 文本；详情按需直查。全局计数和 Data Bounds 由独立 Summary 查询聚合，只在首次打开、Filter 变化或显式“适配全部”时请求；普通平移/缩放不重复全局聚合，也不把完整 Record 集传给 Plugin。
-- 对热点 Field 增加针对性的 PostgreSQL 索引，而不是为所有 Field 盲目建索引。
+- P0 不依赖 PostGIS；Location 视口查询从 JSONB 安全提取 WGS 84 数值并在应用层聚类。先用 XL 20k 基准验证，再为已测出的热点增加表达式或投影索引，而不是为所有 Field 盲目建索引。
 
 ## 回归场景
 
@@ -69,3 +69,9 @@
 8. 模拟服务不可用和恢复。
 9. 模拟 Revision Conflict。
 10. 在窄桌面 Pane、平板和手机布局下运行。
+11. 验证 Filter 深度 8/节点 100、10 个 Sort、500 个 Projection 和 8 MiB Body 的边界与拒绝路径。
+12. 对 20k Records 的 Grid Query、Location 矩形视口查询、Map Summary 和应用层聚类记录 p50/p95、查询计划、响应大小及峰值内存。
+
+## P0 验收门槛
+
+20k Query/Map 基准是 Server P0 PR 转为 Ready 的必要条件，不是可延后的优化项。还必须通过 OpenAPI Contract、PostgreSQL Integration、Docker Compose Smoke、完整 Backup/Restore、Go Test/Vet；未达到任一门槛时 `agent/server-p0` 保持 Draft，不合并到 `main`。

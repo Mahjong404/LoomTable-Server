@@ -20,3 +20,4 @@
 
 - [Personal 部署与运维](./operations/personal-deployment.md)
 - [ADR 目录](./adr/)
+- [P0 不引入 PostGIS](./adr/0009-defer-postgis-beyond-p0.md)

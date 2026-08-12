@@ -30,7 +30,7 @@ func Load() Config {
 	}
 
 	return Config{
-		HTTPAddr:             value("LOOMTABLE_HTTP_ADDR", ":3000"),
+		HTTPAddr:             value("LOOMTABLE_HTTP_ADDR", "127.0.0.1:31201"),
 		DatabaseURL:          strings.TrimSpace(os.Getenv("LOOMTABLE_DATABASE_URL")),
 		AuthTokenHash:        tokenHash,
 		ServerVersion:        value("LOOMTABLE_SERVER_VERSION", "dev"),

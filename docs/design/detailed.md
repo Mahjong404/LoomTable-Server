@@ -49,7 +49,7 @@ QueryRequest
 → Sort 和 Cursor 条件
 → Projection
 → Record JSONB 解码
-→ QueryResult + nextCursor + changeCursor
+→ QueryResult + hasMore + nextCursor（仅续页存在）+ changeCursor + 首页面 totalCount
 ```
 
 约束：
@@ -134,7 +134,7 @@ Change Log 用于：
 
 - Personal 使用 Bearer Token。
 - Personal Server 通过显式 Bootstrap/管理命令在 PostgreSQL 中初始化一个稳定 `actor`；同一 Actor 可以拥有多个具名 Active Token，各 Token 可独立撤销。P0 Token 不设置到期时间，默认授予该 Actor 所有 Workspace 权限，不实现 User、Role 和登录体系。
-- PostgreSQL 中未撤销的 Token 哈希是认证事实来源。环境变量只可作为显式 Bootstrap 的输入；普通启动不把环境变量哈希当作旁路，也不隐式创建或轮换 Token。
+- PostgreSQL 中未撤销的 Token 哈希是认证事实来源。最终 P0 的 Bootstrap/Create 都只生成随机 Secret，不接受调用者通过参数、stdin 或环境变量指定 Secret；普通启动不把环境变量哈希当作旁路，也不隐式创建或轮换 Token。
 - Server 不向客户端返回数据库凭据。
 - Attachment Content 下载必须经过授权。
 - 文件路径使用服务端生成的 storage key。
@@ -196,8 +196,8 @@ Conflict 使用 `409`；认证、授权、输入校验、资源不存在、能�
 - `/healthz` 是无需认证的进程存活检查。
 - `/readyz` 是无需认证的可接收请求检查，至少检查数据库连接和迁移状态。
 - 业务 API 继续要求 Bearer Token。
-- P0 的初始 Token 由显式 Bootstrap/管理命令创建；环境变量只能提供给该命令作为一次性输入。Server 只保存 Token 哈希，不提供公开的 Token 生成 API，也不对 localhost 免认证。同一稳定 Actor 可以拥有多个具名 Active Token，各自独立撤销；P0 Token 不设置到期时间。
-- P0 的备份/恢复通过 Server 管理命令或运维脚本完成，必须同时覆盖 PostgreSQL、Managed Attachment 文件卷和版本清单。
+- P0 的初始 Token 由显式 Bootstrap/管理命令随机创建；调用者不能指定 Secret。Server 只保存 Token 哈希，不提供公开的 Token 生成 API，也不对 localhost 免认证。同一稳定 Actor 可以拥有多个具名 Active Token，各自独立撤销；P0 Token 不设置到期时间。
+- P0 的备份/恢复通过经过测试的 PowerShell/Bash Docker Compose 脚本完成，必须同时覆盖 PostgreSQL custom-format dump、Managed Attachment 文件卷、版本清单和校验和。
 
 ## 12. Q93–Q102 已确认的实现合同
 
@@ -232,6 +232,7 @@ P0 的稳定 HTTP 状态映射为：
 | 404 | 资源不存在或不属于当前 Actor | `NOT_FOUND` |
 | 409 | Revision 或幂等键冲突 | `CONFLICT`, `IDEMPOTENCY_KEY_REUSED` |
 | 410 | Cursor 或短期查询快照已过期/失效 | `CURSOR_EXPIRED`, `QUERY_SNAPSHOT_EXPIRED` |
+| 413 | JSON 请求体超过 8 MiB | `PAYLOAD_TOO_LARGE` |
 | 422 | 字段值、Filter、Operator、View 配置或其他领域语义无效 | `VALIDATION_ERROR`, `UNSUPPORTED_OPERATOR`, `VIEW_CONFIGURATION_REQUIRED` |
 | 501 | 能力存在于合同但当前 Server 未启用 | `CAPABILITY_NOT_ENABLED` |
 | 503 | Server 尚未就绪或依赖不可用 | `MIGRATION_REQUIRED`, `DEPENDENCY_UNAVAILABLE` |
@@ -246,7 +247,7 @@ P0 不提供公开 Token 生成 API，也不因使用 localhost 而免认证。�
 ### Query、Filter 和 Cursor
 
 - P0 Filter 严格按照 Field Type Registry 校验 Operator 和值类型。
-- `null`、缺失值和空字符串保持区分；文本匹配不区分大小写。
+- `null`、缺失值和空字符串保持区分；文本匹配使用 NFC 和 locale-neutral Unicode Default Case Folding，不区分大小写但区分重音。
 - 不支持的 Operator 返回 `422 UNSUPPORTED_OPERATOR`，不在 Server 或 Plugin 中静默降级。
 - Cursor 是不透明值，绑定 Table、View 基础配置、Filter、Sort、Projection、分页大小和 API 版本。
 - Cursor 只允许用于生成它的等价 Query；结构不匹配返回 `400 INVALID_CURSOR`，过期返回 `410 CURSOR_EXPIRED`。
@@ -276,14 +277,7 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 - P0 的 Select/MultiSelect Option 由 Server 生成稳定 ID，至少保存 `id`、`name`、`color`。删除 Option 不复用旧 ID；已有 Record 保留旧引用并显示为已删除。Option 变更消耗 Field Revision。
 - 创建 Table 时在同一事务中自动创建 Primary Field 和一个 Grid View；请求可选提交本地化的 `primaryFieldName`、`initialViewName`，未传时 Server 使用 `Name`、`Grid`。响应必须同时返回完整的 Table、Primary Field 和初始 Grid View；Map View 由用户显式创建。
 - `View`、`CreateViewRequest` 和 `UpdateViewRequest` 使用 `type` 判别的 `oneOf`，Grid 与 Map 的 Config 不接受任意额外属性。P0 不允许改变已有 View 的 Type。
-- 创建 View 时提交完整 Config；更新时携带 `expectedRevision` 并完整替换 Config，Server 校验、规范化后返回完整 View。缺失的可选配置表示其合同规定的未设置/默认状态，不表示沿用旧值。
-- Field 更新保留顶层 PATCH 语义；`config` 省略时保留旧配置，一旦提供则完整替换。Server 必须按既有 Field Type 校验、规范化并返回完整 Field；P0 不接受 `migrationToken` 或类型变更。
-- `Field`、`CreateFieldRequest` 和 `UpdateFieldRequest` 使用 `type` 判别的严格联合；更新请求回显不可变 `type`，每种 Config 拒绝未声明属性。Select Option 使用期望 Active 列表完成创建、更新、软删除与恢复，OpenAPI 不再保留通用 Config 过渡 Schema。
-- Text、LongText、Number、Checkbox、Date、URL 和 Location 的 P0 Config 固定为严格空对象 `{}`；Select/MultiSelect Config 只包含 Option 生命周期数据，不接受显示或校验扩展属性。
-- Select/MultiSelect 更新提交期望的 Active Option 列表：无 ID 表示新建，当前 Field 的 Active ID 表示更新，Deleted ID 表示恢复，遗漏的 Active Option 软删除。响应分别返回 Active 与 Deleted Option；Active 数组顺序就是显示顺序。Option ID 由 Server 生成，其他 Field 的 ID 或未知 ID 返回 `422 VALIDATION_ERROR`。
-- Grid View 的 P0 配置包含 `projection`、`columnOrder`、`columnWidths`、`frozenFieldIds`、`rowHeight`、`filter` 和 `sort`；Group 只预留，不在 P0 实现。
-- 初始 Grid View 仅投影并排列 Primary Field，`columnWidths` 和 `frozenFieldIds` 为空、无 Filter、Sort 为空、`rowHeight` 为 `standard`。行高只允许 `compact`、`standard`、`comfortable`；显式列宽是 80–1000 CSS px。
-- Map View 配置必须包含同一 Table 内有效的 `locationFieldId`，还可包含 `filter` 和 Default Camera `center + zoom`；瓦片提供方和 Credential 仅属于客户端本地配置。创建时没有 Location Field 则不能创建；配置的 Field 被软删除或不再可用时，Map Query 返回 `422 VIEW_CONFIGURATION_REQUIRED`，不自动改选其他 Field。
+- 创建 View 时提交完整 Config；更新时携带 `expectedRevision` 并完整替换 Config，Server 校验、规范化后返回完整 View。缺失的可选配置��m�G����ƭy�ationFieldId`，还可包含 `filter` 和 Default Camera `center + zoom`；瓦片提供方和 Credential 仅属于客户端本地配置。创建时没有 Location Field 则不能创建；配置的 Field 被软删除或不再可用时，Map Query 返回 `422 VIEW_CONFIGURATION_REQUIRED`，不自动改选其他 Field。
 - Map View 使用 `POST /v1/views/{viewId}/map/query`。请求只提交临时 Map Viewport（一个或两个不跨反经线的 WGS 84 Box）、Zoom 和 CSS Pixel 尺寸；Server 校验 Map View 并应用已保存的 Location Field 与 Filter，不接受临时覆盖。
 - Map Query 最多返回 500 个 Map Point/Map Cluster，并自适应聚类直到满足上限；Feature 必须完整代表视口内全部可渲染匹配 Record，不能静默截断。聚类算法属于内部实现，不成为 API 兼容合同。
 - Map Point 只返回 Record ID、坐标和服务端格式化的 Primary Field 文本；用户打开详情时再调用 `GET /v1/records/{recordId}`。Map Cluster 返回中心、范围、数量、可选展开 Zoom 和短期 Record Query Token。
@@ -297,7 +291,7 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 
 - FilterGroup 支持递归嵌套 `AND`/`OR`，每个 Group 至少一个子节点，最大嵌套深度为 8。空 Group 或超深结构返回 `422 VALIDATION_ERROR`。
 - P0 Operator 严格按 Field Type 矩阵校验。Text/LongText/URL 支持等于、不等于、包含、不包含、前缀、后缀、为空、不为空；Number/Date 支持等于、不等于、大于、大于等于、小于、小于等于、为空、不为空；Checkbox 支持等于、不等于；Select 支持等于、不等于、为空、不为空；MultiSelect 支持包含、不包含、为空、不为空；Location 只支持为空、不为空。
-- Search 只在 Primary Field、Text、LongText 和 URL 中执行服务端不区分大小写的包含匹配。
+- Search 只在 Primary Field、Text、LongText 和 URL 中执行服务端包含匹配；输入去除首尾 Unicode 空白，规范化后为空表示不搜索。匹配使用 NFC 和 locale-neutral Unicode Default Case Folding，区分重音。Field Filter 的文本 Operand 不自动 trim。
 
 ### 元数据恢复和 Primary Field
 
@@ -317,7 +311,7 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 - Record 更新使用 `set + unsetFieldIds`。`set` 可显式写入 Field Type 允许的 `null` 或空值；只有 `unsetFieldIds` 删除键，未提及的 Field 不变。P0 九种 Field 都允许 `null`；Text/LongText 的 `""` 与 MultiSelect 的 `[]` 是自然空值，空 URL 字符串和空 Location 对象无效。Conflict 必须分别回显客户端提交的 Set 与 Unset 意图。
 - Primary Field 可以为 Unset、`null` 或 `""`；Server 不因其为空拒绝创建 Record，也不持久化“无标题”占位。Plugin 在需要标签时使用本地化占位或 Record ID 回退。
 - Unknown、属于其他 Table 或 Deleted Field 不能写入，返回 `422 VALIDATION_ERROR`。Deleted Option 不得被新引入，但同一 Record 已保存的 Deleted Option 引用可以原样保留；删除 Field/Option 不清除历史值，恢复后重新可用。Server 不静默删除无效输入。
-- Text 最多 10,000、LongText 最多 100,000 个 Unicode 码点；URL 最多 2,048 个字符且必须是绝对 HTTP/HTTPS URL；Number 必须是有限 IEEE-754 数；Date 必须是有效 Gregorian `YYYY-MM-DD`；MultiSelect 最多 100 个互异 Option ID。Location 文本成员的精确上限在下一层合同中固定。
+- Text 最多 10,000、LongText 最多 100,000 个 Unicode 码点；URL 最多 2,048 个字符且必须是绝对 HTTP/HTTPS URL；Number 必须是有限 IEEE-754 数；Date 必须是有效 Gregorian `YYYY-MM-DD`；MultiSelect 最多 100 个互异 Option ID。Location 的 `label`、`address`、`provider` 分别最多 500、2,000、100 个 Unicode 码点。
 - Table、Field、View List 与 Record Query 的 Lifecycle Scope 是 `active`、`deleted` 或 `all`，默认 `active`；Record Query 会把它纳入 Cursor 绑定。`deleted` 按对象自身的软删除状态筛选，不把仅因祖先删除而暂时不可见的子对象改写为已删除。
 - Personal Actor、Token 哈希与撤销状态持久化在 PostgreSQL。首次 Bootstrap 或后续管理命令显式创建/管理多个具名 Token；各 Token 独立撤销，P0 不设置到期时间。普通 Server 启动不会隐式创建、替换或轮换。运行时认证只查询数据库中未撤销的 Token，Actor ID 在 Token 更换、重启和备份恢复后保持稳定。
 
@@ -331,6 +325,48 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 - 初始 Grid、Deleted Field/Option 写入限制、Cell 值上限和元数据 List 顺序按本章前述规则执行。
 - 本机管理程序提供 `loomtable-admin auth bootstrap/create/list/revoke`。Token Secret 默认使用 `ltp_` 加 32 字节 CSPRNG Base64URL，明文仅显示一次，数据库保存 SHA-256；`tok_...` 是元数据 ID，不是 Secret。
 - Map 全局 Summary 与 Viewport Query 分离；Cluster Token 使用 5 分钟、View/Table Change 绑定的无状态失效合同。
+
+## 15. Q149–Q170 已确认的实现边界
+
+### Select、Location 与 Field 顺序
+
+- Select Option 的必填语义颜色固定为 `gray`、`red`、`orange`、`yellow`、`green`、`cyan`、`blue`、`purple`、`pink`；客户端按当前主题映射，Server 不保存 CSS 颜色。
+- Option 名称执行 Unicode Trim、NFC、控制字符拒绝和 100 码点上限。Active Option 名称按 locale-neutral Unicode Default Case Folding 后唯一；Deleted Option 可以与 Active Option 同名。单个 Field 最多 500 个 Active Option、5,000 个 Active + Deleted Option；Deleted Option 按 `deletedAt ASC, id ASC` 返回。
+- Location 的 `label`、`address`、`provider` 分别限制为 500、2,000、100 个 Unicode 码点，并执行 Unicode Trim、NFC 和控制字符拒绝。规范化后为空的成员被省略；省略后必须至少保留 `label`、`address`、`provider` 或完整经纬度对之一，`precision` 不能单独构成有效 Location。
+- 新 Field 的 `position` 为当前最大位置加一；删除不回收位置，恢复沿用原位置。P0 不提供 Schema Field 重排 API；Grid `columnOrder` 只改变该 View 的视觉顺序。
+
+### 元数据、直接读取和容量
+
+- P0 元数据列表保持完整、不分页并继续使用稳定顺序，同时执行硬上限：每 Actor 100 Workspace、每 Workspace 500 Base、每 Base 500 Table、每 Table 500 Field、100 View。达到上限后创建返回 `422`，不会静默截断 List。
+- Workspace 和 Base 增加直接 GET 与 PATCH rename，响应包含 `revision`，PATCH 必须携带 `expectedRevision`。P0 不为二者提供删除和恢复。
+- 直接 GET Table、View、Record 时，只要祖先仍 Active 且可访问，就可以返回目标自身的 Recycle State 及 `deletedAt`；Deleted 祖先隐藏后代并返回 `404`。Restore API 可以直接访问待恢复目标。
+- 格式错误的类型化 ID 返回 `400`；格式正确但不存在、属于其他 Actor、不可访问或被祖先隐藏的 ID 返回 `404`。`403` 只表示明确授权策略拒绝，不用于泄漏资源存在性。
+
+### Record Query、Filter 和 Sort
+
+- 普通 Record Query 使用有效期 30 分钟的无状态 Keyset Cursor，绑定完整等价 Query 和 API 版本。它不是 Query Snapshot，也不维持数据库快照；并发写入可能影响后续页，客户端通过 `changeCursor` 判断是否失效并在需要一致性时重新开始。结构不匹配返回 `400 INVALID_CURSOR`，过期返回 `410 CURSOR_EXPIRED`。
+- `QueryResult.hasMore` 必填；只有 `hasMore=true` 才返回 `nextCursor`。`totalEstimate` 被精确的 `totalCount` 取代，并且只在未提交 Cursor 的第一页返回。
+- Filter 最大深度 8、总节点数 100；Sort 最多 10 个互异 Field；Projection 最多 500 个互异 Field；Search 最长 500 个 Unicode 码点；JSON 请求体最大 8 MiB，超过时返回 `413 PAYLOAD_TOO_LARGE`。Record 页大小仍为 1–500。
+- Text、LongText、URL 以 NFC + Unicode Default Case Folding 后的 locale-neutral、区分重音键排序；Number 按数值，Date 按日期，Checkbox 为 `false < true`；Select 按 Active Option 显示顺序，Deleted Option 排在其后并以稳定 ID 排序。MultiSelect 和 Location 在 P0 不可排序，返回 `422`。Unset 与 `null` 共用指定 null bucket，自然空值仍是真实可排序值；最终总是追加 `Record.id ASC` 作为稳定 Tie-breaker。
+- 保存的 View 中 projection/filter/sort/location 等查询语义引用指向 Deleted 或不可用 Field 时，Query 返回 `422 VIEW_CONFIGURATION_REQUIRED` 并列出失效 Field ID，不自动修复 View。纯展示元数据中的过时引用可以保留但忽略；恢复 Field 后查询配置重新有效。Ad-hoc Query 的 Foreign/Deleted Field 引用返回 `422 VALIDATION_ERROR`。
+
+### Mutation 状态合同
+
+- 一个 MutationRequest 不得包含多个指向同一已有 Record 的 Command；违反时整个请求返回 `422`。每个成功 Command 都返回完整操作后 Record，Delete 返回带 `deletedAt` 的 Tombstone；MutationResult 必须返回最终 `changeCursor`。
+- `expectedRevision` 始终先校验。规范化后的目标状态与当前状态相同则返回 `unchanged`，不增加 Revision，也不写 Change。对已删除对象再次 Delete、对 Active 对象 Restore 均是 `422` 非法状态转换；重试语义由幂等键保证。
+
+### 认证、部署、空间查询与运维
+
+- `loomtable-admin auth bootstrap/create/list/revoke` 的 Token 名称执行 Unicode Trim、NFC、控制字符拒绝和 100 码点上限；同一 Actor 的 Active Token 名称按 Unicode case-fold 唯一。`bootstrap --name` 只在尚未初始化时创建 Actor 和首个 Token，已初始化时只报告状态且不显示 Secret；`create --name` 始终生成 `ltp_` 加 32 字节 CSPRNG Base64URL Secret，不接受调用者提供的 Secret；`list` 只返回元数据；`revoke` 使用 `tok_...` ID，并允许撤销最后一个 Token。
+- 原生 Server 默认只监听 `127.0.0.1:31201`；Compose 容器监听 `:31201`，只发布 `127.0.0.1:31201:31201`。局域网或远程访问必须显式覆盖监听地址并使用 TLS 反向代理或可信内网；Obsidian Adapter 不依赖浏览器 CORS。
+- P0 不引入 PostGIS。Location 使用 WGS 84 JSONB，通过数值提取完成矩形视口查询和应用层聚类；以 20k Record 基准决定是否添加表达式或投影索引。`geoWithin`/Polygon 等后续范围能力再重新评估 PostGIS。
+- P0 提供经过测试的 PowerShell 与 Bash Docker Compose 备份/恢复脚本。一个版本化归档包含 PostgreSQL custom-format dump、Attachment Volume、Server/Schema/时间 Manifest 和校验和；验证脚本检查归档，恢复要求 Server 停止并显式确认。
+- Server 启动时及其后每 24 小时执行有界后台清理，移除超过配置保留期的 Change 和幂等记录；`forever` 禁用清理，不依赖外部 Scheduler。
+- Map Cluster Record Query 返回完整 Record，并固定按 `createdAt ASC, id ASC`；Cluster Token 和后续 Cursor 绑定该顺序。
+
+### P0 合并门槛
+
+`agent/server-p0` 仅在没有待定合同标记，全部 P0 路由和业务模块、Migration、认证管理、备份恢复、OpenAPI Contract Test、PostgreSQL 集成测试、20k Query/Map 基准、Docker Smoke/Backup Restore、Go Test/Vet 全部通过后转为 Ready。随后通过 GitHub PR 合并到 `main` 并删除开发分支；在此之前保持 Draft，不提前合并设计骨架。
 
 ### 后续字段扩展
 

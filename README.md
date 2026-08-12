@@ -36,6 +36,8 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 go run ./cmd/loomtable-server
 ```
 
+原生进程默认只监听 `127.0.0.1:31201`；只有显式设置 `LOOMTABLE_HTTP_ADDR` 才会改变监听地址。Docker Compose 同样只把 `31201` 发布到宿主机回环地址。局域网或远程部署必须显式配置监听地址，并通过 TLS 反向代理或可信内网通道暴露服务。
+
 首次初始化数据库时，先执行显式 Migration：
 
 ```text

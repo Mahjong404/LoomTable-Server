@@ -29,6 +29,8 @@
 | natural-empty-value | Natural Empty Value | 自然空值 | 未设置、null | 已存储且非 null、但该 Field Type 在空值筛选中视为空的值 |
 | primary-field | Primary Field | 主字段 | ID 字段、标题列 | 用于识别记录的用户可见字段 |
 | select-option | Select Option | 选项 | 标签文本、显示名称 | Select/MultiSelect 中由 Server 持有稳定 ID 的可选值 |
+| active-option | Active Option | 活动选项 | 启用标签、未删除名称 | 当前可供新 Record 引用并参与显示顺序的 Select Option |
+| deleted-option | Deleted Option | 已删除选项 | 无效选项、移除字符串 | 不再接受新引用、但为历史值和恢复保留的 Select Option |
 | relation | Relation | 关联 | 外键字段、链接文本 | 对其他数据表记录的引用 |
 | computed-field | Computed Field | 计算字段 | 公式列 | 由其他数据派生且只读的字段 |
 | location | Location | 地点 | GeoPoint 字段、地点文本 | 可包含名称、地址和坐标的地点值 |
@@ -52,9 +54,11 @@
 | conflict | Conflict | 冲突 | 合并错误、覆盖警告 | expected Revision 与对象当前 Revision 不相等的变更被拒绝 |
 | lifecycle-scope | Lifecycle Scope | 生命周期范围 | 祖先可见性、权限范围 | 按对象自身状态选择 Active、Recycle 或两者的查询范围 |
 | query-snapshot | Query Snapshot | 查询快照 | 保存视图、实时分页 | Continuation Token 使用期间成员必须稳定的短期绑定查询上下文 |
+| record-query-cursor | Record Query Cursor | 记录查询游标 | 查询快照、页码 | 绑定等价 Query 与排序、但允许并发 Change 影响成员的短期续页位置 |
 | recycle-state | Recycle State | 回收状态 | 硬删除、回收站副本 | 可发现并恢复的软删除对象状态 |
 | actor | Actor | 操作者身份 | Token、会话、用户账户 | 变更归属的稳定认证身份 |
 | access-token | Access Token | 访问令牌 | Actor ID、用户身份、密码 | 具名、可独立撤销且不改变 Actor 身份的秘密凭据 |
+| backup-archive | Backup Archive | 备份归档 | 数据库转储、卷副本 | 包含数据库、托管附件和兼容性清单的版本化校验恢复单元 |
 | validation-preset | Validation Preset | 校验预设 | 特殊数字类型 | 针对 Text 等字段的区域化格式校验规则 |
 | server | Server | 服务端 | 后端程序 | LoomTable Server |
 | plugin | Plugin | 插件 | 客户端程序 | LoomTable Obsidian Plugin |
