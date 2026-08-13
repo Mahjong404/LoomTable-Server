@@ -99,7 +99,7 @@ func (s *Service) SummarizeMap(ctx context.Context, actorID, viewID string) (Map
 			summary.UnlocatedRecordCount++
 			continue
 		}
-		if record.Position.Lat < -mercatorMaxLat || record.Position.Lat > mercatorMaxLat {
+		if !renderableMapCoordinate(*record.Position) {
 			summary.UnrenderableRecordCount++
 			continue
 		}

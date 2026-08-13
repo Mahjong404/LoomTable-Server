@@ -276,3 +276,36 @@ func TestMapBoundsKeepBothAntimeridianEndpoints(t *testing.T) {
 		t.Fatalf("bounds = %#v", bounds)
 	}
 }
+
+func TestSummarizeMapExcludesInvalidLongitude(t *testing.T) {
+	locationID := "fld_00000000000000000000000001"
+	viewID := "view_00000000000000000000000000"
+	tableID := "tbl_00000000000000000000000000"
+	renderable := MapCoordinate{Lat: 31.2, Lng: 121.5}
+	unrenderableLatitude := MapCoordinate{Lat: 86, Lng: 121.5}
+	unrenderableLongitude := MapCoordinate{Lat: 31.2, Lng: 181}
+	store := &serviceStore{
+		metadata: QueryMetadata{
+			TableID: tableID, PrimaryFieldID: textFieldID,
+			Fields: map[string]FieldDefinition{
+				textFieldID: {ID: textFieldID, Type: "text", Revision: 1, Position: 0},
+				locationID:  {ID: locationID, Type: "location", Revision: 1, Position: 1},
+			},
+			View: &domain.View{ID: viewID, TableID: tableID, Type: "map", Revision: 1, Config: domain.MapViewConfig{LocationFieldID: locationID}},
+		},
+		mapSnapshot: StoredMapSnapshot{Records: []MapRecord{
+			{Record: Record{ID: "rec_00000000000000000000000001"}, Position: &renderable},
+			{Record: Record{ID: "rec_00000000000000000000000002"}},
+			{Record: Record{ID: "rec_00000000000000000000000003"}, Position: &unrenderableLatitude},
+			{Record: Record{ID: "rec_00000000000000000000000004"}, Position: &unrenderableLongitude},
+		}, ChangeSequence: 7},
+	}
+	service := NewWithClock(store, func() time.Time { return time.Unix(1000, 0).UTC() })
+	result, err := service.SummarizeMap(context.Background(), "act_00000000000000000000000000", viewID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Summary.MatchedRecordCount != 4 || result.Summary.RenderableRecordCount != 1 || result.Summary.UnlocatedRecordCount != 1 || result.Summary.UnrenderableRecordCount != 2 {
+		t.Fatalf("summary = %#v", result.Summary)
+	}
+}
