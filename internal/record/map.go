@@ -72,12 +72,13 @@ func (s *Service) QueryMap(ctx context.Context, actorID, viewID string, request 
 	if err != nil {
 		return MapQueryResult{}, err
 	}
+	renderableCount := countRenderableMapRecords(snapshot.Records)
 	changeCursor, err := signer.Encode("change", changeCursorPayload{ActorID: actorID, TableID: metadata.TableID, Sequence: snapshot.ChangeSequence})
 	if err != nil {
 		return MapQueryResult{}, fmt.Errorf("encode Map Change cursor: %w", err)
 	}
 	return MapQueryResult{
-		Features: features, ViewportRenderableRecordCount: int64(len(snapshot.Records)),
+		Features: features, ViewportRenderableRecordCount: int64(renderableCount),
 		ViewRevision: metadata.View.Revision, ChangeCursor: changeCursor,
 	}, nil
 }
@@ -288,12 +289,10 @@ func (s *Service) clusterMapRecords(
 	request MapQueryRequest,
 	snapshot StoredMapSnapshot,
 ) ([]any, error) {
-	if len(snapshot.Records) <= maxMapFeatures {
-		features := make([]any, 0, len(snapshot.Records))
-		for _, record := range snapshot.Records {
-			if record.Position == nil {
-				continue
-			}
+	renderableRecords := filterRenderableMapRecords(snapshot.Records)
+	if len(renderableRecords) <= maxMapFeatures {
+		features := make([]any, 0, len(renderableRecords))
+		for _, record := range renderableRecords {
 			features = append(features, MapPoint{Kind: "point", RecordID: record.ID, Position: *record.Position, PrimaryFieldText: record.PrimaryFieldText})
 		}
 		return features, nil
@@ -301,7 +300,7 @@ func (s *Service) clusterMapRecords(
 	cellSize := math.Max(32, math.Sqrt(float64(request.PixelWidth)*float64(request.PixelHeight)/maxMapFeatures))
 	var cells map[string]*clusteredMapCell
 	for {
-		cells = groupMapRecords(snapshot.Records, request.Zoom, cellSize)
+		cells = groupMapRecords(renderableRecords, request.Zoom, cellSize)
 		if len(cells) <= maxMapFeatures {
 			break
 		}
@@ -380,6 +379,28 @@ func groupMapRecords(records []MapRecord, zoom, cellSize float64) map[string]*cl
 	return cells
 }
 
+func filterRenderableMapRecords(records []MapRecord) []MapRecord {
+	result := make([]MapRecord, 0, len(records))
+	for _, record := range records {
+		if record.Position == nil || !renderableMapCoordinate(*record.Position) {
+			continue
+		}
+		result = append(result, record)
+	}
+	return result
+}
+
+func countRenderableMapRecords(records []MapRecord) int {
+	return len(filterRenderableMapRecords(records))
+}
+
+func renderableMapCoordinate(position MapCoordinate) bool {
+	return !math.IsNaN(position.Lat) && !math.IsInf(position.Lat, 0) &&
+		!math.IsNaN(position.Lng) && !math.IsInf(position.Lng, 0) &&
+		position.Lat >= -mercatorMaxLat && position.Lat <= mercatorMaxLat &&
+		position.Lng >= -180 && position.Lng <= 180
+}
+
 func worldPixel(position MapCoordinate, worldSize float64) (float64, float64) {
 	x := (position.Lng + 180) / 360 * worldSize
 	if x >= worldSize {
@@ -412,6 +433,12 @@ func minimalMapBounds(points []MapCoordinate) MapViewport {
 	start := longitudes[(gapIndex+1)%len(longitudes)]
 	span := 360 - largestGap
 	end := start + span
+	if span == 0 && longitudes[0] == -180 && longitudes[len(longitudes)-1] == 180 {
+		return MapViewport{Boxes: []MapViewportBox{
+			{West: 180, South: latMin, East: 180, North: latMax},
+			{West: -180, South: latMin, East: -180, North: latMax},
+		}}
+	}
 	if end <= 180 {
 		return MapViewport{Boxes: []MapViewportBox{{West: start, South: latMin, East: end, North: latMax}}}
 	}

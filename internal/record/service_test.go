@@ -231,3 +231,48 @@ func TestQueryMapClustersWithoutDroppingRecords(t *testing.T) {
 		t.Fatalf("features represent %d Records, want 501", represented)
 	}
 }
+
+func TestQueryMapExcludesUnlocatedAndUnrenderableRecords(t *testing.T) {
+	locationID := "fld_00000000000000000000000001"
+	viewID := "view_00000000000000000000000000"
+	tableID := "tbl_00000000000000000000000000"
+	renderable := MapCoordinate{Lat: 31.2, Lng: 121.5}
+	unrenderable := MapCoordinate{Lat: 86, Lng: 121.5}
+	store := &serviceStore{
+		metadata: QueryMetadata{
+			TableID: tableID, PrimaryFieldID: textFieldID,
+			Fields: map[string]FieldDefinition{
+				textFieldID: {ID: textFieldID, Type: "text", Revision: 1, Position: 0},
+				locationID:  {ID: locationID, Type: "location", Revision: 1, Position: 1},
+			},
+			View: &domain.View{ID: viewID, TableID: tableID, Type: "map", Revision: 1, Config: domain.MapViewConfig{LocationFieldID: locationID}},
+		},
+		mapSnapshot: StoredMapSnapshot{Records: []MapRecord{
+			{Record: Record{ID: "rec_00000000000000000000000001"}, Position: &renderable},
+			{Record: Record{ID: "rec_00000000000000000000000002"}},
+			{Record: Record{ID: "rec_00000000000000000000000003"}, Position: &unrenderable},
+		}, ChangeSequence: 7},
+	}
+	service := NewWithClock(store, func() time.Time { return time.Unix(1000, 0).UTC() })
+	result, err := service.QueryMap(context.Background(), "act_00000000000000000000000000", viewID, MapQueryRequest{
+		Viewport: MapViewport{Boxes: []MapViewportBox{{West: 100, South: 0, East: 140, North: 40}}},
+		Zoom:     8, PixelWidth: 1000, PixelHeight: 800,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ViewportRenderableRecordCount != 1 || len(result.Features) != 1 {
+		t.Fatalf("map result = %#v", result)
+	}
+	point, ok := result.Features[0].(MapPoint)
+	if !ok || point.RecordID != "rec_00000000000000000000000001" {
+		t.Fatalf("features = %#v", result.Features)
+	}
+}
+
+func TestMapBoundsKeepBothAntimeridianEndpoints(t *testing.T) {
+	bounds := minimalMapBounds([]MapCoordinate{{Lat: 10, Lng: -180}, {Lat: 12, Lng: 180}})
+	if len(bounds.Boxes) != 2 || bounds.Boxes[0].West != 180 || bounds.Boxes[1].East != -180 {
+		t.Fatalf("bounds = %#v", bounds)
+	}
+}
