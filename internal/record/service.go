@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/cursor"
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
@@ -19,10 +20,15 @@ type Store interface {
 
 type Service struct {
 	store Store
+	now   func() time.Time
 }
 
 func New(store Store) *Service {
-	return &Service{store: store}
+	return NewWithClock(store, time.Now)
+}
+
+func NewWithClock(store Store, now func() time.Time) *Service {
+	return &Service{store: store, now: now}
 }
 
 func (s *Service) Get(ctx context.Context, actorID, recordID string) (Record, error) {

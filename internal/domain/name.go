@@ -1,26 +1,44 @@
 package domain
 
 import (
+	"fmt"
 	"unicode"
 	"unicode/utf8"
 
+	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
 
 const ResourceNameMaxCodePoints = 200
 
 func NormalizeResourceName(path, value string) (string, error) {
+	return normalizeName(path, value, ResourceNameMaxCodePoints, "name")
+}
+
+func NormalizeOptionName(path, value string) (string, error) {
+	return normalizeName(path, value, 100, "option name")
+}
+
+func NormalizeTokenName(path, value string) (string, error) {
+	return normalizeName(path, value, 100, "token name")
+}
+
+func FoldKey(value string) string {
+	return cases.Fold().String(norm.NFC.String(value))
+}
+
+func normalizeName(path, value string, maxCodePoints int, label string) (string, error) {
 	normalized := norm.NFC.String(trimUnicodeSpace(value))
 	if normalized == "" {
-		return "", NewValidationError(ValidationIssue{Path: path, Code: "required", Message: "name is required"})
+		return "", NewValidationError(ValidationIssue{Path: path, Code: "required", Message: label + " is required"})
 	}
 	for _, r := range normalized {
 		if unicode.IsControl(r) {
-			return "", NewValidationError(ValidationIssue{Path: path, Code: "format", Message: "name cannot contain control characters"})
+			return "", NewValidationError(ValidationIssue{Path: path, Code: "format", Message: label + " cannot contain control characters"})
 		}
 	}
-	if utf8.RuneCountInString(normalized) > ResourceNameMaxCodePoints {
-		return "", NewValidationError(ValidationIssue{Path: path, Code: "limit", Message: "name exceeds 200 Unicode code points"})
+	if utf8.RuneCountInString(normalized) > maxCodePoints {
+		return "", NewValidationError(ValidationIssue{Path: path, Code: "limit", Message: fmt.Sprintf("%s exceeds %d Unicode code points", label, maxCodePoints)})
 	}
 	return normalized, nil
 }

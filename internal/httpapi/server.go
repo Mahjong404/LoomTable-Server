@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/auth"
+	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 	"github.com/Mahjong404/LoomTable-Server/internal/config"
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
 	"github.com/Mahjong404/LoomTable-Server/internal/id"
@@ -40,10 +41,26 @@ type Catalog interface {
 	UpdateTable(context.Context, string, string, int64, string) (domain.Table, error)
 	DeleteTable(context.Context, string, string, int64) error
 	RestoreTable(context.Context, string, string, int64) (domain.Table, error)
+	ListFields(context.Context, string, string, string) ([]domain.Field, error)
+	CreateField(context.Context, string, string, string, catalog.FieldInput) (domain.Field, error)
+	UpdateField(context.Context, string, string, catalog.FieldUpdate) (domain.Field, error)
+	DeleteField(context.Context, string, string, int64) error
+	RestoreField(context.Context, string, string, int64) (domain.Field, error)
+	ListViews(context.Context, string, string, string) ([]domain.View, error)
+	GetView(context.Context, string, string) (domain.View, error)
+	CreateView(context.Context, string, string, string, catalog.ViewInput) (domain.View, error)
+	UpdateView(context.Context, string, string, catalog.ViewUpdate) (domain.View, error)
+	DeleteView(context.Context, string, string, int64) error
+	RestoreView(context.Context, string, string, int64) (domain.View, error)
 }
 
 type Records interface {
 	Get(context.Context, string, string) (loomrecord.Record, error)
+	Query(context.Context, string, string, loomrecord.QueryRequest) (loomrecord.QueryResult, error)
+	Changes(context.Context, string, string, string, int) (loomrecord.ChangePage, error)
+	QueryMap(context.Context, string, string, loomrecord.MapQueryRequest) (loomrecord.MapQueryResult, error)
+	SummarizeMap(context.Context, string, string) (loomrecord.MapSummaryResult, error)
+	QueryMapClusterRecords(context.Context, string, string, loomrecord.MapClusterRecordsRequest) (loomrecord.QueryResult, error)
 	Mutate(context.Context, string, string, string, []loomrecord.Command) (loomrecord.MutationResult, error)
 }
 
@@ -109,6 +126,8 @@ func New(cfg config.Config, ready ReadyChecker, provided ...Dependencies) *Serve
 	mux.HandleFunc("/v1/bases/", server.withAuth(server.base))
 	mux.HandleFunc("/v1/tables", server.withAuth(server.tables))
 	mux.HandleFunc("/v1/tables/", server.withAuth(server.table))
+	mux.HandleFunc("/v1/fields/", server.withAuth(server.field))
+	mux.HandleFunc("/v1/views/", server.withAuth(server.view))
 	mux.HandleFunc("/v1/records/", server.withAuth(server.record))
 	mux.HandleFunc("/v1/attachments", server.withAuth(server.attachmentDisabled))
 	mux.HandleFunc("/v1/attachments/", server.withAuth(server.attachmentDisabled))
@@ -217,11 +236,11 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r.WithContext(context.WithValue(r.Context(), actorIDKey{}, actorID)))
 			return
 		}
-		if !auth.VerifyBearer(header, s.config.AuthTokenHash) {
+		if _, ok := auth.BearerToken(header); !ok {
 			writeAPIError(w, r, http.StatusUnauthorized, "UNAUTHENTICATED", "a valid Bearer Token is required")
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), actorIDKey{}, "act_legacy")))
+		writeAPIError(w, r, http.StatusServiceUnavailable, "DEPENDENCY_UNAVAILABLE", "authentication dependency is unavailable")
 	}
 }
 

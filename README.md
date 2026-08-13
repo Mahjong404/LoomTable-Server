@@ -4,7 +4,7 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 
 ## 当前状态
 
-当前仓库处于 P0 实现阶段。已接入 PostgreSQL 认证与 Bootstrap 状态、严格 JSON 请求边界，以及 Workspace/Base/Table 的列表、读取、创建和并发控制；Table 创建会原子生成 Primary Field 与初始 Grid View。Record 已实现直接读取和原子批量 Mutation，包括九种 P0 值校验、幂等、冲突、No-op、回收状态、Change 与查询投影。Field/View 管理、Record Query/Change 拉取、运维脚本和完整集成验收仍在继续。
+当前仓库处于 P0 集成验收阶段。Workspace/Base/Table/Field/View、Record Query/Mutation/Change、Grid/Map 查询、PostgreSQL Token 管理、保留期清理及跨平台备份/验证/恢复入口均已实现。纯 Go 测试、静态检查、OpenAPI 路由合同和 Compose 配置可在本地运行；需要 PostgreSQL/Docker 的端到端与运维恢复验收由测试环境执行后才可合并 `main`。
 
 ## 文档
 
@@ -30,13 +30,21 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 
 ## 本地运行
 
-需要 Go 1.22+。当前骨架仍通过 `LOOMTABLE_AUTH_TOKEN_HASH` 注入单个开发用认证哈希；这是业务 Handler 接入前的过渡实现，不是最终 P0 认证合同。最终实现必须由显式 Bootstrap/管理命令在 PostgreSQL 中创建稳定 Actor 和具名 Token，普通启动不得把环境变量作为长期认证旁路。
+需要 Go 1.22+。认证由 PostgreSQL 中的 Personal Actor 与具名 Token 管理；普通 Server 启动不接受环境变量 Token 旁路，也不隐式创建身份。
 
-配置 `LOOMTABLE_DATABASE_URL` 和过渡用 `LOOMTABLE_AUTH_TOKEN_HASH` 后运行：
+配置 `LOOMTABLE_DATABASE_URL` 后运行：
 
 ```text
 go run ./cmd/loomtable-server
 ```
+
+首次部署在 Migration 后显式创建 Personal Actor 与初始 Token；Secret 只在创建时显示一次：
+
+```text
+go run ./cmd/loomtable-admin auth bootstrap --name "Primary device"
+```
+
+后续使用 `auth create --name`、`auth list` 和 `auth revoke --token-id` 管理具名 Token。Docker Compose 下使用 `docker compose --profile ops run --rm admin auth ...`。
 
 原生进程默认只监听 `127.0.0.1:31201`；只有显式设置 `LOOMTABLE_HTTP_ADDR` 才会改变监听地址。Docker Compose 同样只把 `31201` 发布到宿主机回环地址。局域网或远程部署必须显式配置监听地址，并通过 TLS 反向代理或可信内网通道暴露服务。
 
@@ -47,6 +55,17 @@ go run ./cmd/loomtable-migrate -dir migrations
 ```
 
 Personal Docker Compose 的环境变量示例见 `.env.example`；Attachment 文件卷在 P0 只作为预留基础设施，`attachments` capability 默认未启用。
+
+常用 Compose 初始化命令：
+
+```text
+docker compose up -d postgres
+docker compose --profile ops run --rm migrate -dir /app/migrations
+docker compose --profile ops run --rm admin auth bootstrap --name "Primary device"
+docker compose up -d server
+```
+
+备份、校验和恢复入口位于 `scripts/operations/`，PowerShell 与 Bash 版本执行相同的版本化归档合同。恢复必须在 Server 停止后显式确认。
 
 许可证：GPL-3.0。
 

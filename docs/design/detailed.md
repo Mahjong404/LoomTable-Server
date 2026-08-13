@@ -197,7 +197,7 @@ Conflict 使用 `409`；认证、授权、输入校验、资源不存在、能�
 - `/readyz` 是无需认证的可接收请求检查，至少检查数据库连接和迁移状态。
 - 业务 API 继续要求 Bearer Token。
 - P0 的初始 Token 由显式 Bootstrap/管理命令随机创建；调用者不能指定 Secret。Server 只保存 Token 哈希，不提供公开的 Token 生成 API，也不对 localhost 免认证。同一稳定 Actor 可以拥有多个具名 Active Token，各自独立撤销；P0 Token 不设置到期时间。
-- P0 的备份/恢复通过经过测试的 PowerShell/Bash Docker Compose 脚本完成，必须同时覆盖 PostgreSQL custom-format dump、Managed Attachment 文件卷、版本清单和校验和。
+- P0 的备份/恢复通过 PowerShell/Bash Docker Compose 脚本完成，必须同时覆盖 PostgreSQL custom-format dump、Managed Attachment 文件卷、版本清单和校验和；转为 Ready 前必须在真实 Docker/PostgreSQL 环境完成脚本验收。
 
 ## 12. Q93–Q102 已确认的实现合同
 
@@ -368,7 +368,7 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 - `loomtable-admin auth bootstrap/create/list/revoke` 的 Token 名称执行 Unicode Trim、NFC、控制字符拒绝和 100 码点上限；同一 Actor 的 Active Token 名称按 Unicode case-fold 唯一。`bootstrap --name` 只在尚未初始化时创建 Actor 和首个 Token，已初始化时只报告状态且不显示 Secret；`create --name` 始终生成 `ltp_` 加 32 字节 CSPRNG Base64URL Secret，不接受调用者提供的 Secret；`list` 只返回元数据；`revoke` 使用 `tok_...` ID，并允许撤销最后一个 Token。
 - 原生 Server 默认只监听 `127.0.0.1:31201`；Compose 容器监听 `:31201`，只发布 `127.0.0.1:31201:31201`。局域网或远程访问必须显式覆盖监听地址并使用 TLS 反向代理或可信内网；Obsidian Adapter 不依赖浏览器 CORS。
 - P0 不引入 PostGIS。Location 使用 WGS 84 JSONB，通过数值提取完成矩形视口查询和应用层聚类；以 20k Record 基准决定是否添加表达式或投影索引。`geoWithin`/Polygon 等后续范围能力再重新评估 PostGIS。
-- P0 提供经过测试的 PowerShell 与 Bash Docker Compose 备份/恢复脚本。一个版本化归档包含 PostgreSQL custom-format dump、Attachment Volume、Server/Schema/时间 Manifest 和校验和；验证脚本检查归档，恢复要求 Server 停止并显式确认。
+- P0 提供 PowerShell 与 Bash Docker Compose 备份/恢复脚本。一个版本化归档包含 PostgreSQL custom-format dump、Attachment Volume、Server/Schema/时间 Manifest 和校验和；验证脚本检查归档，恢复要求 Server 停止并显式确认；转为 Ready 前必须完成真实环境验收。
 - Server 启动时及其后每 24 小时执行有界后台清理，移除超过配置保留期的 Change 和幂等记录；`forever` 禁用清理，不依赖外部 Scheduler。
 - Map Cluster Record Query 返回完整 Record，并固定按 `createdAt ASC, id ASC`；Cluster Token 和后续 Cursor 绑定该顺序。
 

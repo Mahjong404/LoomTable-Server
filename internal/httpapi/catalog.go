@@ -276,6 +276,24 @@ func (s *Server) table(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trimmed := strings.TrimPrefix(r.URL.Path, "/v1/tables/")
+	if strings.HasSuffix(trimmed, "/fields") {
+		tableID := strings.TrimSuffix(trimmed, "/fields")
+		if tableID == "" || strings.Contains(tableID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.fields(w, r, tableID)
+		return
+	}
+	if strings.HasSuffix(trimmed, "/views") {
+		tableID := strings.TrimSuffix(trimmed, "/views")
+		if tableID == "" || strings.Contains(tableID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.views(w, r, tableID)
+		return
+	}
 	if strings.HasSuffix(trimmed, "/records/mutate") {
 		tableID := strings.TrimSuffix(trimmed, "/records/mutate")
 		if tableID == "" || strings.Contains(tableID, "/") {
@@ -283,6 +301,24 @@ func (s *Server) table(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mutateRecords(w, r, tableID)
+		return
+	}
+	if strings.HasSuffix(trimmed, "/records/query") {
+		tableID := strings.TrimSuffix(trimmed, "/records/query")
+		if tableID == "" || strings.Contains(tableID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.queryRecords(w, r, tableID)
+		return
+	}
+	if strings.HasSuffix(trimmed, "/changes") {
+		tableID := strings.TrimSuffix(trimmed, "/changes")
+		if tableID == "" || strings.Contains(tableID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.changes(w, r, tableID)
 		return
 	}
 	if strings.HasSuffix(trimmed, "/restore") {
@@ -405,6 +441,21 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		writeAPIError(w, r, http.StatusBadRequest, "BAD_REQUEST", badRequest.Error())
 		return
 	}
+	var invalidCursor *domain.InvalidCursorError
+	if errors.As(err, &invalidCursor) {
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_CURSOR", invalidCursor.Error())
+		return
+	}
+	var cursorExpired *domain.CursorExpiredError
+	if errors.As(err, &cursorExpired) {
+		writeAPIError(w, r, http.StatusGone, "CURSOR_EXPIRED", cursorExpired.Error())
+		return
+	}
+	var snapshotExpired *domain.QuerySnapshotExpiredError
+	if errors.As(err, &snapshotExpired) {
+		writeAPIError(w, r, http.StatusGone, "QUERY_SNAPSHOT_EXPIRED", snapshotExpired.Error())
+		return
+	}
 	var validation *domain.ValidationError
 	if errors.As(err, &validation) {
 		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "VALIDATION_ERROR", validation.Error(), map[string]any{"issues": validation.Issues})
@@ -442,6 +493,27 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 			"current":  state.Current,
 		}
 		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "INVALID_STATE_TRANSITION", state.Error(), details)
+		return
+	}
+	var unsupportedOperator *domain.UnsupportedOperatorError
+	if errors.As(err, &unsupportedOperator) {
+		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "UNSUPPORTED_OPERATOR", unsupportedOperator.Error(), map[string]string{
+			"fieldId": unsupportedOperator.FieldID, "operator": unsupportedOperator.Operator,
+		})
+		return
+	}
+	var unsupportedSort *domain.UnsupportedSortError
+	if errors.As(err, &unsupportedSort) {
+		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "UNSUPPORTED_SORT", unsupportedSort.Error(), map[string]string{
+			"fieldId": unsupportedSort.FieldID, "fieldType": unsupportedSort.FieldType,
+		})
+		return
+	}
+	var viewConfiguration *domain.ViewConfigurationRequiredError
+	if errors.As(err, &viewConfiguration) {
+		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "VIEW_CONFIGURATION_REQUIRED", viewConfiguration.Error(), map[string]any{
+			"viewId": viewConfiguration.ViewID, "invalidFieldIds": viewConfiguration.InvalidFieldIDs,
+		})
 		return
 	}
 	if errors.Is(err, domain.ErrDependencyMissing) {

@@ -115,6 +115,12 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     PRIMARY KEY (actor_id, client_mutation_id)
 );
 
+CREATE TABLE IF NOT EXISTS change_retention_watermarks (
+    table_id TEXT PRIMARY KEY REFERENCES tables(id),
+    expired_through BIGINT NOT NULL CHECK (expired_through >= 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 ALTER TABLE tables
     ADD CONSTRAINT tables_primary_field_fk
     FOREIGN KEY (primary_field_id) REFERENCES fields(id)

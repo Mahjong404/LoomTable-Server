@@ -85,3 +85,42 @@ type InvalidStateTransitionError struct {
 func (e *InvalidStateTransitionError) Error() string {
 	return fmt.Sprintf("cannot %s %s %s while it is %s", e.Action, e.Resource, e.ID, e.Current)
 }
+
+type InvalidCursorError struct{}
+
+func (e *InvalidCursorError) Error() string { return "cursor is invalid for this query" }
+
+type CursorExpiredError struct{}
+
+func (e *CursorExpiredError) Error() string { return "cursor has expired" }
+
+type QuerySnapshotExpiredError struct{}
+
+func (e *QuerySnapshotExpiredError) Error() string { return "query snapshot has expired" }
+
+type UnsupportedOperatorError struct {
+	FieldID  string
+	Operator string
+}
+
+func (e *UnsupportedOperatorError) Error() string {
+	return fmt.Sprintf("operator %s is unsupported for Field %s", e.Operator, e.FieldID)
+}
+
+type UnsupportedSortError struct {
+	FieldID   string
+	FieldType string
+}
+
+func (e *UnsupportedSortError) Error() string {
+	return fmt.Sprintf("Field %s of type %s cannot be sorted", e.FieldID, e.FieldType)
+}
+
+type ViewConfigurationRequiredError struct {
+	ViewID          string
+	InvalidFieldIDs []string
+}
+
+func (e *ViewConfigurationRequiredError) Error() string {
+	return fmt.Sprintf("View %s references unavailable Fields", e.ViewID)
+}

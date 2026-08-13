@@ -55,6 +55,15 @@ P0 不启用 Attachment capability，但保留文件卷和备份清单位置，�
 - Token 名称执行 Unicode Trim、NFC、控制字符拒绝和 100 码点上限；同一 Actor 的 Active Token 名称按 locale-neutral Unicode Default Case Folding 后唯一。`create --name` 只生成随机 Secret，`list` 只显示元数据，`revoke` 接收 `tok_...` ID，并允许撤销最后一个 Token。
 - Actor、Token 哈希及撤销状态随 PostgreSQL 一起备份和恢复。
 
+Compose 管理命令示例：
+
+```text
+docker compose --profile ops run --rm admin auth bootstrap --name "Primary device"
+docker compose --profile ops run --rm admin auth create --name "Laptop"
+docker compose --profile ops run --rm admin auth list
+docker compose --profile ops run --rm admin auth revoke --token-id tok_...
+```
+
 ## 健康检查
 
 Server 至少提供：
@@ -83,9 +92,25 @@ Server 至少提供：
 
 只备份 PostgreSQL 不算完整 LoomTable 备份。
 
-P0 提供经过测试的 PowerShell 与 Bash Docker Compose 脚本，不通过业务 REST API 暴露备份接口。脚本生成一个跨平台 `.tar.gz` 版本化归档，包含 PostgreSQL custom-format dump、Managed Attachment Volume、Server/Schema 版本、生成时间、文件清单及 SHA-256 校验和；拒绝覆盖已有输出。独立验证命令必须能在恢复前发现损坏或不兼容归档。
+P0 提供 PowerShell 与 Bash Docker Compose 脚本，不通过业务 REST API 暴露备份接口。脚本生成一个跨平台 `.tar.gz` 版本化归档，包含 PostgreSQL custom-format dump、Managed Attachment Volume、Server/Schema 版本、生成时间、文件清单及 SHA-256 校验和；拒绝覆盖已有输出。独立验证命令必须能在恢复前发现损坏或不兼容归档；P0 合并前还必须在真实 Docker/PostgreSQL 环境完成脚本验收。
 
 归档默认不加密，但创建时尽可能使用仅当前用户可读的权限，并明确提示数据库包含 Actor、Token Hash 和业务数据。Cursor HMAC Key 随数据库转储备份，不在 Manifest 中输出明文。
+
+仓库提供以下等价入口：
+
+```text
+scripts/operations/backup.ps1 OUTPUT.tar.gz
+scripts/operations/validate-backup.ps1 OUTPUT.tar.gz
+scripts/operations/restore.ps1 OUTPUT.tar.gz -Confirm
+
+scripts/operations/backup.sh OUTPUT.tar.gz
+scripts/operations/validate-backup.sh OUTPUT.tar.gz
+scripts/operations/restore.sh OUTPUT.tar.gz --confirm
+```
+
+备份拒绝覆盖既有输出。验证会检查归档格式、必需成员与 SHA-256；恢复会先验证归档并拒绝 Server 仍在运行的环境。
+
+`acceptance.ps1` / `acceptance.sh` 使用随机 Compose Project、临时端口和临时数据卷，自动执行 Migration、Bootstrap、写入测试 Workspace、备份、销毁测试卷、恢复和数据核对；无论成功失败都会清理隔离资源。它只用于验收环境，不连接或复用生产 Compose Project。
 
 ## 恢复
 
@@ -125,6 +150,8 @@ Server 日志使用结构化格式，并默认不包含 Record 内容、Attachme
 ## 保留期清理
 
 Server 在启动时及其后每 24 小时运行一次有界后台任务，按实际配置的保留期清理 Change 与幂等结果；`forever` 禁用清理。任务使用 PostgreSQL Advisory Lock 和数据库时钟，每类数据每次最多 10 批、每批 10,000 条，以短事务提交并记录删除数量和耗时；不要求外部 Scheduler。
+
+`LOOMTABLE_CHANGE_RETENTION` 与 `LOOMTABLE_IDEMPOTENCY_RETENTION` 接受 `30d`、`90d`、`365d` 或 `forever`，默认均为 `30d`。Change 清理同时维护每个 Table 的过期水位，避免全局 Change Sequence 的间隙被误判为 Cursor 过期。
 
 ## Migration 生命周期
 
