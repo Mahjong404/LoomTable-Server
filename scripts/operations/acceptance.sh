@@ -30,8 +30,21 @@ wait_ready() {
   return 1
 }
 
+wait_postgres() {
+  for _ in $(seq 1 60); do
+    if docker compose exec -T postgres pg_isready -U loomtable -d loomtable >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "PostgreSQL did not become ready" >&2
+  docker compose logs postgres >&2 || true
+  return 1
+}
+
 cd "$repo_dir"
 docker compose up -d postgres
+wait_postgres
 docker compose --profile ops run --rm --build migrate -dir /app/migrations
 bootstrap_json=$(docker compose --profile ops run --rm admin auth bootstrap --name Acceptance)
 token=$(printf '%s\n' "$bootstrap_json" | sed -n 's/.*"secret"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
@@ -58,6 +71,7 @@ fi
 "$script_dir/validate-backup.sh" "$archive"
 docker compose down -v --remove-orphans
 docker compose up -d postgres
+wait_postgres
 "$script_dir/restore.sh" "$archive" --confirm
 docker compose up -d server
 wait_ready

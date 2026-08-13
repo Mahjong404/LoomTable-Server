@@ -33,7 +33,9 @@ try {
         schemaVersions = $schemaVersions.Trim()
         files = @('database.dump', 'attachments.tar')
     }
-    $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $workDir 'manifest.json') -Encoding utf8NoBOM
+    $manifestJson = $manifest | ConvertTo-Json -Depth 4
+    $utf8NoBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText((Join-Path $workDir 'manifest.json'), $manifestJson, $utf8NoBom)
 
     $checksumLines = foreach ($name in @('database.dump', 'attachments.tar', 'manifest.json')) {
         $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $workDir $name)).Hash.ToLowerInvariant()
