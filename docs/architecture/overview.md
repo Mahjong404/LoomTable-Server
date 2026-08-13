@@ -55,18 +55,14 @@ Server 是模块化单体，第一阶段作为一个 Go 进程部署：
 LoomTable Server
 ├── API Module
 ├── Auth Module
-├── Workspace Module
-├── Base Module
-├── Table Module
-├── View Module
-├── Schema Module
-├── Query Module
-├── Mutation Module
+├── Catalog Module
+├── Record Module
 ├── Attachment Module
-└── Sync Module
+├── Operations Module
+└── PostgreSQL Adapter
 ```
 
-模块是代码组织和职责边界，不是独立进程。只有在 Team 模式出现明确的吞吐或隔离需求时，才考虑拆分后台任务或实时协作进程。
+Catalog Module 统一承载 Workspace、Base、Table、Field 与 View 的元数据不变量；Record Module 统一承载 Mutation、Query、Change 与 Map 的数据语义。模块是代码组织和职责边界，不是独立进程，HTTP 与 PostgreSQL 位于模块 seam 的 adapter 侧。详细依赖规则见[源码结构](./source-layout.md)。只有在 Team 模式出现明确的吞吐或隔离需求时，才考虑拆分后台任务或实时协作进程。
 
 ## 关键 Seam
 
@@ -76,11 +72,15 @@ Plugin 内部使用一个小的 `LoomTableClient` Interface。生产实现是 HT
 
 ### Attachment Store Seam
 
-Server 将附件元数据与文件内容分离。第一阶段使用本地文件卷；未来可以加入 S3 或兼容对象存储 Adapter。
+Server 将附件元数据与文件内容分离。启用 Attachment capability 后，第一阶段使用本地文件卷；未来可以加入 S3 或兼容对象存储 Adapter。P0 只保留该 seam，不启用业务 API。
 
-### Map Provider Seam
+### Tile Provider Seam
 
-Map View 自己控制交互和 Marker 生命周期。地图瓦片和地理编码通过可配置 Provider 接入，不绑定特定商业服务。
+Map View 自己控制交互和 Marker 生命周期。地图瓦片通过客户端的可配置 Tile Provider 接入；地理编码是另一个可选 Adapter。两者都不绑定特定商业服务，也不经过 LoomTable Server。
+
+### Map Query Seam
+
+Server 只负责基于已保存 Map View 配置查询业务数据：验证 Location Field、执行 Filter、计算精确计数和 Data Bounds，并把当前 Map Viewport 归并为最多 500 个 Map Point/Map Cluster。P0 从 PostgreSQL JSONB 安全提取 WGS 84 数值并在应用层聚类，不引入 PostGIS；Server 不选择瓦片提供方、不保存临时相机，也不把内部聚类算法暴露成稳定领域合同。
 
 ### Database Access
 

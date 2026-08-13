@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: loomtable
+      POSTGRES_USER: loomtable
+      POSTGRES_PASSWORD: ${LOOMTABLE_POSTGRES_PASSWORD:?set LOOMTABLE_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loomtable -d loomtable"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LOOMTABLE_HTTP_ADDR: :31201
+      LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
+      LOOMTABLE_CHANGE_RETENTION: ${LOOMTABLE_CHANGE_RETENTION:-30d}
+      LOOMTABLE_IDEMPOTENCY_RETENTION: ${LOOMTABLE_IDEMPOTENCY_RETENTION:-30d}
+    ports:
+      - "${LOOMTABLE_HOST_ADDR:-127.0.0.1}:${LOOMTABLE_HOST_PORT:-31201}:31201"
+    volumes:
+      - attachment-data:/var/lib/loomtable/attachments
+
+  migrate:
+    build: .
+    profiles: ["ops"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/app/loomtable-migrate"]
+    environment:
+      LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
+
+  admin:
+    build: .
+    profiles: ["ops"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/app/loomtable-admin"]
+    environment:
+      LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
+
+volumes:
+  postgres-data:
+  attachment-data:
