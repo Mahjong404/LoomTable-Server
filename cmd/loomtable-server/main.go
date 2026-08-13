@@ -12,12 +12,15 @@ import (
 	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 	"github.com/Mahjong404/LoomTable-Server/internal/config"
 	"github.com/Mahjong404/LoomTable-Server/internal/httpapi"
+	"github.com/Mahjong404/LoomTable-Server/internal/maintenance"
 	loomrecord "github.com/Mahjong404/LoomTable-Server/internal/record"
 	"github.com/Mahjong404/LoomTable-Server/internal/storage/postgres"
 )
 
 func main() {
 	cfg := config.Load()
+	applicationContext, stopApplication := context.WithCancel(context.Background())
+	defer stopApplication()
 
 	var ready httpapi.ReadyChecker
 	var dependencies httpapi.Dependencies
@@ -32,6 +35,11 @@ func main() {
 			defer db.Close()
 			ready = postgres.ReadyChecker(db)
 			repository := postgres.NewRepository(db)
+			retention, err := maintenance.NewRetentionRunner(repository, cfg.ChangeRetention, cfg.IdempotencyRetention, log.Printf)
+			if err != nil {
+				log.Fatalf("invalid retention configuration: %v", err)
+			}
+			retention.Start(applicationContext)
 			dependencies = httpapi.Dependencies{
 				Authenticator: repository,
 				Bootstrap:     repository,
@@ -62,10 +70,12 @@ func main() {
 
 	select {
 	case err := <-serverErrors:
+		stopApplication()
 		if !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
 		}
 	case <-signals:
+		stopApplication()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {

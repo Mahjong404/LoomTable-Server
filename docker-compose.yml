@@ -21,9 +21,10 @@ services:
     environment:
       LOOMTABLE_HTTP_ADDR: :31201
       LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
-      LOOMTABLE_AUTH_TOKEN_HASH: ${LOOMTABLE_AUTH_TOKEN_HASH:?set LOOMTABLE_AUTH_TOKEN_HASH}
+      LOOMTABLE_CHANGE_RETENTION: ${LOOMTABLE_CHANGE_RETENTION:-30d}
+      LOOMTABLE_IDEMPOTENCY_RETENTION: ${LOOMTABLE_IDEMPOTENCY_RETENTION:-30d}
     ports:
-      - "127.0.0.1:31201:31201"
+      - "${LOOMTABLE_HOST_ADDR:-127.0.0.1}:${LOOMTABLE_HOST_PORT:-31201}:31201"
     volumes:
       - attachment-data:/var/lib/loomtable/attachments
 
@@ -34,6 +35,16 @@ services:
       postgres:
         condition: service_healthy
     entrypoint: ["/app/loomtable-migrate"]
+    environment:
+      LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
+
+  admin:
+    build: .
+    profiles: ["ops"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/app/loomtable-admin"]
     environment:
       LOOMTABLE_DATABASE_URL: postgres://loomtable:${LOOMTABLE_POSTGRES_PASSWORD}@postgres:5432/loomtable?sslmode=disable
 
