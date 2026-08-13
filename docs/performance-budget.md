@@ -86,3 +86,14 @@
 | Map Summary | 1.5 s |
 | 单条 Mutation | 250 ms |
 | 100-command Mutation | 1.5 s |
+
+### 可重复的 20k Query/Map 基准
+
+仓库提供了 `scripts/operations/benchmark.sh`。它会启动隔离的 Compose 项目，使用 API 创建 Workspace/Base/Table/Location Field/Map View，通过测试数据库生成固定的 20,000 条记录，执行 5 次预热和 30 次测量，并输出 Query、Filter+Sort、Map viewport、Map summary 的 p50/p95 和响应体大小。基准完成后会自动删除该隔离项目及其卷。
+
+```bash
+bash scripts/operations/benchmark.sh
+```
+
+基准夹具只用于性能测量，不代表生产导入路径；它不会写入真实部署数据，也不应在生产数据库上运行。
+
