@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go tests and vet
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: loomtable_test
+          POSTGRES_USER: loomtable
+          POSTGRES_PASSWORD: loomtable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U loomtable -d loomtable_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      LOOMTABLE_TEST_DATABASE_URL: postgres://loomtable:loomtable@127.0.0.1:5432/loomtable_test?sslmode=disable
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run tests
+        run: go test ./...
+      - name: Run vet
+        run: go vet ./...
+
+  docker:
+    name: Docker build and Compose validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+      - name: Build server image
+        run: docker build --tag loomtable-server:ci .
