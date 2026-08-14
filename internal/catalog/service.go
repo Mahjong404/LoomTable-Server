@@ -656,6 +656,9 @@ func (s *Service) normalizeNewFieldConfig(fieldType string, raw any) (any, any, 
 			return nil, nil, domain.NewValidationError(domain.ValidationIssue{Path: "/config", Code: "type", Message: "config must be an empty object"})
 		}
 		return domain.EmptyFieldConfig{}, domain.EmptyFieldConfig{}, nil
+	case "attachment":
+		config, err := normalizeAttachmentFieldConfig(raw)
+		return config, config, err
 	case "select", "multiSelect":
 		input, ok := raw.(SelectFieldConfigInput)
 		if !ok {
@@ -722,6 +725,8 @@ func (s *Service) normalizeUpdatedFieldConfig(current domain.Field, raw any) (an
 			return nil, domain.NewValidationError(domain.ValidationIssue{Path: "/config", Code: "type", Message: "config must be an empty object"})
 		}
 		return domain.EmptyFieldConfig{}, nil
+	case "attachment":
+		return normalizeAttachmentFieldConfig(raw)
 	case "select", "multiSelect":
 		input, ok := raw.(SelectFieldConfigInput)
 		if !ok {
@@ -735,6 +740,20 @@ func (s *Service) normalizeUpdatedFieldConfig(current domain.Field, raw any) (an
 	default:
 		return nil, fmt.Errorf("unsupported persisted Field type %q", current.Type)
 	}
+}
+
+func normalizeAttachmentFieldConfig(raw any) (domain.AttachmentFieldConfig, error) {
+	config, ok := raw.(domain.AttachmentFieldConfig)
+	if !ok {
+		return domain.AttachmentFieldConfig{}, domain.NewValidationError(domain.ValidationIssue{Path: "/config", Code: "type", Message: "config must contain an optional maxCount"})
+	}
+	if config.MaxCount == 0 {
+		config.MaxCount = 10
+	}
+	if config.MaxCount < 1 || config.MaxCount > 100 {
+		return domain.AttachmentFieldConfig{}, domain.NewValidationError(domain.ValidationIssue{Path: "/config/maxCount", Code: "limit", Message: "maxCount must be from 1 to 100"})
+	}
+	return config, nil
 }
 
 func (s *Service) normalizeUpdatedSelectConfig(current domain.SelectFieldConfig, input SelectFieldConfigInput) (domain.SelectFieldConfig, error) {
@@ -902,7 +921,7 @@ func normalizeGridViewConfig(config *domain.GridViewConfig, fields map[string]do
 		field, ok := fields[spec.FieldID]
 		if !ok || field.DeletedAt != nil || !id.Valid(id.FieldPrefix, spec.FieldID) {
 			issues = append(issues, domain.ValidationIssue{Path: path + "/fieldId", Code: "invalidReference", Message: "Field must be active and belong to the View Table"})
-		} else if field.Type == "multiSelect" || field.Type == "location" {
+		} else if field.Type == "multiSelect" || field.Type == "location" || field.Type == "attachment" {
 			return &domain.UnsupportedSortError{FieldID: field.ID, FieldType: field.Type}
 		}
 		if _, duplicate := seenSort[spec.FieldID]; duplicate {

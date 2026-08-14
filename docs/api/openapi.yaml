@@ -1177,6 +1177,8 @@ paths:
     post:
       tags: [Attachments]
       operationId: initializeAttachment
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1203,7 +1205,7 @@ paths:
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
         '501':
-          description: Attachment capability is present in the contract but disabled in P0
+          description: Attachment capability is present in the contract but disabled by configuration
           content:
             application/json:
               schema:
@@ -1233,7 +1235,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '501':
-          description: Attachment capability is present in the contract but disabled in P0
+          description: Attachment capability is present in the contract but disabled by configuration
           content:
             application/json:
               schema:
@@ -1243,6 +1245,8 @@ paths:
     delete:
       tags: [Attachments]
       operationId: deleteAttachment
+      parameters:
+        - $ref: '#/components/parameters/ExpectedRevision'
       responses:
         '204':
           description: Attachment reference removed; physical cleanup may be deferred
@@ -1255,7 +1259,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '501':
-          description: Attachment capability is present in the contract but disabled in P0
+          description: Attachment capability is present in the contract but disabled by configuration
           content:
             application/json:
               schema:
@@ -1274,8 +1278,12 @@ paths:
         content:
           application/octet-stream: {}
       responses:
-        '204':
+        '200':
           description: Attachment content stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1287,7 +1295,7 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '501':
-          description: Attachment capability is present in the contract but disabled in P0
+          description: Attachment capability is present in the contract but disabled by configuration
           content:
             application/json:
               schema:
@@ -1313,7 +1321,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '501':
-          description: Attachment capability is present in the contract but disabled in P0
+          description: Attachment capability is present in the contract but disabled by configuration
           content:
             application/json:
               schema:
@@ -1563,7 +1571,7 @@ components:
           type: string
         capabilities:
           type: array
-          description: Enabled server capabilities. P0 includes grid and map; it does not include attachments.
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available.
           items:
             type: string
         changeRetention:
@@ -1639,6 +1647,7 @@ components:
         - $ref: '#/components/schemas/MultiSelectField'
         - $ref: '#/components/schemas/URLField'
         - $ref: '#/components/schemas/LocationField'
+        - $ref: '#/components/schemas/AttachmentField'
       discriminator:
         propertyName: type
         mapping:
@@ -1651,6 +1660,7 @@ components:
           multiSelect: '#/components/schemas/MultiSelectField'
           url: '#/components/schemas/URLField'
           location: '#/components/schemas/LocationField'
+          attachment: '#/components/schemas/AttachmentField'
 
     FieldBase:
       type: object
@@ -1763,6 +1773,16 @@ components:
             config: { $ref: '#/components/schemas/EmptyFieldConfig' }
       unevaluatedProperties: false
 
+    AttachmentField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: attachment }
+            config: { $ref: '#/components/schemas/AttachmentFieldConfig' }
+      unevaluatedProperties: false
+
     View:
       description: A discriminated P0 View. The type always determines the exact config schema.
       oneOf:
@@ -1841,7 +1861,7 @@ components:
         $ref: '#/components/schemas/P0FieldValue'
 
     P0FieldValue:
-      description: Transport union for a P0 Cell value. Semantic validity is selected by the Field Type identified by the containing object key. Text is limited to 10,000 and LongText to 100,000 Unicode code points; URL is an absolute HTTP/HTTPS URL up to 2,048 characters; Number is finite IEEE-754; Date is a valid Gregorian YYYY-MM-DD.
+      description: Transport union for a Cell value. Semantic validity is selected by the Field Type identified by the containing object key. Text is limited to 10,000 and LongText to 100,000 Unicode code points; URL is an absolute HTTP/HTTPS URL up to 2,048 characters; Number is finite IEEE-754; Date is a valid Gregorian YYYY-MM-DD; Attachment is an array of ready AttachmentRef objects.
       oneOf:
         - type: 'null'
         - type: string
@@ -1853,7 +1873,44 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/OptionId'
+        - $ref: '#/components/schemas/AttachmentRefArray'
         - $ref: '#/components/schemas/LocationValue'
+
+    AttachmentRefArray:
+      type: array
+      uniqueItems: true
+      maxItems: 100
+      items:
+        $ref: '#/components/schemas/AttachmentRef'
+
+    AttachmentRef:
+      type: object
+      additionalProperties: false
+      required: [id, source, filename]
+      properties:
+        id: { $ref: '#/components/schemas/AttachmentId' }
+        source:
+          type: string
+          enum: [managed, vault]
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+        mimeType: { type: string }
+        size:
+          type: integer
+          minimum: 0
+        storageKey: { type: string }
+        vaultPath: { type: string }
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
 
     LocationValue:
       type: object
@@ -1894,12 +1951,15 @@ components:
 
     Attachment:
       type: object
-      required: [id, source, filename, createdAt]
+      required: [id, source, status, filename, revision, createdAt, updatedAt]
       properties:
         id: { $ref: '#/components/schemas/AttachmentId' }
         source:
           type: string
           enum: [managed, vault]
+        status:
+          type: string
+          enum: [pending, ready]
         filename: { type: string }
         mimeType: { type: string }
         size:
@@ -1907,14 +1967,21 @@ components:
           minimum: 0
         storageKey: { type: string }
         vaultPath: { type: string }
-        hash: { type: string }
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
         width:
           type: integer
           minimum: 1
         height:
           type: integer
           minimum: 1
+        revision:
+          type: integer
+          minimum: 1
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: string, format: date-time }
 
     CreateWorkspaceRequest:
       type: object
@@ -1993,6 +2060,7 @@ components:
         - $ref: '#/components/schemas/CreateMultiSelectFieldRequest'
         - $ref: '#/components/schemas/CreateURLFieldRequest'
         - $ref: '#/components/schemas/CreateLocationFieldRequest'
+        - $ref: '#/components/schemas/CreateAttachmentFieldRequest'
       discriminator:
         propertyName: type
         mapping:
@@ -2005,6 +2073,7 @@ components:
           multiSelect: '#/components/schemas/CreateMultiSelectFieldRequest'
           url: '#/components/schemas/CreateURLFieldRequest'
           location: '#/components/schemas/CreateLocationFieldRequest'
+          attachment: '#/components/schemas/CreateAttachmentFieldRequest'
 
     CreateFieldBase:
       type: object
@@ -2102,6 +2171,16 @@ components:
             config: { $ref: '#/components/schemas/EmptyFieldConfig' }
       unevaluatedProperties: false
 
+    CreateAttachmentFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: attachment }
+            config: { $ref: '#/components/schemas/AttachmentFieldConfig' }
+      unevaluatedProperties: false
+
     UpdateFieldRequest:
       description: Strict type-discriminated top-level PATCH. Type is immutable and must be echoed; omitted name or config is preserved, while a supplied config completely replaces the old config. expectedRevision is checked first; an identical normalized result returns the current Field without a Revision or Change.
       oneOf:
@@ -2114,6 +2193,7 @@ components:
         - $ref: '#/components/schemas/UpdateMultiSelectFieldRequest'
         - $ref: '#/components/schemas/UpdateURLFieldRequest'
         - $ref: '#/components/schemas/UpdateLocationFieldRequest'
+        - $ref: '#/components/schemas/UpdateAttachmentFieldRequest'
       discriminator:
         propertyName: type
         mapping:
@@ -2126,6 +2206,7 @@ components:
           multiSelect: '#/components/schemas/UpdateMultiSelectFieldRequest'
           url: '#/components/schemas/UpdateURLFieldRequest'
           location: '#/components/schemas/UpdateLocationFieldRequest'
+          attachment: '#/components/schemas/UpdateAttachmentFieldRequest'
 
     UpdateFieldBase:
       type: object
@@ -2137,7 +2218,7 @@ components:
         name: { $ref: '#/components/schemas/ResourceName' }
         type:
           type: string
-          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location]
+          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment]
         expectedRevision:
           type: integer
           minimum: 1
@@ -2223,9 +2304,29 @@ components:
             config: { $ref: '#/components/schemas/EmptyFieldConfig' }
       unevaluatedProperties: false
 
+    UpdateAttachmentFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: attachment }
+            config: { $ref: '#/components/schemas/AttachmentFieldConfig' }
+      unevaluatedProperties: false
+
     EmptyFieldConfig:
       type: object
       additionalProperties: false
+
+    AttachmentFieldConfig:
+      type: object
+      additionalProperties: false
+      description: Attachment Cell configuration. maxCount defaults to 10 and is bounded from 1 to 100.
+      properties:
+        maxCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
 
     SelectFieldConfigInput:
       type: object
@@ -2979,6 +3080,7 @@ components:
     InitializeAttachmentRequest:
       type: object
       additionalProperties: false
+      description: Managed attachments start as pending and require a subsequent binary PUT; Vault attachments are ready immediately and require a relative vaultPath. The Idempotency-Key header is required by the operation.
       required: [source, filename]
       properties:
         source:
@@ -2989,7 +3091,9 @@ components:
         size:
           type: integer
           minimum: 0
-        vaultPath: { type: string }
+        vaultPath:
+          type: string
+          description: Required for vault attachments; must be a relative Vault path without dot, parent, or empty path members.
 
     ErrorResponse:
       type: object

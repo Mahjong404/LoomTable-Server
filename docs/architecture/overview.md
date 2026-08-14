@@ -72,7 +72,7 @@ Plugin 内部使用一个小的 `LoomTableClient` Interface。生产实现是 HT
 
 ### Attachment Store Seam
 
-Server 将附件元数据与文件内容分离。启用 Attachment capability 后，第一阶段使用本地文件卷；未来可以加入 S3 或兼容对象存储 Adapter。P0 只保留该 seam，不启用业务 API。
+Server 将附件元数据与文件内容分离。当前 P1 使用本地文件卷；未来可以加入 S3 或兼容对象存储 Adapter。Attachment capability 可通过配置关闭，但接口和存储 seam 保持稳定。
 
 ### Tile Provider Seam
 
@@ -91,3 +91,4 @@ Server 第一阶段只支持 PostgreSQL，不创建通用数据库 Interface。R
 LoomTable 自身使用带默认值的 `--loom-*` 语义变量，并映射到 Obsidian 的主题变量。插件不依赖某个特定主题；用户启用不同 Obsidian 主题时，组件应自然继承该主题的视觉风格。
 
 所有插件 CSS 使用 `.loom-*` 命名空间。任何外部视觉参考只用于开发和测试，不作为运行时依赖。
+

@@ -23,3 +23,5 @@
 - [ADR 目录](./adr/)
 - [P0 不引入 PostGIS](./adr/0009-defer-postgis-beyond-p0.md)
 - [Canonical Record 值与可重建查询投影分离](./adr/0010-canonical-values-with-query-projection.md)
+- [P1 Attachment 合同](./adr/0011-attachment-p1-contract.md)
+

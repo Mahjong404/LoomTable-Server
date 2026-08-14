@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	loomattachment "github.com/Mahjong404/LoomTable-Server/internal/attachment"
 	loomauth "github.com/Mahjong404/LoomTable-Server/internal/auth"
 	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
@@ -18,7 +20,7 @@ import (
 	"github.com/Mahjong404/LoomTable-Server/internal/storage/postgres"
 )
 
-func TestRepositoryP0EndToEnd(t *testing.T) {
+func TestRepositoryEndToEnd(t *testing.T) {
 	databaseURL := os.Getenv("LOOMTABLE_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("LOOMTABLE_TEST_DATABASE_URL is not set")
@@ -85,6 +87,23 @@ func TestRepositoryP0EndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	selectConfig := selectField.Config.(domain.SelectFieldConfig)
+	attachmentField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
+		Name: "Attachments", Type: "attachment", Config: domain.AttachmentFieldConfig{MaxCount: 1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attachmentService := loomattachment.New(repository, loomattachment.NewFileStore(t.TempDir()), loomattachment.DefaultMaxBytes)
+	attachment, err := attachmentService.Initialize(ctx, actorID, newMutationID(t), loomattachment.InitRequest{
+		Source: "managed", Filename: "hello.txt", MimeType: "text/plain", Size: int64Pointer(5),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attachment, err = attachmentService.Upload(ctx, actorID, attachment.ID, "text/plain", bytes.NewReader([]byte("hello")))
+	if err != nil {
+		t.Fatal(err)
+	}
 	mapView, err := catalogService.CreateView(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.ViewInput{
 		Name: "Map", Type: "map", Config: domain.MapViewConfig{LocationFieldID: locationField.ID},
 	})
@@ -96,6 +115,7 @@ func TestRepositoryP0EndToEnd(t *testing.T) {
 	mutation, err := recordService.Mutate(ctx, actorID, tableResult.Table.ID, newMutationID(t), []loomrecord.Command{
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
 			tableResult.PrimaryField.ID: "Alpha Road", locationField.ID: map[string]any{"lat": 31.2, "lng": 121.5}, selectField.ID: selectConfig.Options[0].ID,
+			attachmentField.ID: []any{map[string]any{"id": attachment.ID, "source": attachment.Source, "filename": attachment.Filename, "mimeType": attachment.MimeType, "size": float64(*attachment.Size), "hash": attachment.Hash}},
 		}},
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
 			tableResult.PrimaryField.ID: "Beta", locationField.ID: map[string]any{"lat": 31.3, "lng": 121.6},
@@ -202,3 +222,8 @@ func newMutationID(t *testing.T) string {
 	}
 	return value
 }
+
+func int64Pointer(value int64) *int64 {
+	return &value
+}
+

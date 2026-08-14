@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
 	"github.com/Mahjong404/LoomTable-Server/internal/id"
@@ -175,6 +177,9 @@ func applyCreateRecord(
 	if err != nil {
 		return loomrecord.CommandResult{}, prefixRecordValidation(err, fmt.Sprintf("/commands/%d", index))
 	}
+	if err := validateAttachmentReferences(ctx, tx, actorID, values, fields, "/values"); err != nil {
+		return loomrecord.CommandResult{}, prefixRecordValidation(err, fmt.Sprintf("/commands/%d", index))
+	}
 	recordID, err := id.New(id.RecordPrefix)
 	if err != nil {
 		return loomrecord.CommandResult{}, fmt.Errorf("generate record ID: %w", err)
@@ -211,6 +216,9 @@ func applyUpdateRecord(
 	}
 	values, queryValues, searchText, err := loomrecord.NormalizeUpdatedValues(current.Values, command.Set, command.UnsetFieldIDs, fields)
 	if err != nil {
+		return loomrecord.CommandResult{}, prefixRecordValidation(err, fmt.Sprintf("/commands/%d", index))
+	}
+	if err := validateAttachmentReferences(ctx, tx, actorID, values, fields, "/set"); err != nil {
 		return loomrecord.CommandResult{}, prefixRecordValidation(err, fmt.Sprintf("/commands/%d", index))
 	}
 	if reflect.DeepEqual(values, current.Values) {
@@ -401,3 +409,61 @@ func prefixRecordValidation(err error, prefix string) error {
 	}
 	return domain.NewValidationError(issues...)
 }
+
+func validateAttachmentReferences(ctx context.Context, tx *sql.Tx, actorID string, values map[string]any, fields map[string]loomrecord.FieldDefinition, basePath string) error {
+	fieldIDs := make([]string, 0)
+	for fieldID, field := range fields {
+		if field.Type == "attachment" {
+			fieldIDs = append(fieldIDs, fieldID)
+		}
+	}
+	sort.Strings(fieldIDs)
+	issues := make([]domain.ValidationIssue, 0)
+	for _, fieldID := range fieldIDs {
+		value, present := values[fieldID]
+		if !present || value == nil {
+			continue
+		}
+		entries, ok := value.([]any)
+		if !ok {
+			return fmt.Errorf("normalized attachment value for %s is not an array", fieldID)
+		}
+		for index, entry := range entries {
+			ref, ok := entry.(map[string]any)
+			if !ok {
+				return fmt.Errorf("normalized attachment reference for %s is not an object", fieldID)
+			}
+			attachmentID, _ := ref["id"].(string)
+			path := fmt.Sprintf("%s/%s/%d", basePath, escapeJSONPointer(fieldID), index)
+			var source, status, filename string
+			err := tx.QueryRowContext(ctx, `
+				SELECT source, status, filename
+				FROM attachments
+				WHERE id = $1 AND actor_id = $2 AND deleted_at IS NULL
+			`, attachmentID, actorID).Scan(&source, &status, &filename)
+			if errors.Is(err, sql.ErrNoRows) {
+				issues = append(issues, domain.ValidationIssue{Path: path + "/id", Code: "invalidReference", Message: "Attachment is unknown, belongs to another Actor, deleted, or not ready"})
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("check attachment reference %s: %w", attachmentID, err)
+			}
+			refSource, sourceOK := ref["source"].(string)
+			refFilename, filenameOK := ref["filename"].(string)
+			if status != "ready" || !sourceOK || source != refSource || !filenameOK || filename != refFilename {
+				issues = append(issues, domain.ValidationIssue{Path: path, Code: "invalidReference", Message: "Attachment metadata does not match a ready Attachment owned by the current Actor"})
+				continue
+			}
+		}
+	}
+	if len(issues) > 0 {
+		return domain.NewValidationError(issues...)
+	}
+	return nil
+}
+
+func escapeJSONPointer(value string) string {
+	value = strings.ReplaceAll(value, "~", "~0")
+	return strings.ReplaceAll(value, "/", "~1")
+}
+

@@ -255,7 +255,7 @@ func compileFilterSQL(builder *querySQLBuilder, node domain.FilterNode, fields m
 		expression = "(" + textValue + ")::double precision"
 	case "checkbox":
 		expression = "(" + textValue + ")::boolean"
-	case "multiSelect":
+	case "multiSelect", "attachment":
 		switch node.Operator {
 		case "includes":
 			return "COALESCE((" + jsonValue + ") ? " + parameter + ", FALSE)", nil
@@ -498,3 +498,4 @@ func locklessActiveTable(ctx context.Context, tx *sql.Tx, actorID, tableID strin
 	}
 	return nil
 }
+

@@ -13,7 +13,7 @@ managed-attachment-volume
 ```
 
 第一阶段不要求 Redis、Kafka、RabbitMQ 或独立对象存储服务。Managed Attachment 使用 Docker 挂载文件卷。
-P0 不启用 Attachment capability，但保留文件卷和备份清单位置，便于后续启用时不改变部署拓扑。
+P1 默认启用 Attachment capability；可以通过配置关闭。Managed Attachment 文件卷必须与 PostgreSQL 一起持久化和备份。
 
 ## 连接流程
 
@@ -77,7 +77,7 @@ Server 至少提供：
 - API 版本。
 - Server 版本。
 - 能力列表。
-- Attachment capability 启用时的存储可写性检查；未启用时不因预留卷不可写阻塞 P0 ready。
+- Attachment capability 启用时的存储目录配置和可写性检查；关闭时不因附件目录不可用阻塞 ready。
 
 ## 备份
 
@@ -92,7 +92,7 @@ Server 至少提供：
 
 只备份 PostgreSQL 不算完整 LoomTable 备份。
 
-P0 提供 PowerShell 与 Bash Docker Compose 脚本，不通过业务 REST API 暴露备份接口。脚本生成一个跨平台 `.tar.gz` 版本化归档，包含 PostgreSQL custom-format dump、Managed Attachment Volume、Server/Schema 版本、生成时间、文件清单及 SHA-256 校验和；拒绝覆盖已有输出。独立验证命令必须能在恢复前发现损坏或不兼容归档；P0 合并前还必须在真实 Docker/PostgreSQL 环境完成脚本验收。
+Server 提供 PowerShell 与 Bash Docker Compose 脚本，不通过业务 REST API 暴露备份接口。脚本生成一个跨平台 `.tar.gz` 版本化归档，包含 PostgreSQL custom-format dump、Managed Attachment Volume、Server/Schema 版本、生成时间、文件清单及 SHA-256 校验和；拒绝覆盖已有输出。独立验证命令必须能在恢复前发现损坏或不兼容归档；合并前还必须在真实 Docker/PostgreSQL 环境完成脚本验收。
 
 归档默认不加密，但创建时尽可能使用仅当前用户可读的权限，并明确提示数据库包含 Actor、Token Hash 和业务数据。Cursor HMAC Key 随数据库转储备份，不在 Manifest 中输出明文。
 
@@ -156,3 +156,4 @@ Server 在启动时及其后每 24 小时运行一次有界后台任务，按实
 ## Migration 生命周期
 
 首个公开 P0 发布前允许把 Schema 调整折叠进 `001_initial.sql`，本阶段开发数据库视为可重建。P0 发布后冻结 001，只新增有序 Forward Migration；普通 Server 启动始终只报告 Migration 状态，不自动执行。
+

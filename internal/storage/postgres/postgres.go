@@ -46,16 +46,18 @@ func ReadyChecker(db *sql.DB) func(context.Context) error {
 			return appstatus.ErrMigrationRequired
 		}
 
-		var applied bool
-		if err := db.QueryRowContext(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM schema_migrations WHERE version = '001_initial'
-			)
-		`).Scan(&applied); err != nil {
-			return fmt.Errorf("%w: check migration version: %v", appstatus.ErrDependencyUnavailable, err)
-		}
-		if !applied {
-			return appstatus.ErrMigrationRequired
+		for _, version := range []string{"001_initial", "002_attachments"} {
+			var applied bool
+			if err := db.QueryRowContext(ctx, `
+				SELECT EXISTS (
+					SELECT 1 FROM schema_migrations WHERE version = $1
+				)
+			`, version).Scan(&applied); err != nil {
+				return fmt.Errorf("%w: check migration version: %v", appstatus.ErrDependencyUnavailable, err)
+			}
+			if !applied {
+				return appstatus.ErrMigrationRequired
+			}
 		}
 		return nil
 	}
@@ -115,3 +117,4 @@ func ApplyMigrations(ctx context.Context, db *sql.DB, directory string) error {
 	}
 	return nil
 }
+

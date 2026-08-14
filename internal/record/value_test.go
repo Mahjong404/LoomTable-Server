@@ -11,19 +11,21 @@ import (
 )
 
 const (
-	textFieldID     = "fld_00000000000000000000000000"
-	locationFieldID = "fld_00000000000000000000000001"
-	selectFieldID   = "fld_00000000000000000000000002"
-	deletedFieldID  = "fld_00000000000000000000000003"
-	activeOptionID  = "opt_00000000000000000000000000"
-	deletedOptionID = "opt_00000000000000000000000001"
+	textFieldID       = "fld_00000000000000000000000000"
+	locationFieldID   = "fld_00000000000000000000000001"
+	selectFieldID     = "fld_00000000000000000000000002"
+	deletedFieldID    = "fld_00000000000000000000000003"
+	attachmentFieldID = "fld_00000000000000000000000004"
+	activeOptionID    = "opt_00000000000000000000000000"
+	deletedOptionID   = "opt_00000000000000000000000001"
 )
 
 func testFields() map[string]FieldDefinition {
 	deletedAt := time.Unix(2, 0).UTC()
 	return map[string]FieldDefinition{
-		textFieldID:     {ID: textFieldID, Type: "text", Config: json.RawMessage(`{}`)},
-		locationFieldID: {ID: locationFieldID, Type: "location", Config: json.RawMessage(`{}`)},
+		textFieldID:       {ID: textFieldID, Type: "text", Config: json.RawMessage(`{}`)},
+		locationFieldID:   {ID: locationFieldID, Type: "location", Config: json.RawMessage(`{}`)},
+		attachmentFieldID: {ID: attachmentFieldID, Type: "attachment", Config: json.RawMessage(`{"maxCount":1}`)},
 		selectFieldID: {
 			ID:   selectFieldID,
 			Type: "select",
@@ -101,3 +103,35 @@ func TestNormalizeCreateValuesRejectsInvalidLocation(t *testing.T) {
 		t.Fatalf("error = %#v, want required Location issue", err)
 	}
 }
+
+func TestNormalizeAttachmentReferences(t *testing.T) {
+	canonical, _, _, err := NormalizeCreateValues(map[string]any{
+		attachmentFieldID: []any{map[string]any{
+			"id":       "att_00000000000000000000000000",
+			"source":   "managed",
+			"filename": "photo.png",
+			"size":     float64(12),
+		}},
+	}, testFields())
+	if err != nil {
+		t.Fatalf("NormalizeCreateValues() error = %v", err)
+	}
+	refs := canonical[attachmentFieldID].([]any)
+	if len(refs) != 1 || refs[0].(map[string]any)["filename"] != "photo.png" {
+		t.Fatalf("normalized AttachmentRef = %#v", refs)
+	}
+}
+
+func TestNormalizeAttachmentReferencesRejectsUnknownPropertyAndMaxCount(t *testing.T) {
+	_, _, _, err := NormalizeCreateValues(map[string]any{
+		attachmentFieldID: []any{
+			map[string]any{"id": "att_00000000000000000000000000", "source": "managed", "filename": "a"},
+			map[string]any{"id": "att_00000000000000000000000001", "source": "managed", "filename": "b", "extra": true},
+		},
+	}, testFields())
+	var validation *domain.ValidationError
+	if !errors.As(err, &validation) || len(validation.Issues) == 0 {
+		t.Fatalf("error = %#v, want Attachment validation issues", err)
+	}
+}
+

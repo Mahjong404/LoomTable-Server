@@ -359,6 +359,7 @@ func validateFilterRule(path string, node *domain.FilterNode, field FieldDefinit
 		"select":      {"is": true, "isNot": true, "isEmpty": true, "isNotEmpty": true},
 		"multiSelect": {"includes": true, "excludes": true, "isEmpty": true, "isNotEmpty": true},
 		"location":    {"isEmpty": true, "isNotEmpty": true},
+		"attachment":  {"isEmpty": true, "isNotEmpty": true},
 	}
 	if !allowed[field.Type][node.Operator] {
 		return &domain.UnsupportedOperatorError{FieldID: field.ID, Operator: node.Operator}
@@ -440,7 +441,7 @@ func normalizeSort(specs []domain.SortSpec, metadata QueryMetadata, fromView boo
 			}
 			continue
 		}
-		if field.Type == "multiSelect" || field.Type == "location" {
+		if field.Type == "multiSelect" || field.Type == "location" || field.Type == "attachment" {
 			return &domain.UnsupportedSortError{FieldID: field.ID, FieldType: field.Type}
 		}
 		if spec.Direction != "asc" && spec.Direction != "desc" {
@@ -596,3 +597,4 @@ func requiredQueryIssue(path, message string) domain.ValidationIssue {
 func queryValueTypeError(path, message string) error {
 	return domain.NewValidationError(domain.ValidationIssue{Path: path + "/value", Code: "type", Message: message})
 }
+

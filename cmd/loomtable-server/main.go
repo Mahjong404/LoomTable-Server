@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"time"
 
+	loomattachment "github.com/Mahjong404/LoomTable-Server/internal/attachment"
 	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 	"github.com/Mahjong404/LoomTable-Server/internal/config"
 	"github.com/Mahjong404/LoomTable-Server/internal/httpapi"
@@ -45,6 +46,13 @@ func main() {
 				Bootstrap:     repository,
 				Catalog:       catalog.New(repository),
 				Records:       loomrecord.New(repository),
+			}
+			if cfg.AttachmentsEnabled {
+				if err := os.MkdirAll(cfg.AttachmentRoot, 0o700); err != nil {
+					log.Printf("attachment storage unavailable: %v", err)
+				} else {
+					dependencies.Attachments = loomattachment.New(repository, loomattachment.NewFileStore(cfg.AttachmentRoot), cfg.AttachmentMaxBytes)
+				}
 			}
 		}
 	}
@@ -83,3 +91,4 @@ func main() {
 		}
 	}
 }
+

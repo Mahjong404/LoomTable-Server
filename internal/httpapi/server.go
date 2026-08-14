@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/auth"
+	loomattachment "github.com/Mahjong404/LoomTable-Server/internal/attachment"
 	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 	"github.com/Mahjong404/LoomTable-Server/internal/config"
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
@@ -64,11 +66,20 @@ type Records interface {
 	Mutate(context.Context, string, string, string, []loomrecord.Command) (loomrecord.MutationResult, error)
 }
 
+type Attachments interface {
+	Initialize(context.Context, string, string, loomattachment.InitRequest) (domain.Attachment, error)
+	Get(context.Context, string, string) (domain.Attachment, error)
+	Delete(context.Context, string, string, int64) error
+	Upload(context.Context, string, string, string, io.Reader) (domain.Attachment, error)
+	Open(context.Context, string, string) (domain.Attachment, io.ReadCloser, error)
+}
+
 type Dependencies struct {
 	Authenticator Authenticator
 	Bootstrap     BootstrapStateChecker
 	Catalog       Catalog
 	Records       Records
+	Attachments   Attachments
 }
 
 type Server struct {
@@ -78,6 +89,7 @@ type Server struct {
 	bootstrap     BootstrapStateChecker
 	catalog       Catalog
 	records       Records
+	attachments   Attachments
 	handler       http.Handler
 }
 
@@ -115,6 +127,10 @@ func New(cfg config.Config, ready ReadyChecker, provided ...Dependencies) *Serve
 		bootstrap:     dependencies.Bootstrap,
 		catalog:       dependencies.Catalog,
 		records:       dependencies.Records,
+		attachments:   dependencies.Attachments,
+	}
+	if server.attachments == nil {
+		server.config.Capabilities = withoutCapability(server.config.Capabilities, "attachments")
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", server.healthz)
@@ -129,12 +145,22 @@ func New(cfg config.Config, ready ReadyChecker, provided ...Dependencies) *Serve
 	mux.HandleFunc("/v1/fields/", server.withAuth(server.field))
 	mux.HandleFunc("/v1/views/", server.withAuth(server.view))
 	mux.HandleFunc("/v1/records/", server.withAuth(server.record))
-	mux.HandleFunc("/v1/attachments", server.withAuth(server.attachmentDisabled))
-	mux.HandleFunc("/v1/attachments/", server.withAuth(server.attachmentDisabled))
+	mux.HandleFunc("/v1/attachments", server.withAuth(server.attachment))
+	mux.HandleFunc("/v1/attachments/", server.withAuth(server.attachment))
 	mux.HandleFunc("/v1/", server.withAuth(server.notFound))
 	mux.HandleFunc("/", server.notFound)
 	server.handler = server.withRequestID(mux)
 	return server
+}
+
+func withoutCapability(capabilities []string, unwanted string) []string {
+	result := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		if capability != unwanted {
+			result = append(result, capability)
+		}
+	}
+	return result
 }
 
 func (s *Server) Handler() http.Handler {
@@ -290,3 +316,4 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
+

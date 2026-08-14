@@ -226,11 +226,141 @@ func normalizeFieldValue(path string, value, previous any, field FieldDefinition
 			return nil, issues
 		}
 		return result, nil
+	case "attachment":
+		return normalizeAttachment(path, value, field.Config)
 	case "location":
 		return normalizeLocation(path, value)
 	default:
 		return nil, invalidReferenceIssue(path, "Field Type is unsupported")
 	}
+}
+
+func normalizeAttachment(path string, value any, rawConfig json.RawMessage) (any, []domain.ValidationIssue) {
+	entries, ok := value.([]any)
+	if !ok {
+		return nil, typeIssue(path, "value must be an array of AttachmentRef objects or null")
+	}
+	maxCount := 10
+	var config domain.AttachmentFieldConfig
+	if err := json.Unmarshal(rawConfig, &config); err != nil {
+		return nil, formatIssue(path, "Field configuration is invalid")
+	}
+	if config.MaxCount != 0 {
+		maxCount = config.MaxCount
+	}
+	if maxCount < 1 || maxCount > 100 {
+		return nil, formatIssue(path, "Field configuration is invalid")
+	}
+	if len(entries) > maxCount {
+		return nil, limitIssue(path, fmt.Sprintf("value cannot contain more than %d Attachments", maxCount))
+	}
+	seen := make(map[string]struct{}, len(entries))
+	result := make([]any, 0, len(entries))
+	issues := make([]domain.ValidationIssue, 0)
+	for index, entry := range entries {
+		entryPath := fmt.Sprintf("%s/%d", path, index)
+		ref, refIssues := normalizeAttachmentRef(entryPath, entry)
+		issues = append(issues, refIssues...)
+		if ref == nil {
+			continue
+		}
+		attachmentID, hasID := ref["id"].(string)
+		if !hasID {
+			continue
+		}
+		if _, duplicate := seen[attachmentID]; duplicate {
+			issues = append(issues, domain.ValidationIssue{Path: entryPath + "/id", Code: "duplicate", Message: "Attachment ID appears more than once"})
+			continue
+		}
+		seen[attachmentID] = struct{}{}
+		result = append(result, ref)
+	}
+	if len(issues) > 0 {
+		return nil, issues
+	}
+	return result, nil
+}
+
+func normalizeAttachmentRef(path string, value any) (map[string]any, []domain.ValidationIssue) {
+	input, ok := value.(map[string]any)
+	if !ok {
+		return nil, typeIssue(path, "AttachmentRef must be an object")
+	}
+	allowed := map[string]bool{
+		"id": true, "source": true, "filename": true, "mimeType": true,
+		"size": true, "storageKey": true, "vaultPath": true, "hash": true,
+		"width": true, "height": true,
+	}
+	issues := make([]domain.ValidationIssue, 0)
+	for key := range input {
+		if !allowed[key] {
+			issues = append(issues, domain.ValidationIssue{Path: path + "/" + escapePointer(key), Code: "unknownProperty", Message: "unknown AttachmentRef property"})
+		}
+	}
+	result := make(map[string]any, len(input))
+	attachmentID, ok := input["id"].(string)
+	if !ok || !id.Valid(id.AttachmentPrefix, attachmentID) {
+		issues = append(issues, typeIssue(path+"/id", "id must be an Attachment ID")...)
+	} else {
+		result["id"] = attachmentID
+	}
+	source, ok := input["source"].(string)
+	if !ok || (source != "managed" && source != "vault") {
+		issues = append(issues, formatIssue(path+"/source", "source must be managed or vault")...)
+	} else {
+		result["source"] = source
+	}
+	filename, ok := input["filename"].(string)
+	if !ok {
+		issues = append(issues, typeIssue(path+"/filename", "filename must be a string")...)
+	} else {
+		filename = norm.NFC.String(strings.TrimFunc(filename, unicode.IsSpace))
+		if filename == "" || utf8.RuneCountInString(filename) > 255 || containsControl(filename) || strings.ContainsAny(filename, "/\\") {
+			issues = append(issues, formatIssue(path+"/filename", "filename must be a safe non-empty file name")...)
+		} else {
+			result["filename"] = filename
+		}
+	}
+	for _, key := range []string{"mimeType", "storageKey", "vaultPath", "hash"} {
+		if current, present := input[key]; present {
+			text, textOK := current.(string)
+			if !textOK {
+				issues = append(issues, typeIssue(path+"/"+key, "property must be a string")...)
+				continue
+			}
+			result[key] = strings.TrimSpace(text)
+		}
+	}
+	if hash, present := result["hash"]; present && hash.(string) != "" && !isSHA256(hash.(string)) {
+		issues = append(issues, formatIssue(path+"/hash", "hash must be a lowercase SHA-256 hexadecimal digest")...)
+	}
+	for _, key := range []string{"size", "width", "height"} {
+		if current, present := input[key]; present {
+			number, numberOK := current.(float64)
+			if !numberOK || math.IsNaN(number) || math.IsInf(number, 0) || number < 0 || number != math.Trunc(number) || number > math.MaxInt64 {
+				issues = append(issues, formatIssue(path+"/"+key, "property must be a non-negative integer")...)
+				continue
+			}
+			if (key == "width" || key == "height") && number == 0 {
+				issues = append(issues, formatIssue(path+"/"+key, "dimension must be positive")...)
+				continue
+			}
+			result[key] = number
+		}
+	}
+	return result, issues
+}
+
+func isSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, current := range value {
+		if !(current >= '0' && current <= '9') && !(current >= 'a' && current <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeLocation(path string, value any) (any, []domain.ValidationIssue) {
@@ -444,3 +574,4 @@ func limitIssue(path, message string) []domain.ValidationIssue {
 func invalidReferenceIssue(path, message string) []domain.ValidationIssue {
 	return []domain.ValidationIssue{{Path: path, Code: "invalidReference", Message: message}}
 }
+

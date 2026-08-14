@@ -108,15 +108,17 @@ Record 更新使用 `set + unsetFieldIds`：`set` 中出现的 Field 被写入�
 ### Managed Attachment
 
 1. 初始化元数据。
-2. 获得上传目标。
-3. 写入文件卷。
-4. 校验大小、MIME、Hash 和必要的图片元数据。
-5. 标记可用。
-6. Record Mutation 写入 Attachment 引用。
+2. Server 生成不可控的 `storageKey`，初始化状态为 `pending`。
+3. 通过内容端点写入文件卷临时文件。
+4. 原子重命名后校验大小、SHA-256、MIME 和必要的图片元数据。
+5. 标记为 `ready`。
+6. Record Mutation 只允许引用当前 Actor 所有且已 `ready` 的 Attachment。
+
+默认单文件上限为 50 MiB，可通过 `LOOMTABLE_ATTACHMENT_MAX_BYTES` 配置。初始化声明的 `size`（如果存在）必须与实际上传大小一致。删除只软删除元数据，物理文件交由后续清理任务处理。
 
 ### Vault Attachment
 
-Server 保存 Vault 相对路径和元数据，不读取用户 Vault。跨设备可用性由用户的 Vault 管理方式决定，Server 不假设同步完成。
+Server 保存 Vault 相对路径和元数据，不读取用户 Vault。路径必须是相对路径且不能包含 `.`、`..` 或空路径成员。Vault Attachment 初始化后直接为 `ready`，不接受 Server 内容上传或下载；跨设备可用性由用户的 Vault 管理方式决定，Server 不假设同步完成。
 
 ## 8. Change Log
 
@@ -156,7 +158,7 @@ Change Log 用于：
 
 ### 范围
 
-P0 先完成 Grid + Map 的完整数据闭环。Attachment 保留在 API 和领域模型的扩展合同中，但不作为 P0 的实现内容；Server 通过 capability 声明是否已启用相关能力，Plugin 在能力不可用时不展示对应入口。
+当前阶段完成 Grid + Map 的完整数据闭环，并实现 Attachment P1。Server 通过 capability 声明 Attachment 是否启用，Plugin 在能力不可用时不展示对应入口。
 
 P0 实现的字段类型为：
 
@@ -266,8 +268,16 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 
 - Migration 只能通过显式 Server 管理命令执行 forward migration。
 - Server 启动发现待迁移时可以存活，但拒绝进入 ready；`/readyz` 返回 `503 MIGRATION_REQUIRED`。
-- P0 保留 Attachment API 合同，但不声明 `attachments` capability。
-- P0 调用 Attachment API 返回 `501 CAPABILITY_NOT_ENABLED`；Plugin 必须隐藏 Attachment 入口，不把该响应当作普通资源不存在。
+- P1 默认声明 `attachments` capability，并提供初始化、上传、元数据、删除和内容下载 API；显式关闭 capability 时返回 `501 CAPABILITY_NOT_ENABLED`。
+- Plugin 必须隐藏不可用的 Attachment 入口，不把 `501 CAPABILITY_NOT_ENABLED` 当作普通资源不存在。
+
+### P1 Attachment 实现
+
+- P1 启用 `attachments` capability，并保留 `pending`/`ready` 内容状态和 Attachment 元数据 Revision。
+- `POST /v1/attachments/init` 使用 `Idempotency-Key`；Managed 通过 `PUT /v1/attachments/{attachmentId}/content` 完成内容写入，Vault 只保存相对路径。
+- Attachment Field 使用 `{maxCount}` Config，缺省 10、范围 1–100；Cell 为 AttachmentRef 数组或 `null`。Record Mutation 必须验证引用归属、未删除和 `ready` 状态。
+- 文件卷使用服务端生成的 Actor/Attachment 路径，上传使用临时文件和原子重命名，禁止通过客户端输入形成文件路径。
+- P1 暂不实现缩略图、Range 下载、对象存储、引用计数和 Vault 内容读取；这些能力保留为后续 Adapter 或清理任务扩展。
 
 ## 13. Q103–Q135 已确认的字段和查询合同
 
@@ -417,3 +427,4 @@ Server P0 PR 仅在没有待定合同标记，全部 P0 路由和业务模块、
 - 后续增加 `DateTime` 和 `Time` Field Type；两者都支持单值和范围模式。DateTime 保存 UTC，Time 保存不带日期的本地时刻。
 - 后续为 Location 增加 `geoWithin` 查询操作，先支持矩形和圆形，Polygon 后置，并允许作为 View Filter 保存。
 - 手机号、身份证号等作为 Text 的区域化 Validation Preset；Currency、Percent 作为 Number 格式；Rating、Duration、User 等独立语义类型后续再评估。
+

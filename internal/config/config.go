@@ -9,6 +9,9 @@ import (
 type Config struct {
 	HTTPAddr             string
 	DatabaseURL          string
+	AttachmentRoot       string
+	AttachmentMaxBytes   int64
+	AttachmentsEnabled   bool
 	ServerVersion        string
 	APIVersion           string
 	MinPluginVersion     string
@@ -19,17 +22,37 @@ type Config struct {
 }
 
 func Load() Config {
+	attachmentsEnabled := boolean("LOOMTABLE_ATTACHMENTS_ENABLED", true)
+	capabilities := []string{"grid", "map"}
+	if attachmentsEnabled {
+		capabilities = append(capabilities, "attachments")
+	}
 	return Config{
 		HTTPAddr:             value("LOOMTABLE_HTTP_ADDR", "127.0.0.1:31201"),
 		DatabaseURL:          strings.TrimSpace(os.Getenv("LOOMTABLE_DATABASE_URL")),
+		AttachmentRoot:       value("LOOMTABLE_ATTACHMENT_ROOT", "data/attachments"),
+		AttachmentMaxBytes:   positiveInt64("LOOMTABLE_ATTACHMENT_MAX_BYTES", 50*1024*1024),
+		AttachmentsEnabled:   attachmentsEnabled,
 		ServerVersion:        value("LOOMTABLE_SERVER_VERSION", "dev"),
 		APIVersion:           value("LOOMTABLE_API_VERSION", "v1"),
 		MinPluginVersion:     value("LOOMTABLE_MIN_PLUGIN_VERSION", "0.1.0"),
-		Capabilities:         []string{"grid", "map"},
+		Capabilities:         capabilities,
 		ChangeRetention:      value("LOOMTABLE_CHANGE_RETENTION", "30d"),
 		IdempotencyRetention: value("LOOMTABLE_IDEMPOTENCY_RETENTION", "30d"),
 		MigrationRequired:    boolean("LOOMTABLE_MIGRATION_REQUIRED", false),
 	}
+}
+
+func positiveInt64(name string, fallback int64) int64 {
+	current := strings.TrimSpace(os.Getenv(name))
+	if current == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(current, 10, 64)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func value(name, fallback string) string {
@@ -50,3 +73,4 @@ func boolean(name string, fallback bool) bool {
 	}
 	return parsed
 }
+

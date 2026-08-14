@@ -339,6 +339,12 @@ func decodeFieldConfig(fieldType string, raw json.RawMessage) (any, error) {
 			return nil, prefixDecodeError(err, "/config")
 		}
 		return config, nil
+	case "attachment":
+		var config domain.AttachmentFieldConfig
+		if err := decodeStrictJSONBytes(raw, &config); err != nil {
+			return nil, prefixDecodeError(err, "/config")
+		}
+		return config, nil
 	case "select", "multiSelect":
 		var request selectFieldConfigRequest
 		if err := decodeStrictJSONBytes(raw, &request); err != nil {
@@ -659,3 +665,4 @@ func prefixDecodeError(err error, prefix string) error {
 	copyError.Details = map[string]any{"issues": prefixed}
 	return &copyError
 }
+

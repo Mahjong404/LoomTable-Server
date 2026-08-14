@@ -46,6 +46,28 @@ type Field struct {
 	DeletedAt     *time.Time `json:"deletedAt,omitempty"`
 }
 
+type AttachmentFieldConfig struct {
+	MaxCount int `json:"maxCount"`
+}
+
+type Attachment struct {
+	ID         string     `json:"id"`
+	Source     string     `json:"source"`
+	Status     string     `json:"status"`
+	Filename   string     `json:"filename"`
+	MimeType   string     `json:"mimeType,omitempty"`
+	Size       *int64     `json:"size,omitempty"`
+	StorageKey string     `json:"storageKey,omitempty"`
+	VaultPath  string     `json:"vaultPath,omitempty"`
+	Hash       string     `json:"hash,omitempty"`
+	Width      *int       `json:"width,omitempty"`
+	Height     *int       `json:"height,omitempty"`
+	Revision   int64      `json:"revision"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+	DeletedAt  *time.Time `json:"deletedAt,omitempty"`
+}
+
 func (field *Field) UnmarshalJSON(data []byte) error {
 	type wireField Field
 	var wire wireField
@@ -71,6 +93,12 @@ func decodeFieldConfig(fieldType string, raw json.RawMessage) (any, error) {
 	switch fieldType {
 	case "select", "multiSelect":
 		var config SelectFieldConfig
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return nil, fmt.Errorf("decode %s Field config: %w", fieldType, err)
+		}
+		return config, nil
+	case "attachment":
+		var config AttachmentFieldConfig
 		if err := json.Unmarshal(raw, &config); err != nil {
 			return nil, fmt.Errorf("decode %s Field config: %w", fieldType, err)
 		}
@@ -205,3 +233,4 @@ type CreateTableResult struct {
 	PrimaryField Field    `json:"primaryField"`
 	InitialView  GridView `json:"initialView"`
 }
+

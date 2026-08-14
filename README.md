@@ -4,7 +4,7 @@ LoomTable 的 Go 后端服务。Server 是 Workspace、Base、Table、Field、Vi
 
 ## 当前状态
 
-当前仓库处于 P0 集成验收阶段。Workspace/Base/Table/Field/View、Record Query/Mutation/Change、Grid/Map 查询、PostgreSQL Token 管理、保留期清理及跨平台备份/验证/恢复入口均已实现。纯 Go 测试、静态检查、OpenAPI 路由合同和 Compose 配置可在本地运行；需要 PostgreSQL/Docker 的端到端与运维恢复验收由测试环境执行后才可合并 `main`。
+当前仓库处于 P1 集成验收阶段。Workspace/Base/Table/Field/View、Record Query/Mutation/Change、Grid/Map 查询、Attachment、PostgreSQL Token 管理、保留期清理及跨平台备份/验证/恢复入口均已实现。纯 Go 测试、静态检查、OpenAPI 路由合同和 Compose 配置可在本地运行；需要 PostgreSQL/Docker 的端到端与运维恢复验收由测试环境执行后才可合并 `main`。
 
 ## 文档
 
@@ -54,7 +54,7 @@ go run ./cmd/loomtable-admin auth bootstrap --name "Primary device"
 go run ./cmd/loomtable-migrate -dir migrations
 ```
 
-Personal Docker Compose 的环境变量示例见 `.env.example`；Attachment 文件卷在 P0 只作为预留基础设施，`attachments` capability 默认未启用。
+Personal Docker Compose 的环境变量示例见 `.env.example`；Attachment P1 使用持久化文件卷，默认单文件大小上限为 50 MiB，可通过 `LOOMTABLE_ATTACHMENT_MAX_BYTES` 覆盖。
 
 常用 Compose 初始化命令：
 
@@ -68,4 +68,5 @@ docker compose up -d server
 备份、校验和恢复入口位于 `scripts/operations/`，PowerShell 与 Bash 版本执行相同的版本化归档合同。恢复必须在 Server 停止后显式确认。
 
 许可证：GPL-3.0。
+
 
