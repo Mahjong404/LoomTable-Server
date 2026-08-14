@@ -304,6 +304,15 @@ func decodeFieldConfig(fieldType string, raw []byte) (any, error) {
 			config.DeletedOptions = make([]domain.DeletedSelectOption, 0)
 		}
 		return config, nil
+	case "attachment":
+		var config domain.AttachmentFieldConfig
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return nil, fmt.Errorf("decode %s Field config: %w", fieldType, err)
+		}
+		if config.MaxCount == 0 {
+			config.MaxCount = 10
+		}
+		return config, nil
 	case "text", "longText", "number", "checkbox", "date", "url", "location":
 		return domain.EmptyFieldConfig{}, nil
 	default:
@@ -398,3 +407,4 @@ func insertMetadataChange(ctx context.Context, tx *sql.Tx, actorID, kind, tableI
 	}
 	return nil
 }
+

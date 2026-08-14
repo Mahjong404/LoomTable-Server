@@ -12,7 +12,7 @@ LoomTable Server 是 LoomTable 的数据事实来源，负责：
 - Field Definition 和 Schema 变更。
 - Record 查询、筛选、排序、分页和 Mutation。
 - Revision、Conflict 和 Change Cursor。
-- Managed Attachment 元数据和文件内容（P0 保留合同，默认不启用 capability）。
+- Managed Attachment 元数据和文件内容（P1，使用持久化文件卷）。
 - Personal Token 认证。
 - API 版本和能力声明。
 - 数据库迁移、备份恢复和健康检查。
@@ -35,7 +35,7 @@ LoomTable Server（Go）
         └── Managed Attachment Volume
 ```
 
-Server、PostgreSQL 和预留的文件卷由 Docker Compose 部署；P0 不启用 Attachment 业务 API。Redis、消息队列和对象存储属于后续 Team 或远程生产部署能力。
+Server、PostgreSQL 和 Managed Attachment 文件卷由 Docker Compose 部署；Attachment capability 可通过配置关闭。Redis、消息队列和对象存储属于后续 Team 或远程生产部署能力。
 
 ## 4. 模块总览
 
@@ -84,3 +84,4 @@ internal/
 ## 7. 许可证
 
 LoomTable Server 使用 GPL-3.0。第三方依赖、文件存储、地图服务和其他外部组件需要单独审核许可证和部署条款。
+

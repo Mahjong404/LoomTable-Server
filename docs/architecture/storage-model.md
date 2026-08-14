@@ -118,9 +118,9 @@ Attachment 元数据示例：
 }
 ```
 
-数据库不保存附件二进制内容。Managed Attachment 使用本地 Docker 文件卷；远程对象存储作为后续 Adapter。Vault Attachment 只保存 Vault 相对路径和必要元数据。
+数据库不保存附件二进制内容。Managed Attachment 使用本地 Docker 文件卷；远程对象存储作为后续 Adapter。Vault Attachment 只保存 Vault 相对路径和必要元数据。P1 的 Managed Attachment 使用 `pending`/`ready` 状态，文件使用服务端生成的 `actorId/attachmentId` storage key 写入临时文件后原子重命名；数据库只在内容校验完成后标记 `ready`。
 
-Attachment API 和存储模型在 P0 保留为扩展合同，但 `attachments` capability 默认未启用；P0 不创建 Attachment Field，也不接受 Attachment Record 值。
+P1 启用 Attachment API 和 Attachment Field；`attachments` capability 可通过配置关闭。Attachment Field 的 Config 为 `maxCount`，Record 值保存稳定 AttachmentRef 数组，引用必须属于当前 Actor、未删除且状态为 `ready`。
 
 ## 删除
 
@@ -133,7 +133,9 @@ Attachment API 和存储模型在 P0 保留为扩展合同，但 `attachments` c
 - P0 不提供硬删除 API。
 - Managed Attachment 的物理文件不能因为一次普通删除立即清理。
 - 物理清理需要引用计数、保留期和可恢复备份策略。
+- P1 删除 Attachment 只写入 `deleted_at`，不立即删除文件；后续清理任务必须在备份和恢复策略允许时删除已删除或未完成上传的文件。
 
 Change 和幂等结果由 Server 启动时及每 24 小时运行的有界后台任务按配置保留期清理；`forever` 完全禁用该清理。该任务不依赖外部 Scheduler。
 
 清理任务使用 PostgreSQL Advisory Lock，按数据库时钟计算 Cutoff；每类数据每次最多 10 批、每批 10,000 条，并以短事务提交。删除 Change 时，`change_retention_watermarks` 按 Table 记录已经过期的最高 Sequence；Change Pull 只据此判断过期，不会把全局 Sequence 中由其他 Table 产生的间隙误判为数据丢失。Personal Workspace 保存 `actor_id`，所有后代通过祖先继承访问边界；P0 不建立资源级 ACL 或 Membership 表。
+

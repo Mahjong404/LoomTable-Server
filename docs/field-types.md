@@ -143,9 +143,11 @@ type AttachmentRef = {
 规则：
 
 - 一个 Attachment Cell 使用数组值。
-- Field Config 可以设置 `maxCount`；单文件字段使用 `maxCount: 1`。
+- Field Config 为 `{maxCount}`，缺省为 10，范围为 1–100；单文件字段使用 `maxCount: 1`。
 - `managed` 使用 Server 文件存储。
 - `vault` 使用 Vault 相对路径。
+- Managed Attachment 必须先完成内容上传并进入 `ready` 状态，Record 才能引用。
+- Record Mutation 校验 Attachment ID、source、当前 Actor 所有权和未删除状态；未知、未完成或其他 Actor 的引用返回 `422 VALIDATION_ERROR`。
 - Vault Attachment 不承诺跨设备可用。
 - 图片优先提供缩略图和懒加载预览。
 - Attachment 删除先解除引用，物理文件清理由保留策略处理。
@@ -174,3 +176,4 @@ Tag 不是独立 Field Type：
 - `Field.schemaVersion` 标识服务端规范化配置的 Schema 版本；版本不嵌套在 Config 对象中。
 - 后续开放类型变更时，必须先提供迁移预览，并把无法转换的值放入明确的迁移错误列表。
 - 未识别的未来 Field Type 不得被静默转换为 Text。
+
