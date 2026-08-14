@@ -626,7 +626,2122 @@ paths:
       tags: [Fields]
       operationId: deleteField
       parameters:
-        - $ref: '#/componen…18323 tokens truncated…        type: string
+        - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '204':
+          description: Field moved to the recycle state
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/fields/{fieldId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/FieldId'
+    post:
+      tags: [Fields]
+      operationId: restoreField
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreMetadataRequest'
+      responses:
+        '200':
+          description: Field restored when its expected revision matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Field'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/views:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Views]
+      operationId: listViews
+      parameters:
+        - $ref: '#/components/parameters/Lifecycle'
+      responses:
+        '200':
+          description: Complete, unpaginated View list in a Table, ordered by createdAt ASC then id ASC. P0 enforces a hard limit of 100 Views per Table.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/View'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Views]
+      operationId: createView
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateViewRequest'
+      responses:
+        '201':
+          description: View created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    get:
+      tags: [Views]
+      operationId: getView
+      description: Returns the directly addressed View even when it is in Recycle State, including deletedAt, provided its Table ancestors remain active and accessible. A deleted ancestor returns 404.
+      responses:
+        '200':
+          description: View configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      tags: [Views]
+      operationId: updateView
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateViewRequest'
+      responses:
+        '200':
+          description: View updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Views]
+      operationId: deleteView
+      parameters:
+        - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '204':
+          description: View deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Views]
+      operationId: restoreView
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreMetadataRequest'
+      responses:
+        '200':
+          description: View restored when its expected revision matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}/map/query:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Views]
+      operationId: queryMap
+      description: Queries the saved Map View against the current client viewport. The Server always uses the View's saved Location Field and Filter; request-time overrides are not accepted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MapQueryRequest'
+      responses:
+        '200':
+          description: At most 500 Map Points or Map Clusters that collectively represent every renderable matching Record in the viewport
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapQueryResult'
+        '400':
+          description: Viewport, zoom, or pixel dimensions are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: The View is not a Map View or its saved Location Field is unavailable; an unavailable field returns VIEW_CONFIGURATION_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}/map/summary:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Views]
+      operationId: summarizeMap
+      description: Computes exact global counts and Data Bounds for all active Records matching the saved Map View Filter. Clients call this on initial open, after the saved Filter changes, or for an explicit fit-all action; camera movement does not call it.
+      responses:
+        '200':
+          description: Exact global Map summary and Data Bounds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapSummaryResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: The View is not a usable Map View or its saved Location Field is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/views/{viewId}/map/cluster-records/query:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Records]
+      operationId: queryMapClusterRecords
+      description: Pages through the full Records represented by a Map Cluster in createdAt ASC, id ASC order. Tokens are valid for five minutes and bind that order, the originating View revision, saved Filter, Location Field, map-query snapshot, and Table Change Cursor. P0 does not persist a large Record-ID snapshot or allow page membership to drift.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MapClusterRecordsQueryRequest'
+      responses:
+        '200':
+          description: A cursor page of full Records represented by the cluster
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '400':
+          description: Cluster token or cursor is invalid or bound to another query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Token timeout or any relevant View/Table change returns QUERY_SNAPSHOT_EXPIRED; the client refreshes the viewport before opening the cluster again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: The View is no longer a usable Map View
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/records/{recordId}:
+    parameters:
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      tags: [Records]
+      operationId: getRecord
+      description: Returns one full Record for details opened from a lightweight Map Point or another direct reference. A directly addressed deleted Record is returned with deletedAt while its ancestors remain active; a deleted ancestor hides the descendant and returns 404.
+      responses:
+        '200':
+          description: Full Record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Record'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/records/query:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Records]
+      operationId: queryRecords
+      description: Uses a stateless keyset cursor with a 30-minute TTL. A regular Record query is not a Query Snapshot; concurrent writes may affect subsequent pages, so clients compare changeCursor and restart when consistency matters.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: A cursor page of records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '400':
+          description: Invalid request or cursor bound to a different query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Cursor has expired and the client must restart from the first page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: Filter, sort, projection, or field operator is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/records/mutate:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Records]
+      operationId: mutateRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MutationRequest'
+      responses:
+        '200':
+          description: Per-command mutation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResult'
+        '409':
+          description: At least one command has a revision conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Bearer Token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Actor is authenticated but forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Table or referenced record was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: Field value or command semantics are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/changes:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Changes]
+      operationId: pullChanges
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Changes after the supplied cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/attachments/init:
+    post:
+      tags: [Attachments]
+      operationId: initializeAttachment
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitializeAttachmentRequest'
+      responses:
+        '201':
+          description: Attachment metadata initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '501':
+          description: Attachment capability is present in the contract but disabled by configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/attachments/{attachmentId}:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentId'
+    get:
+      tags: [Attachments]
+      operationId: getAttachment
+      responses:
+        '200':
+          description: Attachment metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          description: Attachment capability is present in the contract but disabled by configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Attachments]
+      operationId: deleteAttachment
+      parameters:
+        - $ref: '#/components/parameters/ExpectedRevision'
+      responses:
+        '204':
+          description: Attachment reference removed; physical cleanup may be deferred
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          description: Attachment capability is present in the contract but disabled by configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/attachments/{attachmentId}/content:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentId'
+    put:
+      tags: [Attachments]
+      operationId: uploadAttachmentContent
+      requestBody:
+        required: true
+        content:
+          application/octet-stream: {}
+      responses:
+        '200':
+          description: Attachment content stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '501':
+          description: Attachment capability is present in the contract but disabled by configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    get:
+      tags: [Attachments]
+      operationId: downloadAttachmentContent
+      responses:
+        '200':
+          description: Attachment content
+          content:
+            application/octet-stream: {}
+            image/*: {}
+            application/pdf: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          description: Attachment capability is present in the contract but disabled by configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: query
+      required: true
+      schema:
+        $ref: '#/components/schemas/WorkspaceId'
+    WorkspacePathId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/WorkspaceId'
+    BaseId:
+      name: baseId
+      in: query
+      required: true
+      schema:
+        $ref: '#/components/schemas/BaseId'
+    BasePathId:
+      name: baseId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/BaseId'
+    TableId:
+      name: tableId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/TableId'
+    FieldId:
+      name: fieldId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/FieldId'
+    ViewId:
+      name: viewId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ViewId'
+    RecordId:
+      name: recordId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/RecordId'
+    AttachmentId:
+      name: attachmentId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/AttachmentId'
+    ExpectedRevision:
+      name: expectedRevision
+      in: query
+      required: true
+      description: Revision required for optimistic concurrency on metadata deletion.
+      schema:
+        type: integer
+        minimum: 1
+    Lifecycle:
+      name: lifecycle
+      in: query
+      required: false
+      description: Filters by the object's own soft-deletion state. Ancestor visibility and authorization still apply.
+      schema:
+        $ref: '#/components/schemas/LifecycleScope'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Actor-global metadata creation key. Retrying the same method, path, and canonical body replays the first 201 response; using the key for a different request returns 409 IDEMPOTENCY_KEY_REUSED.
+      schema:
+        $ref: '#/components/schemas/MutationId'
+
+  responses:
+    ErrorResponse:
+      description: LoomTable API error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Malformed request, parameter, cursor, or Idempotency-Key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthenticated:
+      description: Missing or invalid Bearer Token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: The authenticated Actor is denied by an explicit authorization policy; existence-hiding resource access uses 404 instead
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: A well-formed resource ID is absent, belongs to another Actor, is inaccessible, or is hidden by a deleted ancestor. Malformed typed IDs use 400 instead
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    IdempotencyKeyReused:
+      description: The Idempotency-Key was previously used for a different method, path, or canonical request body; error code IDEMPOTENCY_KEY_REUSED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RevisionConflict:
+      description: The supplied expectedRevision does not match the current object revision; error code CONFLICT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    CursorExpired:
+      description: The cursor is outside the retained query or change window; error code CURSOR_EXPIRED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    QuerySnapshotExpired:
+      description: The short-lived query snapshot expired or was invalidated; error code QUERY_SNAPSHOT_EXPIRED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PayloadTooLarge:
+      description: The JSON request body exceeds the 8 MiB API limit; error code PAYLOAD_TOO_LARGE
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnsupportedMediaType:
+      description: The request is not UTF-8 application/json or uses an unsupported Content-Encoding; error code UNSUPPORTED_MEDIA_TYPE
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: The request is structurally valid but violates a domain validation rule
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    LifecycleScope:
+      type: string
+      enum: [active, deleted, all]
+      default: active
+      description: active returns non-deleted objects, deleted returns objects in Recycle State, and all returns both.
+
+    ResourceName:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: The Server trims leading/trailing Unicode whitespace, normalizes to NFC, rejects control characters, then enforces 1–200 Unicode code points. Sibling names need not be unique; IDs are authoritative.
+
+    WorkspaceId:
+      type: string
+      pattern: '^ws_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    BaseId:
+      type: string
+      pattern: '^base_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    TableId:
+      type: string
+      pattern: '^tbl_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    FieldId:
+      type: string
+      pattern: '^fld_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    ViewId:
+      type: string
+      pattern: '^view_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    RecordId:
+      type: string
+      pattern: '^rec_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    AttachmentId:
+      type: string
+      pattern: '^att_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    ChangeId:
+      type: string
+      pattern: '^chg_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    ActorId:
+      type: string
+      pattern: '^act_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    TokenId:
+      type: string
+      pattern: '^tok_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    OptionId:
+      type: string
+      pattern: '^opt_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    MutationId:
+      type: string
+      pattern: '^mut_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    RequestId:
+      type: string
+      pattern: '^req_[0-9A-HJKMNP-TV-Z]{26}$'
+
+    BootstrapState:
+      type: string
+      enum: [required, complete, unknown]
+      description: Personal Actor setup state. It does not reveal the number of active Access Tokens.
+
+    ServerMeta:
+      type: object
+      additionalProperties: false
+      required: [serverVersion, apiVersion, minPluginVersion, capabilities, changeRetention, idempotencyRetention, migrationRequired, bootstrapState]
+      properties:
+        serverVersion:
+          type: string
+        apiVersion:
+          type: string
+          example: v1
+        minPluginVersion:
+          type: string
+        capabilities:
+          type: array
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available.
+          items:
+            type: string
+        changeRetention:
+          type: string
+          description: Change Cursor retention currently enforced by this server.
+          enum: [30d, 90d, 365d, forever]
+          default: 30d
+        idempotencyRetention:
+          type: string
+          description: Idempotency result retention currently enforced by this server.
+          enum: [30d, 90d, 365d, forever]
+          default: 30d
+        migrationRequired:
+          type: boolean
+          description: True when an explicit server migration command must run before the server can become ready.
+        bootstrapState:
+          $ref: '#/components/schemas/BootstrapState'
+
+    Workspace:
+      type: object
+      additionalProperties: false
+      required: [id, name, revision, createdAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/WorkspaceId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+        revision:
+          type: integer
+          minimum: 1
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Base:
+      type: object
+      additionalProperties: false
+      required: [id, workspaceId, name, revision, createdAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/BaseId' }
+        workspaceId: { $ref: '#/components/schemas/WorkspaceId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+        revision:
+          type: integer
+          minimum: 1
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Table:
+      type: object
+      description: A Table always has a server-created, user-renamable Primary Field in P0.
+      required: [id, baseId, name, primaryFieldId, revision, createdAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/TableId' }
+        baseId: { $ref: '#/components/schemas/BaseId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+        primaryFieldId: { $ref: '#/components/schemas/FieldId' }
+        revision:
+          type: integer
+          minimum: 1
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt:
+          type: string
+          format: date-time
+
+    Field:
+      description: Strict type-discriminated P0 Field response.
+      oneOf:
+        - $ref: '#/components/schemas/TextField'
+        - $ref: '#/components/schemas/LongTextField'
+        - $ref: '#/components/schemas/NumberField'
+        - $ref: '#/components/schemas/CheckboxField'
+        - $ref: '#/components/schemas/DateField'
+        - $ref: '#/components/schemas/SelectField'
+        - $ref: '#/components/schemas/MultiSelectField'
+        - $ref: '#/components/schemas/URLField'
+        - $ref: '#/components/schemas/LocationField'
+        - $ref: '#/components/schemas/AttachmentField'
+      discriminator:
+        propertyName: type
+        mapping:
+          text: '#/components/schemas/TextField'
+          longText: '#/components/schemas/LongTextField'
+          number: '#/components/schemas/NumberField'
+          checkbox: '#/components/schemas/CheckboxField'
+          date: '#/components/schemas/DateField'
+          select: '#/components/schemas/SelectField'
+          multiSelect: '#/components/schemas/MultiSelectField'
+          url: '#/components/schemas/URLField'
+          location: '#/components/schemas/LocationField'
+          attachment: '#/components/schemas/AttachmentField'
+
+    FieldBase:
+      type: object
+      description: New Fields are assigned max(existing position) + 1. Deletion leaves the position gap and restoration reuses the original position. P0 exposes no schema-level Field reorder endpoint; Grid columnOrder controls presentation order only.
+      required: [id, tableId, name, position, schemaVersion, revision]
+      properties:
+        id: { $ref: '#/components/schemas/FieldId' }
+        tableId: { $ref: '#/components/schemas/TableId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+        position:
+          type: integer
+          minimum: 0
+        schemaVersion:
+          type: integer
+          minimum: 1
+        revision:
+          type: integer
+          minimum: 1
+        deletedAt:
+          type: string
+          format: date-time
+
+    TextField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: text }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    LongTextField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: longText }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    NumberField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: number }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CheckboxField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: checkbox }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    DateField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: date }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    SelectField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: select }
+            config: { $ref: '#/components/schemas/SelectFieldConfig' }
+      unevaluatedProperties: false
+
+    MultiSelectField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: multiSelect }
+            config: { $ref: '#/components/schemas/SelectFieldConfig' }
+      unevaluatedProperties: false
+
+    URLField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: url }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    LocationField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: location }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    AttachmentField:
+      allOf:
+        - $ref: '#/components/schemas/FieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: attachment }
+            config: { $ref: '#/components/schemas/AttachmentFieldConfig' }
+      unevaluatedProperties: false
+
+    View:
+      description: A discriminated P0 View. The type always determines the exact config schema.
+      oneOf:
+        - $ref: '#/components/schemas/GridView'
+        - $ref: '#/components/schemas/MapView'
+      discriminator:
+        propertyName: type
+        mapping:
+          grid: '#/components/schemas/GridView'
+          map: '#/components/schemas/MapView'
+
+    GridView:
+      type: object
+      additionalProperties: false
+      required: [id, tableId, name, type, config, revision, createdAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/ViewId' }
+        tableId: { $ref: '#/components/schemas/TableId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+        type:
+          type: string
+          const: grid
+        config:
+          $ref: '#/components/schemas/GridViewConfig'
+        revision:
+          type: integer
+          minimum: 1
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: string, format: date-time }
+
+    MapView:
+      type: object
+      additionalProperties: false
+      required: [id, tableId, name, type, config, revision, createdAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/ViewId' }
+        tableId: { $ref: '#/components/schemas/TableId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+        type:
+          type: string
+          const: map
+        config:
+          $ref: '#/components/schemas/MapViewConfig'
+        revision:
+          type: integer
+          minimum: 1
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: string, format: date-time }
+
+    Record:
+      type: object
+      description: The keys of values are stable Field IDs, never mutable Field names. A missing key is an Unset Cell; a present null is an explicitly cleared Cell.
+      required: [id, tableId, revision, values, createdAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/RecordId' }
+        tableId: { $ref: '#/components/schemas/TableId' }
+        revision:
+          type: integer
+          minimum: 1
+        values:
+          $ref: '#/components/schemas/RecordValues'
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt:
+          type: string
+          format: date-time
+
+    RecordValues:
+      type: object
+      description: Values keyed by stable Field ID. Missing keys are Unset. Every P0 Field Type accepts explicit null; Text and LongText additionally accept an empty string, and MultiSelect accepts an empty array. Empty URL strings and empty Location objects are invalid. Unknown, foreign-Table, or deleted Fields cannot be written. Deleted Options cannot be newly introduced, but existing references may remain. Violations return 422 VALIDATION_ERROR and are never silently removed.
+      propertyNames:
+        $ref: '#/components/schemas/FieldId'
+      additionalProperties:
+        $ref: '#/components/schemas/P0FieldValue'
+
+    P0FieldValue:
+      description: Transport union for a Cell value. Semantic validity is selected by the Field Type identified by the containing object key. Text is limited to 10,000 and LongText to 100,000 Unicode code points; URL is an absolute HTTP/HTTPS URL up to 2,048 characters; Number is finite IEEE-754; Date is a valid Gregorian YYYY-MM-DD; Attachment is an array of ready AttachmentRef objects.
+      oneOf:
+        - type: 'null'
+        - type: string
+          maxLength: 100000
+        - type: number
+        - type: boolean
+        - type: array
+          uniqueItems: true
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/OptionId'
+        - $ref: '#/components/schemas/AttachmentRefArray'
+        - $ref: '#/components/schemas/LocationValue'
+
+    AttachmentRefArray:
+      type: array
+      uniqueItems: true
+      maxItems: 100
+      items:
+        $ref: '#/components/schemas/AttachmentRef'
+
+    AttachmentRef:
+      type: object
+      additionalProperties: false
+      required: [id, source, filename]
+      properties:
+        id: { $ref: '#/components/schemas/AttachmentId' }
+        source:
+          type: string
+          enum: [managed, vault]
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+        mimeType: { type: string }
+        size:
+          type: integer
+          minimum: 0
+        storageKey: { type: string }
+        vaultPath: { type: string }
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+
+    LocationValue:
+      type: object
+      additionalProperties: false
+      description: Text members are Unicode-trimmed, NFC-normalized, and rejected when they contain control characters. Members normalized to empty are omitted; after omission, at least one of label, address, provider, or a complete coordinate pair must remain. Precision alone is not a meaningful Location.
+      anyOf:
+        - required: [label]
+        - required: [address]
+        - required: [provider]
+        - required: [lat, lng]
+      dependentRequired:
+        lat: [lng]
+        lng: [lat]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 500
+        address:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+        provider:
+          type: string
+          minLength: 1
+          maxLength: 100
+        precision:
+          type: string
+          enum: [exact, rooftop, approximate]
+
+    Attachment:
+      type: object
+      required: [id, source, status, filename, revision, createdAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/AttachmentId' }
+        source:
+          type: string
+          enum: [managed, vault]
+        status:
+          type: string
+          enum: [pending, ready]
+        filename: { type: string }
+        mimeType: { type: string }
+        size:
+          type: integer
+          minimum: 0
+        storageKey: { type: string }
+        vaultPath: { type: string }
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        revision:
+          type: integer
+          minimum: 1
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: string, format: date-time }
+
+    CreateWorkspaceRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+
+    CreateBaseRequest:
+      type: object
+      additionalProperties: false
+      required: [workspaceId, name]
+      properties:
+        workspaceId: { $ref: '#/components/schemas/WorkspaceId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+
+    CreateTableRequest:
+      type: object
+      additionalProperties: false
+      description: Creating a Table atomically creates its renameable text Primary Field and initial Grid View. Clients should submit localized names; the Server fallbacks are Name and Grid.
+      required: [baseId, name]
+      properties:
+        baseId: { $ref: '#/components/schemas/BaseId' }
+        name: { $ref: '#/components/schemas/ResourceName' }
+        primaryFieldName:
+          allOf:
+            - $ref: '#/components/schemas/ResourceName'
+          default: Name
+        initialViewName:
+          allOf:
+            - $ref: '#/components/schemas/ResourceName'
+          default: Grid
+
+    CreateTableResult:
+      type: object
+      additionalProperties: false
+      description: Atomic result of creating a Table and its mandatory initial metadata.
+      required: [table, primaryField, initialView]
+      properties:
+        table:
+          $ref: '#/components/schemas/Table'
+        primaryField:
+          $ref: '#/components/schemas/Field'
+        initialView:
+          $ref: '#/components/schemas/GridView'
+
+    UpdateNameRequest:
+      type: object
+      additionalProperties: false
+      description: expectedRevision is checked first. If the normalized name is unchanged, the current object is returned without a Revision or Change.
+      required: [name, expectedRevision]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    RestoreMetadataRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    CreateFieldRequest:
+      description: Strict type-discriminated Field creation request. The parent Table ID comes only from the route.
+      oneOf:
+        - $ref: '#/components/schemas/CreateTextFieldRequest'
+        - $ref: '#/components/schemas/CreateLongTextFieldRequest'
+        - $ref: '#/components/schemas/CreateNumberFieldRequest'
+        - $ref: '#/components/schemas/CreateCheckboxFieldRequest'
+        - $ref: '#/components/schemas/CreateDateFieldRequest'
+        - $ref: '#/components/schemas/CreateSelectFieldRequest'
+        - $ref: '#/components/schemas/CreateMultiSelectFieldRequest'
+        - $ref: '#/components/schemas/CreateURLFieldRequest'
+        - $ref: '#/components/schemas/CreateLocationFieldRequest'
+        - $ref: '#/components/schemas/CreateAttachmentFieldRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          text: '#/components/schemas/CreateTextFieldRequest'
+          longText: '#/components/schemas/CreateLongTextFieldRequest'
+          number: '#/components/schemas/CreateNumberFieldRequest'
+          checkbox: '#/components/schemas/CreateCheckboxFieldRequest'
+          date: '#/components/schemas/CreateDateFieldRequest'
+          select: '#/components/schemas/CreateSelectFieldRequest'
+          multiSelect: '#/components/schemas/CreateMultiSelectFieldRequest'
+          url: '#/components/schemas/CreateURLFieldRequest'
+          location: '#/components/schemas/CreateLocationFieldRequest'
+          attachment: '#/components/schemas/CreateAttachmentFieldRequest'
+
+    CreateFieldBase:
+      type: object
+      required: [name]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+
+    CreateTextFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: text }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CreateLongTextFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: longText }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CreateNumberFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: number }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CreateCheckboxFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: checkbox }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CreateDateFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: date }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CreateSelectFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: select }
+            config: { $ref: '#/components/schemas/SelectFieldConfigInput' }
+      unevaluatedProperties: false
+
+    CreateMultiSelectFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: multiSelect }
+            config: { $ref: '#/components/schemas/SelectFieldConfigInput' }
+      unevaluatedProperties: false
+
+    CreateURLFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: url }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CreateLocationFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: location }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    CreateAttachmentFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateFieldBase'
+        - type: object
+          required: [type, config]
+          properties:
+            type: { const: attachment }
+            config: { $ref: '#/components/schemas/AttachmentFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateFieldRequest:
+      description: Strict type-discriminated top-level PATCH. Type is immutable and must be echoed; omitted name or config is preserved, while a supplied config completely replaces the old config. expectedRevision is checked first; an identical normalized result returns the current Field without a Revision or Change.
+      oneOf:
+        - $ref: '#/components/schemas/UpdateTextFieldRequest'
+        - $ref: '#/components/schemas/UpdateLongTextFieldRequest'
+        - $ref: '#/components/schemas/UpdateNumberFieldRequest'
+        - $ref: '#/components/schemas/UpdateCheckboxFieldRequest'
+        - $ref: '#/components/schemas/UpdateDateFieldRequest'
+        - $ref: '#/components/schemas/UpdateSelectFieldRequest'
+        - $ref: '#/components/schemas/UpdateMultiSelectFieldRequest'
+        - $ref: '#/components/schemas/UpdateURLFieldRequest'
+        - $ref: '#/components/schemas/UpdateLocationFieldRequest'
+        - $ref: '#/components/schemas/UpdateAttachmentFieldRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          text: '#/components/schemas/UpdateTextFieldRequest'
+          longText: '#/components/schemas/UpdateLongTextFieldRequest'
+          number: '#/components/schemas/UpdateNumberFieldRequest'
+          checkbox: '#/components/schemas/UpdateCheckboxFieldRequest'
+          date: '#/components/schemas/UpdateDateFieldRequest'
+          select: '#/components/schemas/UpdateSelectFieldRequest'
+          multiSelect: '#/components/schemas/UpdateMultiSelectFieldRequest'
+          url: '#/components/schemas/UpdateURLFieldRequest'
+          location: '#/components/schemas/UpdateLocationFieldRequest'
+          attachment: '#/components/schemas/UpdateAttachmentFieldRequest'
+
+    UpdateFieldBase:
+      type: object
+      required: [type, expectedRevision]
+      anyOf:
+        - required: [name]
+        - required: [config]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+        type:
+          type: string
+          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment]
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    UpdateTextFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: text }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateLongTextFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: longText }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateNumberFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: number }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateCheckboxFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: checkbox }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateDateFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: date }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateSelectFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: select }
+            config: { $ref: '#/components/schemas/SelectFieldConfigInput' }
+      unevaluatedProperties: false
+
+    UpdateMultiSelectFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: multiSelect }
+            config: { $ref: '#/components/schemas/SelectFieldConfigInput' }
+      unevaluatedProperties: false
+
+    UpdateURLFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: url }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateLocationFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: location }
+            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+      unevaluatedProperties: false
+
+    UpdateAttachmentFieldRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateFieldBase'
+        - type: object
+          properties:
+            type: { const: attachment }
+            config: { $ref: '#/components/schemas/AttachmentFieldConfig' }
+      unevaluatedProperties: false
+
+    EmptyFieldConfig:
+      type: object
+      additionalProperties: false
+
+    AttachmentFieldConfig:
+      type: object
+      additionalProperties: false
+      description: Attachment Cell configuration. maxCount defaults to 10 and is bounded from 1 to 100.
+      properties:
+        maxCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+
+    SelectFieldConfigInput:
+      type: object
+      additionalProperties: false
+      description: Desired active Option list in display order. Omitted active IDs are soft-deleted; deleted IDs are restored. Unknown or foreign IDs are invalid. Active names must be unique after locale-neutral Unicode Default Case Folding. A Field may contain at most 500 active and 5,000 total active-plus-deleted Options.
+      required: [options]
+      properties:
+        options:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/SelectOptionInput'
+
+    SelectOptionInput:
+      type: object
+      additionalProperties: false
+      required: [name, color]
+      properties:
+        id:
+          description: Omit to create. Supply an ID owned by this Field to update or restore it.
+          $ref: '#/components/schemas/OptionId'
+        name: { $ref: '#/components/schemas/SelectOptionName' }
+        color: { $ref: '#/components/schemas/SelectOptionColor' }
+
+    SelectFieldConfig:
+      type: object
+      additionalProperties: false
+      required: [options, deletedOptions]
+      properties:
+        options:
+          type: array
+          maxItems: 500
+          description: Active Options in display order.
+          items:
+            $ref: '#/components/schemas/SelectOption'
+        deletedOptions:
+          type: array
+          maxItems: 5000
+          description: Soft-deleted Option tombstones retained for old Record references and explicit restoration, ordered by deletedAt ASC then id ASC. Together with options, the array cannot represent more than 5,000 total Options.
+          items:
+            $ref: '#/components/schemas/DeletedSelectOption'
+
+    SelectOption:
+      type: object
+      additionalProperties: false
+      required: [id, name, color]
+      properties:
+        id:
+          description: Server-generated stable option ID. Deleted option IDs are never reused.
+          $ref: '#/components/schemas/OptionId'
+        name: { $ref: '#/components/schemas/SelectOptionName' }
+        color: { $ref: '#/components/schemas/SelectOptionColor' }
+
+    DeletedSelectOption:
+      type: object
+      additionalProperties: false
+      required: [id, name, color, deletedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/OptionId'
+        name: { $ref: '#/components/schemas/SelectOptionName' }
+        color: { $ref: '#/components/schemas/SelectOptionColor' }
+        deletedAt:
+          type: string
+          format: date-time
+
+    SelectOptionColor:
+      type: string
+      enum: [gray, red, orange, yellow, green, cyan, blue, purple, pink]
+      description: Required Server-defined semantic palette token. Clients map the token to their active theme; CSS color values are never stored.
+
+    SelectOptionName:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: The Server trims leading/trailing Unicode whitespace, normalizes to NFC, rejects control characters, then enforces 1–100 Unicode code points. Active sibling Option names are unique after locale-neutral Unicode Default Case Folding; deleted Options may share a name with an active Option.
+
+    CreateViewRequest:
+      description: A discriminated P0 View creation request.
+      oneOf:
+        - $ref: '#/components/schemas/CreateGridViewRequest'
+        - $ref: '#/components/schemas/CreateMapViewRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          grid: '#/components/schemas/CreateGridViewRequest'
+          map: '#/components/schemas/CreateMapViewRequest'
+
+    CreateGridViewRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type, config]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+        type:
+          type: string
+          const: grid
+        config:
+          $ref: '#/components/schemas/GridViewConfig'
+
+    CreateMapViewRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type, config]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+        type:
+          type: string
+          const: map
+        config:
+          $ref: '#/components/schemas/MapViewConfig'
+
+    UpdateViewRequest:
+      description: Full replacement of a P0 View config. Optional config members mean their documented unset/default state, not preservation of the prior value. The type must match the existing View. expectedRevision is checked first; an identical normalized result returns the current View without a Revision or Change.
+      oneOf:
+        - $ref: '#/components/schemas/UpdateGridViewRequest'
+        - $ref: '#/components/schemas/UpdateMapViewRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          grid: '#/components/schemas/UpdateGridViewRequest'
+          map: '#/components/schemas/UpdateMapViewRequest'
+
+    UpdateGridViewRequest:
+      type: object
+      additionalProperties: false
+      required: [type, config, expectedRevision]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+        type:
+          type: string
+          const: grid
+        config:
+          $ref: '#/components/schemas/GridViewConfig'
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    UpdateMapViewRequest:
+      type: object
+      additionalProperties: false
+      required: [type, config, expectedRevision]
+      properties:
+        name: { $ref: '#/components/schemas/ResourceName' }
+        type:
+          type: string
+          const: map
+        config:
+          $ref: '#/components/schemas/MapViewConfig'
+        expectedRevision:
+          type: integer
+          minimum: 1
+
+    GridViewConfig:
+      type: object
+      additionalProperties: false
+      description: P0 Grid configuration. Grouping is reserved and is not implemented in P0. The initial Grid contains only the Primary Field in projection/columnOrder, empty widths/frozen fields, standard row height, no filter, and an empty sort.
+      required: [projection, columnOrder, columnWidths, frozenFieldIds, rowHeight, sort]
+      properties:
+        projection:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/FieldId' }
+        columnOrder:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/FieldId' }
+        columnWidths:
+          type: object
+          propertyNames:
+            $ref: '#/components/schemas/FieldId'
+          additionalProperties:
+            type: integer
+            minimum: 80
+            maximum: 1000
+          description: Explicit widths in CSS pixels; omitted Field IDs use the shared client default.
+        frozenFieldIds:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/FieldId' }
+        rowHeight:
+          type: string
+          enum: [compact, standard, comfortable]
+        filter:
+          $ref: '#/components/schemas/FilterNode'
+        sort:
+          type: array
+          items:
+            $ref: '#/components/schemas/SortSpec'
+
+    MapViewConfig:
+      type: object
+      additionalProperties: false
+      description: P0 Map configuration for an active Location Field in the same Table. Center and zoom are an explicitly saved Default Camera, not a client's temporary viewport. Tile provider selection and credentials are client-local and never appear here.
+      required: [locationFieldId]
+      dependentRequired:
+        center: [zoom]
+        zoom: [center]
+      properties:
+        locationFieldId:
+          $ref: '#/components/schemas/FieldId'
+        filter:
+          $ref: '#/components/schemas/FilterNode'
+        center:
+          type: object
+          additionalProperties: false
+          required: [lat, lng]
+          properties:
+            lat:
+              type: number
+              minimum: -85.0511287798066
+              maximum: 85.0511287798066
+            lng:
+              type: number
+              minimum: -180
+              maximum: 180
+        zoom:
+          type: number
+          minimum: 0
+
+    MapCoordinate:
+      type: object
+      additionalProperties: false
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          minimum: -85.0511287798066
+          maximum: 85.0511287798066
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+
+    MapViewportBox:
+      type: object
+      additionalProperties: false
+      description: A non-wrapping WGS 84 box. West must not exceed east and south must not exceed north. A viewport that crosses the antimeridian is represented by two boxes; Records are de-duplicated by Record ID at the seam.
+      required: [west, south, east, north]
+      properties:
+        west:
+          type: number
+          minimum: -180
+          maximum: 180
+        south:
+          type: number
+          minimum: -85.0511287798066
+          maximum: 85.0511287798066
+        east:
+          type: number
+          minimum: -180
+          maximum: 180
+        north:
+          type: number
+          minimum: -85.0511287798066
+          maximum: 85.0511287798066
+
+    MapViewport:
+      type: object
+      additionalProperties: false
+      required: [boxes]
+      properties:
+        boxes:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/MapViewportBox'
+
+    MapQueryRequest:
+      type: object
+      additionalProperties: false
+      description: The current temporary camera is client state. Pixel dimensions are CSS pixels and let the Server choose an appropriate adaptive clustering density.
+      required: [viewport, zoom, pixelWidth, pixelHeight]
+      properties:
+        viewport:
+          $ref: '#/components/schemas/MapViewport'
+        zoom:
+          type: number
+          minimum: 0
+        pixelWidth:
+          type: integer
+          minimum: 1
+        pixelHeight:
+          type: integer
+          minimum: 1
+
+    MapFeature:
+      oneOf:
+        - $ref: '#/components/schemas/MapPoint'
+        - $ref: '#/components/schemas/MapCluster'
+      discriminator:
+        propertyName: kind
+        mapping:
+          point: '#/components/schemas/MapPoint'
+          cluster: '#/components/schemas/MapCluster'
+
+    MapPoint:
+      type: object
+      additionalProperties: false
+      description: Lightweight map presentation for one Record. Full field values are fetched only when the user opens Record details.
+      required: [kind, recordId, position, primaryFieldText]
+      properties:
+        kind:
+          type: string
+          const: point
+        recordId:
+          $ref: '#/components/schemas/RecordId'
+        position:
+          $ref: '#/components/schemas/MapCoordinate'
+        primaryFieldText:
+          type: string
+          description: Server-formatted Primary Field display text; unset, null, or empty Primary Field values produce an empty string. The Plugin applies its localized Untitled or Record ID fallback without persisting it.
+
+    MapCluster:
+      type: object
+      additionalProperties: false
+      description: An ephemeral map-scale grouping. The clustering algorithm and cluster identity are internal and may change on every map query; clients must not persist clusterId.
+      required: [kind, clusterId, position, bounds, pointCount, recordsQueryToken]
+      properties:
+        kind:
+          type: string
+          const: cluster
+        clusterId:
+          type: string
+          description: Ephemeral identity for renderer reconciliation within this response only.
+        position:
+          $ref: '#/components/schemas/MapCoordinate'
+        bounds:
+          $ref: '#/components/schemas/MapViewport'
+        pointCount:
+          type: integer
+          minimum: 2
+        expansionZoom:
+          type: number
+          minimum: 0
+          description: Suggested zoom at which this cluster separates. If absent, or above the active renderer/provider maximum zoom, the client opens the paginated Record list instead.
+        recordsQueryToken:
+          type: string
+          description: Opaque five-minute token bound to the View revision and Table Change Cursor for paging through this cluster.
+
+    MapQuerySummary:
+      type: object
+      additionalProperties: false
+      description: Exact global counts over all active Records matching the saved Map View Filter. matchedRecordCount equals renderableRecordCount plus unlocatedRecordCount plus unrenderableRecordCount.
+      required: [matchedRecordCount, renderableRecordCount, unlocatedRecordCount, unrenderableRecordCount]
+      properties:
+        matchedRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+        renderableRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+        unlocatedRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Matching Records whose Location is missing or is not a valid WGS 84 coordinate.
+        unrenderableRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Matching Records with a valid WGS 84 coordinate outside the EPSG:3857 renderable latitude range.
+        dataBounds:
+          $ref: '#/components/schemas/MapViewport'
+          description: Bounds of every renderable matching Record, omitted when renderableRecordCount is zero. It may contain two boxes when the minimal span crosses the antimeridian.
+
+    MapSummaryResult:
+      type: object
+      additionalProperties: false
+      required: [summary, viewRevision, changeCursor]
+      properties:
+        summary:
+          $ref: '#/components/schemas/MapQuerySummary'
+        viewRevision:
+          type: integer
+          minimum: 1
+        changeCursor:
+          type: string
+
+    MapQueryResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        The features collectively represent all viewportRenderableRecordCount Records:
+        each Point contributes one and each Cluster contributes pointCount. The Server
+        adaptively clusters until no more than 500 features remain and never silently
+        truncates Records. Global counts and Data Bounds come from MapSummaryResult,
+        not from every viewport query.
+      required: [features, viewportRenderableRecordCount, viewRevision, changeCursor]
+      properties:
+        features:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/MapFeature'
+        viewportRenderableRecordCount:
+          type: integer
+          format: int64
+          minimum: 0
+        viewRevision:
+          type: integer
+          minimum: 1
+        changeCursor:
+          type: string
+
+    MapClusterRecordsQueryRequest:
+      type: object
+      additionalProperties: false
+      required: [clusterToken]
+      properties:
+        clusterToken:
+          type: string
         cursor:
           type: string
           description: Opaque next-page cursor bound to the cluster token and limit.
@@ -1112,4 +3227,3 @@ paths:
         limitBytes:
           type: integer
           const: 8388608
-
