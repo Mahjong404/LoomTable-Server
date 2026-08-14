@@ -562,7 +562,38 @@ func (s *Service) ListViews(ctx context.Context, actorID, tableID, lifecycle str
 		return nil, err
 	}
 	if s == nil || s.store == nil {
-		retur…314 tokens truncated…sion,
+		return nil, domain.ErrDependencyMissing
+	}
+	return s.store.ListViews(ctx, actorID, tableID, lifecycle)
+}
+
+func (s *Service) GetView(ctx context.Context, actorID, viewID string) (domain.View, error) {
+	if err := validateID("/viewId", id.ViewPrefix, viewID); err != nil {
+		return domain.View{}, err
+	}
+	if s == nil || s.store == nil {
+		return domain.View{}, domain.ErrDependencyMissing
+	}
+	return s.store.GetView(ctx, actorID, viewID)
+}
+
+func (s *Service) UpdateView(ctx context.Context, actorID, viewID string, update ViewUpdate) (domain.View, error) {
+	if err := validateID("/viewId", id.ViewPrefix, viewID); err != nil {
+		return domain.View{}, err
+	}
+	if update.ExpectedRevision < 1 {
+		return domain.View{}, domain.NewValidationError(domain.ValidationIssue{Path: "/expectedRevision", Code: "required", Message: "expectedRevision must be at least 1"})
+	}
+	if s == nil || s.store == nil {
+		return domain.View{}, domain.ErrDependencyMissing
+	}
+	current, err := s.store.GetView(ctx, actorID, viewID)
+	if err != nil {
+		return domain.View{}, err
+	}
+	if current.Revision != update.ExpectedRevision {
+		return domain.View{}, &domain.RevisionConflictError{
+			Resource: "view", ID: viewID, ExpectedRevision: update.ExpectedRevision, CurrentRevision: current.Revision,
 		}
 	}
 	if current.DeletedAt != nil {
@@ -1030,4 +1061,3 @@ func requestFingerprint(method, path string, body any) ([32]byte, error) {
 	}
 	return sha256.Sum256(canonical), nil
 }
-
