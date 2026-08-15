@@ -43,6 +43,8 @@ type stubRecords struct {
 	actorID      string
 	tableID      string
 	command      loomrecord.Command
+	mutateErr    error
+	mutateCalls  int
 	queryRequest loomrecord.QueryRequest
 	mapRequest   loomrecord.MapQueryRequest
 }
@@ -55,8 +57,12 @@ func (s *stubRecords) Get(_ context.Context, actorID, recordID string) (loomreco
 func (s *stubRecords) Mutate(_ context.Context, actorID, tableID, mutationID string, commands []loomrecord.Command) (loomrecord.MutationResult, error) {
 	s.actorID = actorID
 	s.tableID = tableID
+	s.mutateCalls++
 	if len(commands) > 0 {
 		s.command = commands[0]
+	}
+	if s.mutateErr != nil {
+		return loomrecord.MutationResult{}, s.mutateErr
 	}
 	return loomrecord.MutationResult{ClientMutationID: mutationID, Results: []loomrecord.CommandResult{}, ChangeCursor: "v1.change.payload.signature"}, nil
 }
@@ -522,6 +528,93 @@ func TestMutateRecordsRouteRejectsUnknownCommandProperty(t *testing.T) {
 
 	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), `"path":"/commands/0/extra"`) {
 		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestMutateRecordsRouteReturnsConflictResponse(t *testing.T) {
+	mutationID := "mut_00000000000000000000000000"
+	recordID := "rec_00000000000000000000000000"
+	records := &stubRecords{mutateErr: &loomrecord.ConflictError{
+		ClientMutationID:   mutationID,
+		FailedCommandIndex: 0,
+		Conflicts: []loomrecord.Conflict{{
+			RecordID:         recordID,
+			ExpectedRevision: 1,
+			CurrentRevision:  2,
+			CurrentValues:    map[string]any{"fld_00000000000000000000000000": "server"},
+			SubmittedSet:     map[string]any{"fld_00000000000000000000000000": "client"},
+		}},
+	}}
+	server := New(testConfig(), func(context.Context) error { return nil }, Dependencies{
+		Authenticator: fixedAuthenticator{},
+		Catalog:       &stubCatalog{},
+		Records:       records,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/mutate", strings.NewReader(`{
+		"clientMutationId":"`+mutationID+`",
+		"commands":[{"kind":"updateRecord","recordId":"`+recordID+`","expectedRevision":1,"set":{"fld_00000000000000000000000000":"client"}}]
+	}`))
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Error struct {
+			Code               string                `json:"code"`
+			ClientMutationID   string                `json:"clientMutationId"`
+			FailedCommandIndex int                   `json:"failedCommandIndex"`
+			Conflicts          []loomrecord.Conflict `json:"conflicts"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error.Code != "CONFLICT" || response.Error.ClientMutationID != mutationID || response.Error.FailedCommandIndex != 0 {
+		t.Fatalf("conflict response = %#v", response)
+	}
+	if len(response.Error.Conflicts) != 1 || response.Error.Conflicts[0].CurrentRevision != 2 {
+		t.Fatalf("conflicts = %#v", response.Error.Conflicts)
+	}
+	if records.command.ExpectedRevision != 1 || records.mutateCalls != 1 {
+		t.Fatalf("mutation call = %#v", records)
+	}
+}
+
+func TestMutateRecordsRouteReturnsIdempotencyKeyReused(t *testing.T) {
+	records := &stubRecords{mutateErr: &domain.IdempotencyKeyReusedError{}}
+	server := New(testConfig(), func(context.Context) error { return nil }, Dependencies{
+		Authenticator: fixedAuthenticator{},
+		Catalog:       &stubCatalog{},
+		Records:       records,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/mutate", strings.NewReader(`{
+		"clientMutationId":"mut_00000000000000000000000000",
+		"commands":[{"kind":"createRecord","values":{}}]
+	}`))
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error.Code != "IDEMPOTENCY_KEY_REUSED" {
+		t.Fatalf("error code = %q, body = %s", response.Error.Code, recorder.Body.String())
 	}
 }
 

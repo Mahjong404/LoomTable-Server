@@ -165,6 +165,7 @@ func TestRepositoryEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	firstRecord := mutation.Results[0].Record
+	secondRecord := mutation.Results[1].Record
 	if _, err := recordService.Mutate(ctx, actorID, tableResult.Table.ID, newMutationID(t), []loomrecord.Command{{
 		Kind: "updateRecord", RecordID: firstRecord.ID, ExpectedRevision: firstRecord.Revision,
 		SetPresent: true, Set: map[string]any{tableResult.PrimaryField.ID: "Alpha Avenue"},
@@ -177,6 +178,77 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	}
 	if len(changes.Items) != 1 || changes.Items[0].Kind != "recordUpdated" {
 		t.Fatalf("changes = %#v", changes)
+	}
+
+	replayMutationID := newMutationID(t)
+	replayCommand := []loomrecord.Command{{Kind: "updateRecord", RecordID: secondRecord.ID, ExpectedRevision: secondRecord.Revision, SetPresent: true, Set: map[string]any{
+		tableResult.PrimaryField.ID: "Beta Replay",
+	}}}
+	replayed, err := recordService.Mutate(ctx, actorID, tableResult.Table.ID, replayMutationID, replayCommand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayedAgain, err := recordService.Mutate(ctx, actorID, tableResult.Table.ID, replayMutationID, replayCommand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayedAgain.Results[0].Record.ID != replayed.Results[0].Record.ID || replayedAgain.Results[0].Record.Revision != replayed.Results[0].Record.Revision {
+		t.Fatalf("idempotent replay changed the Record: first=%#v replay=%#v", replayed.Results[0].Record, replayedAgain.Results[0].Record)
+	}
+	_, err = recordService.Mutate(ctx, actorID, tableResult.Table.ID, replayMutationID, []loomrecord.Command{{
+		Kind: "updateRecord", RecordID: secondRecord.ID, ExpectedRevision: secondRecord.Revision, SetPresent: true, Set: map[string]any{tableResult.PrimaryField.ID: "Replay Twice"},
+	}})
+	var reused *domain.IdempotencyKeyReusedError
+	if !errors.As(err, &reused) {
+		t.Fatalf("different request reuse error = %v, want IdempotencyKeyReusedError", err)
+	}
+
+	staleMutationID := newMutationID(t)
+	_, err = recordService.Mutate(ctx, actorID, tableResult.Table.ID, staleMutationID, []loomrecord.Command{{
+		Kind: "updateRecord", RecordID: firstRecord.ID, ExpectedRevision: firstRecord.Revision,
+		SetPresent: true, Set: map[string]any{tableResult.PrimaryField.ID: "Stale Client Value"},
+	}})
+	var stale *loomrecord.ConflictError
+	if !errors.As(err, &stale) {
+		t.Fatalf("stale revision error = %v, want ConflictError", err)
+	}
+	if stale.FailedCommandIndex != 0 || len(stale.Conflicts) != 1 || stale.Conflicts[0].CurrentRevision != firstRecord.Revision+1 {
+		t.Fatalf("stale conflict = %#v", stale)
+	}
+
+	atomicMutationID := newMutationID(t)
+	atomicStart, err := recordService.Changes(ctx, actorID, tableResult.Table.ID, "", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = recordService.Mutate(ctx, actorID, tableResult.Table.ID, atomicMutationID, []loomrecord.Command{
+		{Kind: "updateRecord", RecordID: secondRecord.ID, ExpectedRevision: secondRecord.Revision + 1, SetPresent: true, Set: map[string]any{tableResult.PrimaryField.ID: "Should Not Persist"}},
+		{Kind: "updateRecord", RecordID: firstRecord.ID, ExpectedRevision: firstRecord.Revision, SetPresent: true, Set: map[string]any{tableResult.PrimaryField.ID: "Should Not Persist"}},
+	})
+	if !errors.As(err, &stale) || stale.FailedCommandIndex != 1 {
+		t.Fatalf("atomic conflict = %v, want failed command index 1", err)
+	}
+	rolledBack, err := recordService.Query(ctx, actorID, tableResult.Table.ID, loomrecord.QueryRequest{
+		FilterPresent: true,
+		Filter:        &domain.FilterNode{Kind: "rule", FieldID: tableResult.PrimaryField.ID, Operator: "is", Value: json.RawMessage(`"Should Not Persist"`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rolledBack.Items) != 0 {
+		t.Fatalf("atomic mutation persisted a Record: %#v", rolledBack.Items)
+	}
+	postAtomicChanges, err := recordService.Changes(ctx, actorID, tableResult.Table.ID, atomicStart.NextCursor, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(postAtomicChanges.Items) != 0 {
+		t.Fatalf("atomic mutation emitted changes: %#v", postAtomicChanges.Items)
+	}
+	if _, err := recordService.Mutate(ctx, actorID, tableResult.Table.ID, atomicMutationID, []loomrecord.Command{{
+		Kind: "updateRecord", RecordID: secondRecord.ID, ExpectedRevision: secondRecord.Revision + 1, SetPresent: true, Set: map[string]any{tableResult.PrimaryField.ID: "Retry After Rollback"},
+	}}); err != nil {
+		t.Fatalf("rolled-back clientMutationId could not be retried: %v", err)
 	}
 
 	summary, err := recordService.SummarizeMap(ctx, actorID, mapView.ID)
