@@ -512,7 +512,7 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 	var viewConfiguration *domain.ViewConfigurationRequiredError
 	if errors.As(err, &viewConfiguration) {
 		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "VIEW_CONFIGURATION_REQUIRED", viewConfiguration.Error(), map[string]any{
-			"viewId": viewConfiguration.ViewID, "invalidFieldIds": viewConfiguration.InvalidFieldIDs,
+			"viewId": viewConfiguration.ViewID, "brokenFieldIds": viewConfiguration.InvalidFieldIDs,
 		})
 		return
 	}

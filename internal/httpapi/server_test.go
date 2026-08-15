@@ -618,6 +618,39 @@ func TestMutateRecordsRouteReturnsIdempotencyKeyReused(t *testing.T) {
 	}
 }
 
+func TestViewConfigurationRequiredErrorUsesOpenAPIFieldName(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/v1/views/view_00000000000000000000000000", nil)
+	recorder := httptest.NewRecorder()
+
+	writeDomainError(recorder, request, &domain.ViewConfigurationRequiredError{
+		ViewID:          "view_00000000000000000000000000",
+		InvalidFieldIDs: []string{"fld_00000000000000000000000000"},
+	})
+
+	if recorder.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Error struct {
+			Code    string         `json:"code"`
+			Details map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error.Code != "VIEW_CONFIGURATION_REQUIRED" {
+		t.Fatalf("error code = %q, body = %s", response.Error.Code, recorder.Body.String())
+	}
+	if _, ok := response.Error.Details["invalidFieldIds"]; ok {
+		t.Fatalf("legacy invalidFieldIds key must not be emitted: %s", recorder.Body.String())
+	}
+	brokenFieldIDs, ok := response.Error.Details["brokenFieldIds"].([]any)
+	if !ok || len(brokenFieldIDs) != 1 || brokenFieldIDs[0] != "fld_00000000000000000000000000" {
+		t.Fatalf("brokenFieldIds = %#v, body = %s", response.Error.Details["brokenFieldIds"], recorder.Body.String())
+	}
+}
+
 func TestReadyzReportsDependencyFailure(t *testing.T) {
 	server := New(testConfig(), func(context.Context) error { return errors.New("database down") })
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
