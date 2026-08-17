@@ -43,6 +43,8 @@ P1 默认启用 Attachment capability；可以通过配置关闭。Managed Attac
 - Attachment 文件卷（即使当前 capability 未启用，也作为预留卷）必须持久化。
 - Secret 不写入日志。
 - 生产远程部署应使用 HTTPS 或可信内网通道。
+- v0.1.0 当前部署使用 Nginx 终止 TLS，并将 `https://loomtable.mahjong404.cn` 根路径反代到宿主机回环地址 `127.0.0.1:31201`；已验收 `/healthz`、`/readyz`、`/v1/meta` 和 Plugin 公网认证。部署环境应显式设置 `LOOMTABLE_SERVER_VERSION=v0.1.0`。
+- Map live smoke 的第三方瓦片结果不扩展 Server 能力边界：Plugin 直连天地图必须使用浏览器端应用 Key，仓库不记录具体凭据。
 
 ## Actor 和 Token 初始化
 
