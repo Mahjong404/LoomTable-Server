@@ -384,7 +384,7 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 
 ### P0 合并门槛
 
-Server P0 PR 仅在没有待定合同标记，全部 P0 路由和业务模块、Migration、认证管理、备份恢复、OpenAPI Contract Test、PostgreSQL 集成测试、20k Query/Map 基准、Docker Smoke/Backup Restore、Go Test/Vet 全部通过后转为 Ready。随后通过 GitHub PR 合并到 `main` 并删除开发分支；在此之前保持 Draft，不提前合并设计骨架。
+历史发布门禁：Server P0 PR 只有在没有待定合同标记，且全部 P0 路由和业务模块、Migration、认证管理、备份恢复、OpenAPI Contract Test、PostgreSQL 集成测试、Query/Map 基准、Docker Smoke/Backup Restore、Go Test/Vet 全部通过后，才可转为 Ready 并通过 GitHub PR 合并到 `main`。该门禁已用于 v0.1.0 release point `ef0c6bd751642f4a604fe1bf88980f64e39dd992`；当前文档同步提交位于其后的 `main` 文档主线上。
 
 ## 16. Q171–Q185 已确认的实现边界
 

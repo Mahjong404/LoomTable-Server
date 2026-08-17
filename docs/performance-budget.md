@@ -74,7 +74,7 @@
 
 ## P0 验收门槛
 
-20k Query/Map 基准是 Server P0 PR 转为 Ready 的必要条件，不是可延后的优化项。还必须通过 OpenAPI Contract、PostgreSQL Integration、Docker Compose Smoke、完整 Backup/Restore、Go Test/Vet；未达到任一门槛时 P0 PR 保持 Draft，不合并到 `main`。
+历史 P0 发布门禁：20k Query/Map 基准、OpenAPI Contract、PostgreSQL Integration、Docker Compose Smoke、完整 Backup/Restore 与 Go Test/Vet 均须通过后，P0 PR 才能转为 Ready 并合并到 `main`。该门禁已满足并用于 v0.1.0 release point `ef0c6bd751642f4a604fe1bf88980f64e39dd992`；本文件不把已完成门禁描述为当前未发布状态。
 
 参考环境固定为 4 vCPU、8 GiB、本地 Docker Compose 和热缓存。每项先预热 5 次，再测量 30 次：
 
