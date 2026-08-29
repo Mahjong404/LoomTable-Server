@@ -38,7 +38,7 @@
 - 该 PR 将 `VIEW_CONFIGURATION_REQUIRED` 的公开字段对齐为 `brokenFieldIds`，并增加 wire-shape 测试；PR 记录明确没有其他公开 wire drift。
 - PR CI：[run 31903906320](https://github.com/Mahjong404/LoomTable-Server/actions/runs/31903906320) 成功；合并后的 main CI：[run 31903957339](https://github.com/Mahjong404/LoomTable-Server/actions/runs/31903957339) 成功。
 - [PR #6](https://github.com/Mahjong404/LoomTable-Server/pull/6) 合并为 `9eec4440e5b8e76771299bac58f7ab4f949cb60c`，记录 v0.1.0 部署验收；PR CI [run 32073685593](https://github.com/Mahjong404/LoomTable-Server/actions/runs/32073685593) 与 main CI [run 32073757640](https://github.com/Mahjong404/LoomTable-Server/actions/runs/32073757640) 均成功。
-- [PR #7](https://github.com/Mahjong404/LoomTable-Server/pull/7) 合并为当前 main `e02f055fecddc0852085dc5a71b4eb136860774a`，澄清 P0 release gates 为历史验收记录；PR CI [run 32074877745](https://github.com/Mahjong404/LoomTable-Server/actions/runs/32074877745) 与 main CI [run 32074948440](https://github.com/Mahjong404/LoomTable-Server/actions/runs/32074948440) 均成功。
+- [PR #7](https://github.com/Mahjong404/LoomTable-Server/pull/7) 合并提交为 `e02f055fecddc0852085dc5a71b4eb136860774a`，当时成为 main，澄清 P0 release gates 为历史验收记录；随后 PR #8 docs-only merge 形成当前 main `41a403cae63e75e5b523a1a10c2318e43834082a`。PR CI [run 32074877745](https://github.com/Mahjong404/LoomTable-Server/actions/runs/32074877745) 与当时的 main CI [run 32074948440](https://github.com/Mahjong404/LoomTable-Server/actions/runs/32074948440) 均成功。
 
 ### P1.5 Server contract audit / freeze
 
