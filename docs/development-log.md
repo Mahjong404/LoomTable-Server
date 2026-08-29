@@ -4,10 +4,11 @@
 
 ## 当前基线
 
-- 当前 `main`：[`e02f055`](https://github.com/Mahjong404/LoomTable-Server/commit/e02f055fecddc0852085dc5a71b4eb136860774a)。
+- 当前 `main`（PR #8 docs-only merge 后的文档主线）：[`41a403ca`](https://github.com/Mahjong404/LoomTable-Server/commit/41a403cae63e75e5b523a1a10c2318e43834082a)。PR #8 是 docs-only merge；runtime/API/OpenAPI/数据库/部署均未变。
 - v0.1.0 Release：[`v0.1.0`](https://github.com/Mahjong404/LoomTable-Server/releases/tag/v0.1.0)，发布目标为 `ef0c6bd751642f4a604fe1bf88980f64e39dd992`。
 - OpenAPI source：[`ef0c6bd`](https://github.com/Mahjong404/LoomTable-Server/commit/ef0c6bd751642f4a604fe1bf88980f64e39dd992)；当前 main 与该 source 的 `docs/api/openapi.yaml` blob SHA 均为 `92b416993ce6be4664d8bee783f2dcaed36e05b5`。
-- 当前 main CI：[run 32074948440](https://github.com/Mahjong404/LoomTable-Server/actions/runs/32074948440) 成功，包含 Go tests and vet 与 Docker build and Compose validation。
+- PR #8 新增并索引本开发日志：新增 `docs/development-log.md`，并在 `docs/README.md` 建立索引；PR #8 仅变更 Markdown，OpenAPI blob 未变。
+- PR #8 CI：[run 33259007295](https://github.com/Mahjong404/LoomTable-Server/actions/runs/33259007295) 成功；PR #8 合并后的 main CI：[run 33259077170](https://github.com/Mahjong404/LoomTable-Server/actions/runs/33259077170) 成功。
 
 ## 阶段记录
 
@@ -42,7 +43,7 @@
 ### P1.5 Server contract audit / freeze
 
 - P1.5 的 Server 工作是合同核验与 stable-support 决策，不是新的 Server 实现交付。
-- 核验基线为 main `e02f055fecddc0852085dc5a71b4eb136860774a` 与 OpenAPI source `ef0c6bd751642f4a604fe1bf88980f64e39dd992`；当前 OpenAPI blob 未漂移。
+- 核验基线为 release-gate/runtime stable-support freeze 的 `e02f055fecddc0852085dc5a71b4eb136860774a` 与 OpenAPI source `ef0c6bd751642f4a604fe1bf88980f64e39dd992`；`e02f055` 是 freeze 基线，不是当前 docs main；当前 main 为 PR #8 docs-only merge 后的 `41a403cae63e75e5b523a1a10c2318e43834082a`。当前 OpenAPI blob 未漂移。
 - 已发布的 `records/query`、`records/mutate`、`changes`、Mutation/Conflict、幂等、revision、value validation 与 opaque change cursor 合同继续有效。
 - P1.5 没有 Server 代码、API、OpenAPI、数据库或部署行为变更，也没有对应的 Server 实现 PR。Server 保持冻结，Plugin 只消费已发布合同。
 - 该条目不应被解读为新增能力、接口承诺或 Server PR 完成。
@@ -63,4 +64,4 @@
 4. 实际部署的 Server commit、是否经过反向代理，以及 timeout 属于连接、TLS 还是 HTTP 响应阶段。
 5. 证明现象无法由 URL、认证、路径、请求体、代理或客户端重试/超时处理解释。
 
-在证据满足前，Server 保持 `e02f055` / `ef0c6bd` stable-support freeze。
+在证据满足前，Server 继续以 `e02f055` / `ef0c6bd` 作为 release-gate/runtime stable-support freeze 基线；该 freeze 基线不是当前 docs main，当前 main（PR #8 docs-only merge 后）为 `41a403ca`。
