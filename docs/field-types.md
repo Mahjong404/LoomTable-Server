@@ -170,10 +170,11 @@ Tag 不是独立 Field Type：
 
 - Field ID 永久稳定。
 - 改名不改变 Field ID 和 Cell 值。
+- Field 可以携带可选 `description`，最多 200 个 Unicode 码点，执行 Trim、NFC 和控制字符拒绝；空描述规范化为省略。
 - 删除先进入回收站或标记为 deleted。
-- P0 不允许类型变更；只允许改名和不改变值语义的 Config 完整替换。Text、LongText、Number、Checkbox、Date、URL、Location 的 Config 固定为 `{}`；Select/MultiSelect 只接受 Option 生命周期配置。
+- 类型变更通过 `convert-preview` + `convert` 两段合同开放：Preview 返回兼容性和可选 `mode` 列表及影响统计，Convert 携带绑定的 previewToken 与选定 `mode` 在单一事务中更新 Field Definition 并重写全部 Record 值。text→select 使用 `distinctOptions` 模式按去重后的现有文本值创建 Option（受 500 Active Option 上限约束）；longText→text 使用 `dropOverlong` 模式丢弃超过 10,000 码点的值；不兼容的值计入 lost，不静默变为空串或 0。`mode` 是请求的显式选择，Server 不自动选择转换语义。schema-only 转换不增加 Record Revision，但写入 `schemaChanged` Change。
+- Text、LongText、Number、Checkbox、Date、URL、Location 的 Config 固定为 `{}`；Select/MultiSelect 只接受 Option 生命周期配置。
 - Field、CreateFieldRequest 和 UpdateFieldRequest 使用 `type` 判别的 P0 Field 联合类型；更新请求必须回显不可变的 `type`。每种 Config 都拒绝未声明属性，不能让任意 JSON 穿透到领域层。
 - `Field.schemaVersion` 标识服务端规范化配置的 Schema 版本；版本不嵌套在 Config 对象中。
-- 后续开放类型变更时，必须先提供迁移预览，并把无法转换的值放入明确的迁移错误列表。
 - 未识别的未来 Field Type 不得被静默转换为 Text。
 

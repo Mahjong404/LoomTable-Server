@@ -56,6 +56,7 @@
 - Map View 使用服务端视口查询返回最多 500 个 Map Point/Map Cluster；Server 自适应聚类并完整代表视口内结果，不能下载完整匹配集、静默截断或一次创建所有复杂 Popup。
 - Map Point 只携带 Record ID、坐标和 Primary Field 文本；详情按需直查。全局计数和 Data Bounds 由独立 Summary 查询聚合，只在首次打开、Filter 变化或显式“适配全部”时请求；普通平移/缩放不重复全局聚合，也不把完整 Record 集传给 Plugin。
 - P0 不依赖 PostGIS；Location 视口查询从 JSONB 安全提取 WGS 84 数值并在应用层聚类。先用 XL 20k 基准验证，再为已测出的热点增加表达式或投影索引，而不是为所有 Field 盲目建索引。
+- Distinct Values（`values/query`）与记录聚合（`records/aggregate`）复用同一查询投影和 Filter 编译；`unfilteredTotal` 只在首页面与 `totalCount` 同事务计算。Record Move 通过取锚点中点只写一行 `position`，不做全表重编号。
 
 ## 回归场景
 

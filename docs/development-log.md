@@ -48,6 +48,16 @@
 - P1.5 没有 Server 代码、API、OpenAPI、数据库或部署行为变更，也没有对应的 Server 实现 PR。Server 保持冻结，Plugin 只消费已发布合同。
 - 该条目不应被解读为新增能力、接口承诺或 Server PR 完成。
 
+### P1.5 Server 能力切片（本地提交，尚未推送）
+
+- 依据 Plugin 仓库 `docs/local/ux-gap-2026-09-17/12-server-requirements.md` 的 S1–S8 需求，Server 合同按只加不破演进；以下提交位于本地 `main`，均未推送远端、无关联 PR 或 CI run。
+- `775d674` 字段级历史（S1）：`changes` 持久化字段级 before/after diff 与 `primary_field_text`；新增 `GET /v1/tables/{tableId}/history` 倒序分页端点，支持 recordId/kind/fieldId/actorId/时间范围过滤。
+- `0cbabd7` 字段描述与类型转换（S2/S3）：Field 增加可选 `description`；`convert-preview` + `convert` 两段合同执行模式选择的原子类型转换，text→select 自动建 Option，longText→text 超长计入 lost；migration 004。
+- `919488c` 查询增强（S4–S6）：`POST .../values/query` distinct 值（剔除自过滤、Option rank 排序、emptyCount）、QueryResult 首页面 `unfilteredTotal`、`POST .../records/aggregate`。
+- `234e60f` 手动排序与复制（S7/S8）：`records.position` 持久化排序键（migration 005）、`POST .../records/{id}/move` 与 `POST .../records/{id}/duplicate`、`recordMoved` Change kind、GridViewConfig `manualSort`。
+- 验证：`go test ./...`、`go vet ./...`、OpenAPI 合同测试与 PostgreSQL 集成测试（含 history、转换、distinct、aggregate、move/duplicate 端到端断言）均通过；集成测试经 SSH 隧道在隔离测试库执行，不接触生产数据。
+- 本节提交在推送并形成 PR/Release 前不更新“当前基线”与 Stable-support 边界；Plugin 仍以已发布 OpenAPI 与响应合同为准。
+
 ## Stable-support 边界
 
 - Server 当前只维护已发布 v0.1.0 合同；不为 Plugin 的 UI、scheduler、error split、queue 展示或 Map/Location wiring 新增接口。

@@ -80,6 +80,10 @@ _Avoid_: data format, widget type
 An independently identifiable item of data in a Table.
 _Avoid_: row, item line
 
+**Record Position**:
+The persisted ordering key that defines a Record's manual place inside one Table; moving a Record changes only this key, never its Revision.
+_Avoid_: row index, sort rank, record order value
+
 **Cell**:
 The value of one Field for one Record.
 _Avoid_: field value slot
@@ -151,6 +155,14 @@ _Avoid_: foreign key field, link text
 **Computed Field**:
 A read-only Field whose value is derived from other data.
 _Avoid_: formula column, calculated cell
+
+**Field Type Conversion**:
+A previewed, mode-selected rewrite of a Field's type and every stored Cell value, executed atomically by the Server.
+_Avoid_: type cast, in-place edit, silent retype
+
+**Distinct Values**:
+The Server-computed set of unique Cell values for one Field, with counts, used to populate filter and option pickers.
+_Avoid_: unique column, enum list
 
 ### Change and deployment concepts
 

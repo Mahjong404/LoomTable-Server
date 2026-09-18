@@ -45,7 +45,8 @@ record
 ├── deleted_at
 ├── values JSONB
 ├── query_values JSONB（内部派生，不进入 API）
-└── search_text TEXT（内部派生，不进入 API）
+├── search_text TEXT（内部派生，不进入 API）
+└── position DOUBLE PRECISION（手动排序键，不进入 API）
 ```
 
 示例值：
@@ -76,7 +77,9 @@ record
 
 P0 的 `date` 值是 `YYYY-MM-DD` 形式的纯日期，不携带时区；日期时间值属于后续字段能力。
 
-P0 不执行 Field Type 迁移。类型变更必须等迁移预览和错误集合同步定义后再开放。
+`position` 是 Table 内单调排序的浮点排序键：新 Record 取当前最大值加 1024 步长追加到末尾；Move 通过取前后锚点中点重定位，省略全部锚点时移动到末尾。位置变化不增加 Record Revision，但写入 `recordMoved` Change。Duplicate 复制全部 Cell 值并追加到末尾；Attachment 值共享同一 AttachmentRef 元数据，不复制二进制内容。
+
+Field Type 转换通过两步合同开放：`POST .../fields/{fieldId}/convert-preview` 先返回可选转换模式与影响统计，`POST .../fields/{fieldId}/convert` 携带绑定的 previewToken 与选定 `mode` 执行。转换在校验后的单一事务中更新 Field Definition 并重写全部 Record 值；text→select 按去重后的现有文本值自动创建 Option，longText→text 将超过 10,000 码点的值计入 lost 并丢弃。Record Revision 不因 schema-only 转换增加。
 
 ## Personal Actor 和 Token
 

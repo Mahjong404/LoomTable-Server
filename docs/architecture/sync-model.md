@@ -66,7 +66,9 @@ P0 的普通 Record Query Cursor 是有效期 30 分钟的不透明无状态 Key
 
 普通 Cursor 与 Map Cluster Token 使用 PostgreSQL 持久化的 32 字节随机 Key、版本化 Base64URL Envelope 和按用途隔离的 HMAC-SHA256。服务端不把解码后的 Token 载荷放入错误、响应或日志。
 
-QueryResult 必须返回 `hasMore`，仅在有续页时返回 `nextCursor`；第一页返回精确 `totalCount`，续页不重复计算。每页的 Records、`changeCursor` 和首页面 Count 来自同一个短期只读 Repeatable Read Transaction，但事务不跨请求存活。Filter 最大深度 8、总节点 100，Sort 最多 10 个唯一 Field，Projection 最多 500 个唯一 Field，Search 最长 500 码点，JSON 请求体最大 8 MiB。
+QueryResult 必须返回 `hasMore`，仅在有续页时返回 `nextCursor`；第一页返回精确 `totalCount` 和忽略 Filter/Search 的 `unfilteredTotal`，续页不重复计算。每页的 Records、`changeCursor` 和首页面 Count 来自同一个短期只读 Repeatable Read Transaction，但事务不跨请求存活。Filter 最大深度 8、总节点 100，Sort 最多 10 个唯一 Field，Projection 最多 500 个唯一 Field，Search 最长 500 码点，JSON 请求体最大 8 MiB。
+
+Record 手动排序使用 `POST .../records/{recordId}/move` 与 `POST .../records/{recordId}/duplicate`，不属于 Mutation Command，也不携带 `expectedRevision`：Move 只改变持久化排序键并写入 `recordMoved` Change，Duplicate 以 `recordCreated` Change 追加新 Record。Grid View 通过 `manualSort` 配置选择按 `position` 排序；Distinct Values 查询（`POST .../values/query`）与聚合（`POST .../records/aggregate`）使用带 Filter 的 POST 请求体，返回 Table 作用域的 `changeCursor` 供调用方对齐。
 
 Table、Field、View List 与 Record Query 默认只返回 `active` 对象；调用方可显式请求 `deleted` 或 `all` 以发现回收站内容。Record Lifecycle Scope 是 Cursor 绑定的一部分，不能在续页时改变。
 
@@ -90,10 +92,14 @@ Change 至少包含：
 - Change ID。
 - Table ID。
 - Record ID 或 Schema Object ID。
-- Change 类型。
+- Change 类型（`recordCreated`、`recordUpdated`、`recordDeleted`、`recordRestored`、`recordMoved`、`schemaChanged`、`viewChanged`）。
 - 新 Revision。
 - Actor ID（Personal 模式也保留字段）。
 - 创建时间。
+
+`recordUpdated` Change 另外携带字段级 before/after diff（`fields`）和变更时的 Primary Field 显示文本（`primaryFieldText`），供客户端渲染精确历史；早于该能力写入的 Change 不保证存在这些成员。
+
+`GET .../tables/{tableId}/history` 是与 `pullChanges` 并存的倒序历史端点：默认返回最新优先的完整 Change 序列，支持按 recordId、kind、fieldId、actorId 和时间范围过滤，使用绑定过滤条件的独立不透明 Cursor 分页，并随页返回 Table `changeCursor` 供与增量拉取对齐。
 
 ## Conflict
 

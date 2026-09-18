@@ -49,7 +49,7 @@ QueryRequest
 → Sort 和 Cursor 条件
 → Projection
 → Record JSONB 解码
-→ QueryResult + hasMore + nextCursor（仅续页存在）+ changeCursor + 首页面 totalCount
+→ QueryResult + hasMore + nextCursor（仅续页存在）+ changeCursor + 首页面 totalCount/unfilteredTotal
 ```
 
 约束：
@@ -90,6 +90,8 @@ Record 更新使用 `set + unsetFieldIds`：`set` 中出现的 Field 被写入�
 - Relation 查询索引和 Record Mutation。
 - Attachment 引用与 Attachment 元数据。
 - Schema 变更与 Change Log。
+- Field 类型转换的 Field Definition 更新与全部 Record 值重写。
+- Record position 更新与 `recordMoved` Change；Duplicate 的新 Record 与 `recordCreated` Change。
 
 文件二进制写入和数据库事务之间使用可恢复的上传状态，不能在数据库已引用文件但文件尚未完成时报告成功。
 
@@ -98,7 +100,7 @@ Record 更新使用 `set + unsetFieldIds`：`set` 中出现的 Field 被写入�
 - Field ID 永久稳定。
 - 字段改名只更新名称。
 - Field 更新是顶层 PATCH：省略 `name` 或 `config` 表示保留该顶层成员；一旦提供 `config`，它就是完整替换，不是 JSON Merge Patch。Server 校验并规范化后返回完整 Field。
-- P0 不开放类型变更；迁移预览、迁移 Token 和无法转换值的错误集合都属于后续能力。
+- 类型变更通过 `convert-preview` + `convert` 两段合同开放：Preview 返回每对类型的可选 `mode` 与影响统计，Convert 携带绑定的 previewToken 与选定 `mode` 在单一事务中更新 Field Definition 并重写 Record 值；previewToken 绑定 Field、目标类型、Revision 和统计，过期或不匹配返回明确错误。
 - 删除 Field 先软删除。
 - 未知 Field Type 不得静默转换为 Text。
 - 迁移记录 Server Schema Version。
@@ -131,6 +133,8 @@ Change Log 用于：
 - 审计基础。
 
 第一阶段不要求完整事件溯源。Change 是持久化变化索引，不替代当前 Record 状态。
+
+`recordUpdated` Change 持久化字段级 before/after diff 与变更时的 Primary Field 显示文本；`GET /tables/{tableId}/history` 以最新优先返回完整序列，支持 recordId/kind/fieldId/actorId/时间范围过滤。`recordMoved` 表示 Record position 变化（Move 或手动排序），不携带字段 diff，Record Revision 保持不变。
 
 ## 9. 认证和安全
 
