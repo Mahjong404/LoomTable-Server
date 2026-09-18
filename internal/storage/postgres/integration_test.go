@@ -179,6 +179,70 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if len(changes.Items) != 1 || changes.Items[0].Kind != "recordUpdated" {
 		t.Fatalf("changes = %#v", changes)
 	}
+	if len(changes.Items[0].Fields) != 1 || changes.Items[0].Fields[0].FieldID != tableResult.PrimaryField.ID ||
+		string(changes.Items[0].Fields[0].Before) != `"Alpha Road"` || string(changes.Items[0].Fields[0].After) != `"Alpha Avenue"` {
+		t.Fatalf("change field diff = %#v", changes.Items[0].Fields)
+	}
+
+	history, err := recordService.History(ctx, actorID, tableResult.Table.ID, loomrecord.HistoryRequest{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history.Items) < 2 || history.Items[0].Kind != "recordUpdated" {
+		t.Fatalf("history = %#v", history)
+	}
+	for index := 1; index < len(history.Items); index++ {
+		if history.Items[index].Sequence >= history.Items[index-1].Sequence {
+			t.Fatalf("history is not descending: %#v", history.Items)
+		}
+	}
+	updatedChange := history.Items[0]
+	if len(updatedChange.Fields) != 1 || updatedChange.Fields[0].FieldID != tableResult.PrimaryField.ID ||
+		string(updatedChange.Fields[0].Before) != `"Alpha Road"` || string(updatedChange.Fields[0].After) != `"Alpha Avenue"` ||
+		updatedChange.PrimaryFieldText != "Alpha Avenue" {
+		t.Fatalf("history entry = %#v", updatedChange)
+	}
+	var createdChange *loomrecord.Change
+	for index := range history.Items {
+		if history.Items[index].Kind == "recordCreated" && history.Items[index].RecordID == mutation.Results[2].Record.ID {
+			createdChange = &history.Items[index]
+		}
+	}
+	if createdChange == nil || createdChange.PrimaryFieldText != "Gamma" || len(createdChange.Fields) != 0 {
+		t.Fatalf("recordCreated history entry = %#v", createdChange)
+	}
+	filtered, err := recordService.History(ctx, actorID, tableResult.Table.ID, loomrecord.HistoryRequest{
+		RecordID: firstRecord.ID, Kind: "recordUpdated", FieldID: tableResult.PrimaryField.ID, Limit: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered.Items) != 1 || filtered.Items[0].RecordID != firstRecord.ID {
+		t.Fatalf("filtered history = %#v", filtered.Items)
+	}
+	unrelatedField, err := recordService.History(ctx, actorID, tableResult.Table.ID, loomrecord.HistoryRequest{
+		Kind: "recordUpdated", FieldID: selectField.ID, Limit: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unrelatedField.Items) != 0 {
+		t.Fatalf("unrelated field history = %#v", unrelatedField.Items)
+	}
+	paged, err := recordService.History(ctx, actorID, tableResult.Table.ID, loomrecord.HistoryRequest{Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paged.Items) != 1 || !paged.HasMore || paged.NextCursor == "" {
+		t.Fatalf("history first page = %#v", paged)
+	}
+	rest, err := recordService.History(ctx, actorID, tableResult.Table.ID, loomrecord.HistoryRequest{Limit: 100, Cursor: paged.NextCursor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rest.Items) != len(history.Items)-1 || rest.Items[0].Sequence >= paged.Items[0].Sequence {
+		t.Fatalf("history second page = %#v", rest.Items)
+	}
 
 	replayMutationID := newMutationID(t)
 	replayCommand := []loomrecord.Command{{Kind: "updateRecord", RecordID: secondRecord.ID, ExpectedRevision: secondRecord.Revision, SetPresent: true, Set: map[string]any{
@@ -298,4 +362,3 @@ func newMutationID(t *testing.T) string {
 func int64Pointer(value int64) *int64 {
 	return &value
 }
-

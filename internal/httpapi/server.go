@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Mahjong404/LoomTable-Server/internal/auth"
 	loomattachment "github.com/Mahjong404/LoomTable-Server/internal/attachment"
+	"github.com/Mahjong404/LoomTable-Server/internal/auth"
 	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 	"github.com/Mahjong404/LoomTable-Server/internal/config"
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
@@ -60,6 +60,7 @@ type Records interface {
 	Get(context.Context, string, string) (loomrecord.Record, error)
 	Query(context.Context, string, string, loomrecord.QueryRequest) (loomrecord.QueryResult, error)
 	Changes(context.Context, string, string, string, int) (loomrecord.ChangePage, error)
+	History(context.Context, string, string, loomrecord.HistoryRequest) (loomrecord.HistoryPage, error)
 	QueryMap(context.Context, string, string, loomrecord.MapQueryRequest) (loomrecord.MapQueryResult, error)
 	SummarizeMap(context.Context, string, string) (loomrecord.MapSummaryResult, error)
 	QueryMapClusterRecords(context.Context, string, string, loomrecord.MapClusterRecordsRequest) (loomrecord.QueryResult, error)
@@ -316,4 +317,3 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
-

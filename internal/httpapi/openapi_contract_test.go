@@ -56,6 +56,7 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 		{"queryRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/query", `{}`, 200},
 		{"mutateRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/mutate", `{"clientMutationId":"mut_00000000000000000000000000","commands":[{"kind":"createRecord","values":{}}]}`, 200},
 		{"pullChanges", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/changes", "", 200},
+		{"pullHistory", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/history", "", 200},
 		{"initializeAttachment", http.MethodPost, "/v1/attachments/init", `{}`, 501},
 		{"getAttachment", http.MethodGet, "/v1/attachments/att_00000000000000000000000000", "", 501},
 		{"deleteAttachment", http.MethodDelete, "/v1/attachments/att_00000000000000000000000000", "", 501},

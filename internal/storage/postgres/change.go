@@ -3,11 +3,37 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
 	loomrecord "github.com/Mahjong404/LoomTable-Server/internal/record"
 )
+
+func scanChange(rows *sql.Rows) (loomrecord.Change, error) {
+	var item loomrecord.Change
+	var recordID, objectID sql.NullString
+	var fieldsJSON []byte
+	var primaryText sql.NullString
+	if err := rows.Scan(&item.Sequence, &item.ID, &item.Kind, &item.TableID, &recordID, &objectID, &item.Revision, &item.ActorID, &item.OccurredAt, &fieldsJSON, &primaryText); err != nil {
+		return loomrecord.Change{}, fmt.Errorf("scan Change: %w", err)
+	}
+	if recordID.Valid {
+		item.RecordID = recordID.String
+	}
+	if objectID.Valid {
+		item.ObjectID = objectID.String
+	}
+	if len(fieldsJSON) > 0 {
+		if err := json.Unmarshal(fieldsJSON, &item.Fields); err != nil {
+			return loomrecord.Change{}, fmt.Errorf("decode Change field diff: %w", err)
+		}
+	}
+	if primaryText.Valid {
+		item.PrimaryFieldText = primaryText.String
+	}
+	return item, nil
+}
 
 func (r *Repository) ChangeTail(ctx context.Context, actorID, tableID string) (int64, error) {
 	if r == nil || r.db == nil {
@@ -60,7 +86,7 @@ func (r *Repository) PullChanges(ctx context.Context, actorID, tableID string, a
 		return loomrecord.StoredChangePage{}, &domain.CursorExpiredError{}
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT change_sequence, id, kind, table_id, record_id, object_id, revision, actor_id, occurred_at
+		SELECT change_sequence, id, kind, table_id, record_id, object_id, revision, actor_id, occurred_at, fields, primary_field_text
 		FROM changes
 		WHERE table_id = $1 AND change_sequence > $2
 		ORDER BY change_sequence ASC
@@ -72,16 +98,9 @@ func (r *Repository) PullChanges(ctx context.Context, actorID, tableID string, a
 	defer rows.Close()
 	items := make([]loomrecord.Change, 0, limit+1)
 	for rows.Next() {
-		var item loomrecord.Change
-		var recordID, objectID sql.NullString
-		if err := rows.Scan(&item.Sequence, &item.ID, &item.Kind, &item.TableID, &recordID, &objectID, &item.Revision, &item.ActorID, &item.OccurredAt); err != nil {
-			return loomrecord.StoredChangePage{}, fmt.Errorf("scan Change: %w", err)
-		}
-		if recordID.Valid {
-			item.RecordID = recordID.String
-		}
-		if objectID.Valid {
-			item.ObjectID = objectID.String
+		item, err := scanChange(rows)
+		if err != nil {
+			return loomrecord.StoredChangePage{}, err
 		}
 		items = append(items, item)
 	}

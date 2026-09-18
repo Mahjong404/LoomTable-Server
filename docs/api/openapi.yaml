@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: LoomTable Server API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     LoomTable Server 的初版 REST API 合同。
     Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
@@ -1162,6 +1162,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChangePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/history:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Changes]
+      operationId: pullHistory
+      description: Time-descending archived history of Table Changes with field-level diffs. Without a cursor the first page starts at the newest retained Change; pagination follows nextCursor until hasMore is false. The cursor binds to the actor, table, and the complete filter set; changing filters requires a fresh first page. Change retention still applies; a cursor reaching below the retention watermark returns CURSOR_EXPIRED.
+      parameters:
+        - name: recordId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/RecordId'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, schemaChanged, viewChanged]
+        - name: fieldId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/FieldId'
+        - name: actorId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ActorId'
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            description: Inclusive lower bound on occurredAt.
+        - name: until
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            description: Inclusive upper bound on occurredAt.
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: History page in descending change order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryPage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -3059,6 +3135,17 @@ components:
           description: Table-scoped opaque Change Cursor. The current default retention is 30 days; without a cursor the server returns the current tail and an empty page.
         hasMore: { type: boolean }
 
+    FieldChange:
+      type: object
+      description: Field-level diff entry for a recordUpdated Change. A missing before member means the value was unset; a missing after member means the value became unset. An explicit null marks a cleared value.
+      required: [fieldId]
+      properties:
+        fieldId: { $ref: '#/components/schemas/FieldId' }
+        before:
+          description: Canonical cell value before the change.
+        after:
+          description: Canonical cell value after the change.
+
     Change:
       type: object
       required: [id, kind, tableId, revision, occurredAt]
@@ -3078,6 +3165,30 @@ components:
         revision: { type: integer }
         actorId: { $ref: '#/components/schemas/ActorId' }
         occurredAt: { type: string, format: date-time }
+        fields:
+          type: array
+          description: Field-level diff applied by a recordUpdated change. Omitted for other change kinds and for changes recorded before field diffs existed.
+          items:
+            $ref: '#/components/schemas/FieldChange'
+        primaryFieldText:
+          type: string
+          description: Display text of the Record's primary Field at the time of the change. Present on Record-scoped changes when the primary value is non-empty.
+
+    HistoryPage:
+      type: object
+      required: [items, hasMore, changeCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Change'
+        nextCursor:
+          type: string
+          description: Opaque history cursor bound to the actor, table, and filter set. Omitted when hasMore is false.
+        hasMore: { type: boolean }
+        changeCursor:
+          type: string
+          description: Table-scoped opaque Change Cursor captured when the page was read, for aligning with pullChanges.
 
     InitializeAttachmentRequest:
       type: object

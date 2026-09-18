@@ -321,6 +321,15 @@ func (s *Server) table(w http.ResponseWriter, r *http.Request) {
 		s.changes(w, r, tableID)
 		return
 	}
+	if strings.HasSuffix(trimmed, "/history") {
+		tableID := strings.TrimSuffix(trimmed, "/history")
+		if tableID == "" || strings.Contains(tableID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.history(w, r, tableID)
+		return
+	}
 	if strings.HasSuffix(trimmed, "/restore") {
 		tableID := strings.TrimSuffix(trimmed, "/restore")
 		if tableID == "" || strings.Contains(tableID, "/") || r.Method != http.MethodPost {

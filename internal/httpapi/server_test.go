@@ -80,6 +80,12 @@ func (s *stubRecords) Changes(_ context.Context, actorID, tableID, _ string, _ i
 	return loomrecord.ChangePage{Items: []loomrecord.Change{}, NextCursor: "v1.change.payload.signature", HasMore: false}, nil
 }
 
+func (s *stubRecords) History(_ context.Context, actorID, tableID string, _ loomrecord.HistoryRequest) (loomrecord.HistoryPage, error) {
+	s.actorID = actorID
+	s.tableID = tableID
+	return loomrecord.HistoryPage{Items: []loomrecord.Change{}, HasMore: false, ChangeCursor: "v1.change.payload.signature"}, nil
+}
+
 func (s *stubRecords) QueryMap(_ context.Context, actorID, viewID string, request loomrecord.MapQueryRequest) (loomrecord.MapQueryResult, error) {
 	s.actorID = actorID
 	s.tableID = viewID

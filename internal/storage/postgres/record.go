@@ -83,9 +83,9 @@ func (r *Repository) MutateRecords(
 		case "updateRecord":
 			result, err = applyUpdateRecord(ctx, tx, actorID, tableID, clientMutationID, index, command, fields)
 		case "deleteRecord":
-			result, err = applyRecordLifecycle(ctx, tx, actorID, tableID, clientMutationID, index, command, true)
+			result, err = applyRecordLifecycle(ctx, tx, actorID, tableID, clientMutationID, index, command, fields, true)
 		case "restoreRecord":
-			result, err = applyRecordLifecycle(ctx, tx, actorID, tableID, clientMutationID, index, command, false)
+			result, err = applyRecordLifecycle(ctx, tx, actorID, tableID, clientMutationID, index, command, fields, false)
 		default:
 			err = domain.NewValidationError(domain.ValidationIssue{Path: fmt.Sprintf("/commands/%d/kind", index), Code: "format", Message: "unsupported mutation command"})
 		}
@@ -188,7 +188,7 @@ func applyCreateRecord(
 	if err != nil {
 		return loomrecord.CommandResult{}, err
 	}
-	if err := insertRecordChange(ctx, tx, actorID, created, "recordCreated"); err != nil {
+	if err := insertRecordChange(ctx, tx, actorID, created, "recordCreated", nil, primaryFieldText(created.Values, fields)); err != nil {
 		return loomrecord.CommandResult{}, err
 	}
 	return loomrecord.CommandResult{Index: index, Status: "applied", Record: created}, nil
@@ -224,11 +224,15 @@ func applyUpdateRecord(
 	if reflect.DeepEqual(values, current.Values) {
 		return loomrecord.CommandResult{Index: index, Status: "unchanged", Record: current}, nil
 	}
+	fieldChanges, err := loomrecord.DiffRecordValues(current.Values, values)
+	if err != nil {
+		return loomrecord.CommandResult{}, err
+	}
 	updated, err := updateRecordValues(ctx, tx, current.ID, values, queryValues, searchText)
 	if err != nil {
 		return loomrecord.CommandResult{}, err
 	}
-	if err := insertRecordChange(ctx, tx, actorID, updated, "recordUpdated"); err != nil {
+	if err := insertRecordChange(ctx, tx, actorID, updated, "recordUpdated", fieldChanges, primaryFieldText(updated.Values, fields)); err != nil {
 		return loomrecord.CommandResult{}, err
 	}
 	return loomrecord.CommandResult{Index: index, Status: "applied", Record: updated}, nil
@@ -242,6 +246,7 @@ func applyRecordLifecycle(
 	clientMutationID string,
 	index int,
 	command loomrecord.Command,
+	fields map[string]loomrecord.FieldDefinition,
 	deleting bool,
 ) (loomrecord.CommandResult, error) {
 	current, err := lockRecord(ctx, tx, tableID, command.RecordID)
@@ -267,7 +272,7 @@ func applyRecordLifecycle(
 	if err != nil {
 		return loomrecord.CommandResult{}, err
 	}
-	if err := insertRecordChange(ctx, tx, actorID, updated, kind); err != nil {
+	if err := insertRecordChange(ctx, tx, actorID, updated, kind, nil, primaryFieldText(updated.Values, fields)); err != nil {
 		return loomrecord.CommandResult{}, err
 	}
 	return loomrecord.CommandResult{Index: index, Status: "applied", Record: updated}, nil
@@ -368,18 +373,51 @@ func encodeRecordValues(values, queryValues map[string]any) (string, string, err
 	return string(encodedValues), string(encodedQuery), nil
 }
 
-func insertRecordChange(ctx context.Context, tx *sql.Tx, actorID string, item loomrecord.Record, kind string) error {
+func insertRecordChange(ctx context.Context, tx *sql.Tx, actorID string, item loomrecord.Record, kind string, fields []loomrecord.FieldChange, primaryText string) error {
 	changeID, err := id.New(id.ChangePrefix)
 	if err != nil {
 		return fmt.Errorf("generate change ID: %w", err)
 	}
+	var fieldsArg any
+	if len(fields) > 0 {
+		encoded, err := json.Marshal(fields)
+		if err != nil {
+			return fmt.Errorf("encode Record change field diff: %w", err)
+		}
+		fieldsArg = string(encoded)
+	}
+	var textArg any
+	if primaryText != "" {
+		textArg = primaryText
+	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO changes (id, kind, table_id, record_id, revision, actor_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, changeID, kind, item.TableID, item.ID, item.Revision, actorID); err != nil {
+		INSERT INTO changes (id, kind, table_id, record_id, revision, actor_id, fields, primary_field_text)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+	`, changeID, kind, item.TableID, item.ID, item.Revision, actorID, fieldsArg, textArg); err != nil {
 		return fmt.Errorf("insert Record change: %w", err)
 	}
 	return nil
+}
+
+func primaryFieldText(values map[string]any, fields map[string]loomrecord.FieldDefinition) string {
+	for _, field := range fields {
+		if !field.IsPrimary {
+			continue
+		}
+		value, present := values[field.ID]
+		if !present || value == nil {
+			return ""
+		}
+		if text, ok := value.(string); ok {
+			return text
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return ""
+		}
+		return string(encoded)
+	}
+	return ""
 }
 
 func recordConflict(clientMutationID string, index int, command loomrecord.Command, current loomrecord.Record) error {
@@ -466,4 +504,3 @@ func escapeJSONPointer(value string) string {
 	value = strings.ReplaceAll(value, "~", "~0")
 	return strings.ReplaceAll(value, "/", "~1")
 }
-

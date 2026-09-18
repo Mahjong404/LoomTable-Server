@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
 	loomrecord "github.com/Mahjong404/LoomTable-Server/internal/record"
@@ -177,6 +178,105 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request, tableID string)
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
+}
+
+func (s *Server) history(w http.ResponseWriter, r *http.Request, tableID string) {
+	if s.records == nil {
+		writeDomainError(w, r, domain.ErrDependencyMissing)
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+		return
+	}
+	request, ok := decodeHistoryQuery(w, r)
+	if !ok {
+		return
+	}
+	page, err := s.records.History(r.Context(), actorIDFrom(r), tableID, request)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func decodeHistoryQuery(w http.ResponseWriter, r *http.Request) (loomrecord.HistoryRequest, bool) {
+	bad := func(message string) (loomrecord.HistoryRequest, bool) {
+		writeAPIError(w, r, http.StatusBadRequest, "BAD_REQUEST", message)
+		return loomrecord.HistoryRequest{}, false
+	}
+	query := r.URL.Query()
+	allowed := map[string]bool{
+		"recordId": true, "kind": true, "fieldId": true, "actorId": true,
+		"since": true, "until": true, "cursor": true, "limit": true,
+	}
+	for name := range query {
+		if !allowed[name] {
+			return bad("unsupported query parameter")
+		}
+	}
+	single := func(name string) (string, bool, bool) {
+		values, present := query[name]
+		if !present {
+			return "", false, true
+		}
+		if len(values) != 1 || values[0] == "" {
+			return "", true, false
+		}
+		return values[0], true, true
+	}
+	request := loomrecord.HistoryRequest{}
+	for _, name := range []string{"recordId", "kind", "fieldId", "actorId", "cursor"} {
+		value, present, ok := single(name)
+		if !ok {
+			return bad(name + " must appear once and cannot be empty")
+		}
+		if !present {
+			continue
+		}
+		switch name {
+		case "recordId":
+			request.RecordID = value
+		case "kind":
+			request.Kind = value
+		case "fieldId":
+			request.FieldID = value
+		case "actorId":
+			request.ActorID = value
+		case "cursor":
+			request.Cursor = value
+		}
+	}
+	for _, name := range []string{"since", "until"} {
+		value, present, ok := single(name)
+		if !ok {
+			return bad(name + " must appear once and cannot be empty")
+		}
+		if !present {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return bad(name + " must be an RFC 3339 timestamp")
+		}
+		parsed = parsed.UTC()
+		if name == "since" {
+			request.Since = &parsed
+		} else {
+			request.Until = &parsed
+		}
+	}
+	if value, present, ok := single("limit"); !ok {
+		return bad("limit must appear once and cannot be empty")
+	} else if present {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 500 {
+			return bad("limit must be from 1 to 500")
+		}
+		request.Limit = parsed
+	}
+	return request, true
 }
 
 func (s *Server) queryMap(w http.ResponseWriter, r *http.Request, viewID string) {

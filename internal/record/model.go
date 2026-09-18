@@ -113,16 +113,24 @@ type QueryResult struct {
 	TotalCount   *int64   `json:"totalCount,omitempty"`
 }
 
+type FieldChange struct {
+	FieldID string          `json:"fieldId"`
+	Before  json.RawMessage `json:"before,omitempty"`
+	After   json.RawMessage `json:"after,omitempty"`
+}
+
 type Change struct {
-	ID         string    `json:"id"`
-	Kind       string    `json:"kind"`
-	TableID    string    `json:"tableId"`
-	RecordID   string    `json:"recordId,omitempty"`
-	ObjectID   string    `json:"objectId,omitempty"`
-	Revision   int64     `json:"revision"`
-	ActorID    string    `json:"actorId"`
-	OccurredAt time.Time `json:"occurredAt"`
-	Sequence   int64     `json:"-"`
+	ID               string        `json:"id"`
+	Kind             string        `json:"kind"`
+	TableID          string        `json:"tableId"`
+	RecordID         string        `json:"recordId,omitempty"`
+	ObjectID         string        `json:"objectId,omitempty"`
+	Revision         int64         `json:"revision"`
+	ActorID          string        `json:"actorId"`
+	OccurredAt       time.Time     `json:"occurredAt"`
+	Fields           []FieldChange `json:"fields,omitempty"`
+	PrimaryFieldText string        `json:"primaryFieldText,omitempty"`
+	Sequence         int64         `json:"-"`
 }
 
 type StoredChangePage struct {
@@ -135,6 +143,38 @@ type ChangePage struct {
 	Items      []Change `json:"items"`
 	NextCursor string   `json:"nextCursor"`
 	HasMore    bool     `json:"hasMore"`
+}
+
+type HistoryFilter struct {
+	RecordID string
+	Kind     string
+	FieldID  string
+	ActorID  string
+	Since    *time.Time
+	Until    *time.Time
+}
+
+type HistoryRequest struct {
+	RecordID string
+	Kind     string
+	FieldID  string
+	ActorID  string
+	Since    *time.Time
+	Until    *time.Time
+	Cursor   string
+	Limit    int
+}
+
+type StoredHistoryPage struct {
+	Items   []Change
+	HasMore bool
+}
+
+type HistoryPage struct {
+	Items        []Change `json:"items"`
+	NextCursor   string   `json:"nextCursor,omitempty"`
+	HasMore      bool     `json:"hasMore"`
+	ChangeCursor string   `json:"changeCursor"`
 }
 
 type MapCoordinate struct {
