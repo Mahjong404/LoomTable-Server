@@ -191,7 +191,7 @@ func buildQueryPlan(request QueryRequest, metadata QueryMetadata) (QueryPlan, er
 
 	plan := QueryPlan{
 		Lifecycle: lifecycle, Limit: limit, Projection: projection, Filter: filter,
-		Sort: sortSpecs, Search: search, Fields: metadata.Fields,
+		Sort: sortSpecs, ManualSort: manualSort(metadata, sortSpecs), Search: search, Fields: metadata.Fields,
 	}
 	plan.Fingerprint, err = queryFingerprint(request.ViewID, plan)
 	if err != nil {
@@ -216,6 +216,14 @@ func viewQueryDefaults(metadata QueryMetadata) ([]string, *domain.FilterNode, []
 	default:
 		return nil, nil, nil
 	}
+}
+
+func manualSort(metadata QueryMetadata, sortSpecs []domain.SortSpec) bool {
+	if metadata.View == nil || len(sortSpecs) > 0 {
+		return false
+	}
+	config, ok := metadata.View.Config.(domain.GridViewConfig)
+	return ok && config.ManualSort
 }
 
 func activeFieldIDs(fields map[string]FieldDefinition) []string {

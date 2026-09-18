@@ -233,6 +233,67 @@ func (s *Server) aggregateRecords(w http.ResponseWriter, r *http.Request, tableI
 	writeJSON(w, http.StatusOK, result)
 }
 
+type moveRecordRequest struct {
+	BeforeRecordID json.RawMessage `json:"beforeRecordId"`
+	AfterRecordID  json.RawMessage `json:"afterRecordId"`
+}
+
+func (s *Server) moveRecord(w http.ResponseWriter, r *http.Request, tableID, recordID string) {
+	if s.records == nil {
+		writeDomainError(w, r, domain.ErrDependencyMissing)
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+		return
+	}
+	var wire moveRecordRequest
+	if err := decodeJSONRequest(r, &wire); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	}
+	request := loomrecord.MoveRequest{}
+	if value, present, err := decodeOptionalJSONString(wire.BeforeRecordID, "/beforeRecordId"); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	} else if present {
+		request.BeforeRecordID = value
+	}
+	if value, present, err := decodeOptionalJSONString(wire.AfterRecordID, "/afterRecordId"); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	} else if present {
+		request.AfterRecordID = value
+	}
+	result, err := s.records.Move(r.Context(), actorIDFrom(r), tableID, recordID, request)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) duplicateRecord(w http.ResponseWriter, r *http.Request, tableID, recordID string) {
+	if s.records == nil {
+		writeDomainError(w, r, domain.ErrDependencyMissing)
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+		return
+	}
+	if len(r.URL.Query()) != 0 || r.ContentLength != 0 {
+		writeAPIError(w, r, http.StatusBadRequest, "BAD_REQUEST", "Record duplication does not accept query parameters or a request body")
+		return
+	}
+	result, err := s.records.Duplicate(r.Context(), actorIDFrom(r), tableID, recordID)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) changes(w http.ResponseWriter, r *http.Request, tableID string) {
 	if s.records == nil {
 		writeDomainError(w, r, domain.ErrDependencyMissing)

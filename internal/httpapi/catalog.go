@@ -336,6 +336,29 @@ func (s *Server) table(w http.ResponseWriter, r *http.Request) {
 		s.distinctFieldValues(w, r, tableID, fieldID)
 		return
 	}
+	if strings.HasSuffix(trimmed, "/move") || strings.HasSuffix(trimmed, "/duplicate") {
+		action := "move"
+		if strings.HasSuffix(trimmed, "/duplicate") {
+			action = "duplicate"
+		}
+		remainder := strings.TrimSuffix(trimmed, "/"+action)
+		separator := strings.Index(remainder, "/records/")
+		if separator < 1 {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		tableID, recordID := remainder[:separator], remainder[separator+len("/records/"):]
+		if tableID == "" || recordID == "" || strings.ContainsAny(tableID+recordID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		if action == "move" {
+			s.moveRecord(w, r, tableID, recordID)
+		} else {
+			s.duplicateRecord(w, r, tableID, recordID)
+		}
+		return
+	}
 	if strings.HasSuffix(trimmed, "/changes") {
 		tableID := strings.TrimSuffix(trimmed, "/changes")
 		if tableID == "" || strings.Contains(tableID, "/") {

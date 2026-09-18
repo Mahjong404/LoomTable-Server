@@ -284,8 +284,9 @@ func insertRecord(ctx context.Context, tx *sql.Tx, recordID, tableID string, val
 		return loomrecord.Record{}, err
 	}
 	created, err := scanRecord(tx.QueryRowContext(ctx, `
-		INSERT INTO records (id, table_id, revision, values, query_values, search_text)
-		VALUES ($1, $2, 1, $3::jsonb, $4::jsonb, $5)
+		INSERT INTO records (id, table_id, revision, values, query_values, search_text, position)
+		VALUES ($1, $2, 1, $3::jsonb, $4::jsonb, $5,
+		        COALESCE((SELECT max(position) + 1024.0 FROM records WHERE table_id = $2), 1024.0))
 		RETURNING id, table_id, revision, values, created_at, updated_at, deleted_at
 	`, recordID, tableID, encodedValues, encodedQuery, searchText))
 	if err != nil {

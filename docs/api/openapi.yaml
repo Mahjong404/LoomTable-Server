@@ -1240,6 +1240,76 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /v1/tables/{tableId}/records/{recordId}/move:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      tags: [Records]
+      operationId: moveRecord
+      description: Repositions an active Record in the Table's persistent manual order. Positions use midpoint spacing so a move updates one row. Supplying both beforeRecordId and afterRecordId places the Record strictly between them; only afterRecordId places it directly after that Record; only beforeRecordId places it directly before; omitting both moves it to the end. Emits a recordMoved Change; the Record revision is unchanged because position is ordering metadata, not a value.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveRecordRequest'
+      responses:
+        '200':
+          description: Record moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordOrderResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: Anchor Record is foreign, unknown, deleted, or ordered after beforeRecordId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/records/{recordId}/duplicate:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      tags: [Records]
+      operationId: duplicateRecord
+      description: Creates a new Record at the end of the Table's manual order with the same values as the source Record. Managed attachment entries reference the same Attachment; binary content is not copied. Emits a recordCreated Change for the new Record.
+      responses:
+        '200':
+          description: Duplicated Record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordOrderResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /v1/tables/{tableId}/records/mutate:
     parameters:
       - $ref: '#/components/parameters/TableId'
@@ -1362,7 +1432,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, schemaChanged, viewChanged]
+            enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, recordMoved, schemaChanged, viewChanged]
         - name: fieldId
           in: query
           required: false
@@ -2875,6 +2945,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SortSpec'
+        manualSort:
+          type: boolean
+          description: When true and sort is empty, queries order Records by their persistent manual position instead of createdAt. An explicit sort always takes precedence.
 
     MapViewConfig:
       type: object
@@ -3342,6 +3415,26 @@ components:
         changeCursor:
           type: string
 
+    MoveRecordRequest:
+      type: object
+      additionalProperties: false
+      description: Omitting both anchors moves the Record to the end of the Table's manual order.
+      properties:
+        beforeRecordId:
+          $ref: '#/components/schemas/RecordId'
+        afterRecordId:
+          $ref: '#/components/schemas/RecordId'
+
+    RecordOrderResult:
+      type: object
+      additionalProperties: false
+      required: [record, changeCursor]
+      properties:
+        record:
+          $ref: '#/components/schemas/Record'
+        changeCursor:
+          type: string
+
     MutationRequest:
       type: object
       additionalProperties: false
@@ -3532,7 +3625,7 @@ components:
         id: { $ref: '#/components/schemas/ChangeId' }
         kind:
           type: string
-          enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, schemaChanged, viewChanged]
+          enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, recordMoved, schemaChanged, viewChanged]
         tableId: { $ref: '#/components/schemas/TableId' }
         recordId: { $ref: '#/components/schemas/RecordId' }
         objectId:

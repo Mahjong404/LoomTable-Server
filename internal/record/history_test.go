@@ -66,7 +66,7 @@ func TestHistoryValidation(t *testing.T) {
 		{name: "bad recordId", request: HistoryRequest{RecordID: "nope"}},
 		{name: "bad fieldId", request: HistoryRequest{FieldID: "nope"}},
 		{name: "bad actorId", request: HistoryRequest{ActorID: "nope"}},
-		{name: "bad kind", request: HistoryRequest{Kind: "recordMoved"}},
+		{name: "bad kind", request: HistoryRequest{Kind: "fieldConverted"}},
 		{name: "since after until", request: HistoryRequest{Since: &since, Until: &until}},
 		{name: "limit too low", request: HistoryRequest{Limit: -1}},
 		{name: "limit too high", request: HistoryRequest{Limit: 501}},

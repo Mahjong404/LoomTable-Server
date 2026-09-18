@@ -157,6 +157,7 @@ type GridViewConfig struct {
 	RowHeight      string         `json:"rowHeight"`
 	Filter         *FilterNode    `json:"filter,omitempty"`
 	Sort           []SortSpec     `json:"sort"`
+	ManualSort     bool           `json:"manualSort,omitempty"`
 }
 
 type MapCenter struct {

@@ -52,6 +52,8 @@ type stubRecords struct {
 	mapRequest       loomrecord.MapQueryRequest
 	valuesRequest    loomrecord.DistinctValuesRequest
 	aggregateRequest loomrecord.AggregateRequest
+	moveRequest      loomrecord.MoveRequest
+	duplicated       string
 }
 
 func (s *stubRecords) Get(_ context.Context, actorID, recordID string) (loomrecord.Record, error) {
@@ -123,6 +125,20 @@ func (s *stubRecords) Aggregate(_ context.Context, actorID, tableID string, requ
 	s.tableID = tableID
 	s.aggregateRequest = request
 	return loomrecord.AggregateResult{Results: map[string]map[string]any{}, ChangeCursor: "v1.change.payload.signature"}, nil
+}
+
+func (s *stubRecords) Move(_ context.Context, actorID, tableID, recordID string, request loomrecord.MoveRequest) (loomrecord.RecordOrderResult, error) {
+	s.actorID = actorID
+	s.tableID = tableID
+	s.moveRequest = request
+	return loomrecord.RecordOrderResult{Record: loomrecord.Record{ID: recordID}, ChangeCursor: "v1.change.payload.signature"}, nil
+}
+
+func (s *stubRecords) Duplicate(_ context.Context, actorID, tableID, recordID string) (loomrecord.RecordOrderResult, error) {
+	s.actorID = actorID
+	s.tableID = tableID
+	s.duplicated = recordID
+	return loomrecord.RecordOrderResult{Record: loomrecord.Record{ID: "rec_11111111111111111111111111"}, ChangeCursor: "v1.change.payload.signature"}, nil
 }
 
 func (s *stubCatalog) ListWorkspaces(context.Context, string) ([]domain.Workspace, error) {

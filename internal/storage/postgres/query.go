@@ -313,6 +313,9 @@ type sqlSortTerm struct {
 
 func buildSortTerms(builder *querySQLBuilder, plan loomrecord.QueryPlan) ([]sqlSortTerm, error) {
 	if len(plan.Sort) == 0 {
+		if plan.ManualSort {
+			return []sqlSortTerm{{expression: "r.position", direction: "ASC", kind: "number"}}, nil
+		}
 		return []sqlSortTerm{{expression: "r.created_at", direction: "ASC", kind: "timestamp"}}, nil
 	}
 	terms := make([]sqlSortTerm, 0, len(plan.Sort)*4)

@@ -116,7 +116,7 @@ func (s *Service) History(ctx context.Context, actorID, tableID string, request 
 
 func validHistoryKind(kind string) bool {
 	switch kind {
-	case "recordCreated", "recordUpdated", "recordDeleted", "recordRestored", "schemaChanged", "viewChanged":
+	case "recordCreated", "recordUpdated", "recordDeleted", "recordRestored", "recordMoved", "schemaChanged", "viewChanged":
 		return true
 	}
 	return false

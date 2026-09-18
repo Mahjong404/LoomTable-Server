@@ -25,7 +25,7 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if databaseURL == "" {
 		t.Skip("LOOMTABLE_TEST_DATABASE_URL is not set")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 	db, err := postgres.Open(databaseURL)
 	if err != nil {
@@ -333,6 +333,67 @@ func TestRepositoryEndToEnd(t *testing.T) {
 		t.Fatalf("filtered aggregate = %#v", filteredAggregate.Results)
 	}
 
+	gridView, err := catalogService.CreateView(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.ViewInput{
+		Name: "Manual", Type: "grid", Config: domain.GridViewConfig{
+			Projection: []string{tableResult.PrimaryField.ID}, ColumnOrder: []string{tableResult.PrimaryField.ID},
+			ColumnWidths: map[string]int{}, FrozenFieldIDs: []string{}, RowHeight: "standard", Sort: []domain.SortSpec{}, ManualSort: true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manualQuery := func() []string {
+		page, err := recordService.Query(ctx, actorID, tableResult.Table.ID, loomrecord.QueryRequest{ViewIDPresent: true, ViewID: gridView.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		order := make([]string, len(page.Items))
+		for index, item := range page.Items {
+			order[index] = item.ID
+		}
+		return order
+	}
+	firstRecordID := mutation.Results[0].Record.ID
+	betaRecordID := mutation.Results[1].Record.ID
+	if order := manualQuery(); len(order) != 3 || order[0] != firstRecordID || order[1] != betaRecordID || order[2] != gammaRecord.ID {
+		t.Fatalf("manual order = %v", order)
+	}
+	if _, err := recordService.Move(ctx, actorID, tableResult.Table.ID, gammaRecord.ID, loomrecord.MoveRequest{BeforeRecordID: betaRecordID}); err != nil {
+		t.Fatal(err)
+	}
+	if order := manualQuery(); order[0] != firstRecordID || order[1] != gammaRecord.ID || order[2] != betaRecordID {
+		t.Fatalf("order after move-before = %v", order)
+	}
+	if _, err := recordService.Move(ctx, actorID, tableResult.Table.ID, firstRecordID, loomrecord.MoveRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if order := manualQuery(); order[0] != gammaRecord.ID || order[1] != betaRecordID || order[2] != firstRecordID {
+		t.Fatalf("order after move-to-end = %v", order)
+	}
+	movedHistory, err := recordService.History(ctx, actorID, tableResult.Table.ID, loomrecord.HistoryRequest{Kind: "recordMoved"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(movedHistory.Items) != 2 || movedHistory.Items[0].RecordID != firstRecordID {
+		t.Fatalf("recordMoved history = %#v", movedHistory.Items)
+	}
+
+	duplicated, err := recordService.Duplicate(ctx, actorID, tableResult.Table.ID, firstRecordID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicated.Record.ID == firstRecordID || duplicated.Record.Values[tableResult.PrimaryField.ID] != "Alpha Road" {
+		t.Fatalf("duplicated record = %#v", duplicated.Record)
+	}
+	sourceAttachment := mutation.Results[0].Record.Values[attachmentField.ID].([]any)[0].(map[string]any)
+	copyAttachment := duplicated.Record.Values[attachmentField.ID].([]any)[0].(map[string]any)
+	if copyAttachment["id"] != sourceAttachment["id"] {
+		t.Fatalf("duplicated attachment = %#v, want shared reference", copyAttachment)
+	}
+	if order := manualQuery(); len(order) != 4 || order[3] != duplicated.Record.ID {
+		t.Fatalf("order after duplicate = %v", order)
+	}
+
 	changeStart, err := recordService.Changes(ctx, actorID, tableResult.Table.ID, "", 100)
 	if err != nil {
 		t.Fatal(err)
@@ -492,7 +553,7 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary.Summary.MatchedRecordCount != 3 || summary.Summary.RenderableRecordCount != 2 || summary.Summary.UnlocatedRecordCount != 1 {
+	if summary.Summary.MatchedRecordCount != 4 || summary.Summary.RenderableRecordCount != 3 || summary.Summary.UnlocatedRecordCount != 1 {
 		t.Fatalf("summary = %#v", summary)
 	}
 	mapResult, err := recordService.QueryMap(ctx, actorID, mapView.ID, loomrecord.MapQueryRequest{
@@ -502,7 +563,7 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mapResult.ViewportRenderableRecordCount != 2 || len(mapResult.Features) != 2 {
+	if mapResult.ViewportRenderableRecordCount != 3 || len(mapResult.Features) != 3 {
 		t.Fatalf("map result = %#v", mapResult)
 	}
 

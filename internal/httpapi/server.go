@@ -65,6 +65,8 @@ type Records interface {
 	History(context.Context, string, string, loomrecord.HistoryRequest) (loomrecord.HistoryPage, error)
 	DistinctValues(context.Context, string, string, string, loomrecord.DistinctValuesRequest) (loomrecord.DistinctValuesPage, error)
 	Aggregate(context.Context, string, string, loomrecord.AggregateRequest) (loomrecord.AggregateResult, error)
+	Move(context.Context, string, string, string, loomrecord.MoveRequest) (loomrecord.RecordOrderResult, error)
+	Duplicate(context.Context, string, string, string) (loomrecord.RecordOrderResult, error)
 	QueryMap(context.Context, string, string, loomrecord.MapQueryRequest) (loomrecord.MapQueryResult, error)
 	SummarizeMap(context.Context, string, string) (loomrecord.MapSummaryResult, error)
 	QueryMapClusterRecords(context.Context, string, string, loomrecord.MapClusterRecordsRequest) (loomrecord.QueryResult, error)

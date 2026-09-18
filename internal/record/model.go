@@ -86,6 +86,7 @@ type QueryPlan struct {
 	Projection  []string
 	Filter      *domain.FilterNode
 	Sort        []domain.SortSpec
+	ManualSort  bool
 	Search      string
 	Fields      map[string]FieldDefinition
 	Fingerprint string
@@ -326,6 +327,21 @@ type MapClusterRecordsRequest struct {
 	ClusterToken string
 	Cursor       string
 	Limit        int
+}
+
+type MoveRequest struct {
+	BeforeRecordID string
+	AfterRecordID  string
+}
+
+type StoredRecordOrderResult struct {
+	Record         Record
+	ChangeSequence int64
+}
+
+type RecordOrderResult struct {
+	Record       Record `json:"record"`
+	ChangeCursor string `json:"changeCursor"`
 }
 
 type Conflict struct {
