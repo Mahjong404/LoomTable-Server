@@ -759,6 +759,58 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /v1/tables/{tableId}/fields/{fieldId}/values/query:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/FieldId'
+    post:
+      tags: [Records]
+      operationId: queryFieldValues
+      description: Returns the distinct values of a Field together with their occurrence counts over active Records matching the optional filter. Rule nodes targeting the requested Field are removed from the filter so its own value list stays complete. select and multiSelect values are ordered by configured option rank; other types sort by value. location and attachment Fields return 422 UNSUPPORTED_FIELD_TYPE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DistinctValuesRequest'
+      responses:
+        '200':
+          description: A cursor page of distinct values with counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistinctValuesPage'
+        '400':
+          description: Invalid request or cursor bound to a different values query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Cursor has expired and the client must restart from the first page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: Filter is invalid or the Field type cannot be enumerated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /v1/tables/{tableId}/views:
     parameters:
       - $ref: '#/components/parameters/TableId'
@@ -1140,6 +1192,47 @@ paths:
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           description: Filter, sort, projection, or field operator is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/records/aggregate:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Records]
+      operationId: aggregateRecords
+      description: Aggregates active Records matching the optional filter. Each requested Field returns one result object keyed by the requested function names. count is the number of Records with a non-empty value. sum and avg apply to number Fields only and return null otherwise. min and max return numbers for number Fields, YYYY-MM-DD strings for date Fields, and null otherwise. Results share one read-only transaction snapshot with changeCursor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AggregateRequest'
+      responses:
+        '200':
+          description: Per-Field aggregation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AggregateResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: fieldIds, fns, or filter is invalid
           content:
             application/json:
               schema:
@@ -3150,6 +3243,104 @@ components:
           format: int64
           minimum: 0
           description: Exact number of Records matching the equivalent query, read in the same transaction as items and changeCursor. Returned only on the first page, when no cursor was supplied.
+        unfilteredTotal:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Exact number of active Records in the Table ignoring filter and search, read in the same transaction as items and changeCursor. Returned only on the first page, when no cursor was supplied.
+
+    DistinctValuesRequest:
+      type: object
+      additionalProperties: false
+      description: Rule nodes that target the requested Field are removed from filter before evaluation so a Field value list is never emptied by its own selection.
+      properties:
+        filter:
+          $ref: '#/components/schemas/FilterNode'
+        search:
+          type: string
+          maxLength: 500
+          description: Folded contains match against the emitted value text (the option name for select and multiSelect Fields).
+        cursor:
+          type: string
+          description: Authenticated opaque cursor for the next page of values, bound to this Field, filter, search, and the Field schema revision.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+
+    DistinctValue:
+      type: object
+      additionalProperties: false
+      required: [value, count]
+      properties:
+        value:
+          description: The distinct stored value. Option ID for select and multiSelect Fields, number for number Fields, boolean for checkbox Fields, string otherwise.
+        display:
+          type: string
+          description: Human-readable label. Option name for select and multiSelect Fields; an example stored value for text-like Fields whose value is folded.
+        count:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Number of matching Records carrying this value.
+
+    DistinctValuesPage:
+      type: object
+      additionalProperties: false
+      required: [items, emptyCount, hasMore, changeCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DistinctValue'
+        emptyCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Number of matching Records with an empty value for this Field, read in the same transaction as items.
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+        changeCursor:
+          type: string
+
+    AggregateRequest:
+      type: object
+      additionalProperties: false
+      required: [fieldIds, fns]
+      properties:
+        filter:
+          $ref: '#/components/schemas/FilterNode'
+        fieldIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/FieldId'
+        fns:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          items:
+            type: string
+            enum: [count, sum, avg, min, max]
+
+    AggregateResult:
+      type: object
+      additionalProperties: false
+      required: [results, changeCursor]
+      properties:
+        results:
+          type: object
+          description: Per-Field results keyed by Field ID. count is the number of matching Records with a non-empty value. sum and avg are numbers for number Fields and null otherwise. min and max are numbers for number Fields, YYYY-MM-DD strings for date Fields, and null otherwise.
+          additionalProperties:
+            type: object
+            additionalProperties: true
+        changeCursor:
+          type: string
 
     MutationRequest:
       type: object

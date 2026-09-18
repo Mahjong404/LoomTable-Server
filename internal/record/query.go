@@ -96,7 +96,8 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 		return QueryResult{}, fmt.Errorf("encode change cursor: %w", err)
 	}
 	result := QueryResult{
-		Items: stored.Items, HasMore: stored.HasMore, ChangeCursor: changeCursor, TotalCount: stored.TotalCount,
+		Items: stored.Items, HasMore: stored.HasMore, ChangeCursor: changeCursor,
+		TotalCount: stored.TotalCount, UnfilteredTotal: stored.UnfilteredTotal,
 	}
 	if stored.HasMore {
 		if stored.NextPosition == nil {
@@ -597,4 +598,3 @@ func requiredQueryIssue(path, message string) domain.ValidationIssue {
 func queryValueTypeError(path, message string) error {
 	return domain.NewValidationError(domain.ValidationIssue{Path: path + "/value", Code: "type", Message: message})
 }
-

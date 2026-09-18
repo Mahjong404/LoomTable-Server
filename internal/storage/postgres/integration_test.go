@@ -25,7 +25,7 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if databaseURL == "" {
 		t.Skip("LOOMTABLE_TEST_DATABASE_URL is not set")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	db, err := postgres.Open(databaseURL)
 	if err != nil {
@@ -112,6 +112,18 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	numberField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
+		Name: "Score", Type: "number", Config: domain.EmptyFieldConfig{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	multiField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
+		Name: "Tags", Type: "multiSelect", Config: catalog.SelectFieldConfigInput{Options: []catalog.SelectOptionInput{{Name: "Urgent", Color: "red"}, {Name: "Later", Color: "gray"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	attachmentService := loomattachment.New(repository, loomattachment.NewFileStore(t.TempDir()), loomattachment.DefaultMaxBytes)
 	attachment, err := attachmentService.Initialize(ctx, actorID, newMutationID(t), loomattachment.InitRequest{
 		Source: "managed", Filename: "hello.txt", MimeType: "text/plain", Size: int64Pointer(5),
@@ -135,13 +147,13 @@ func TestRepositoryEndToEnd(t *testing.T) {
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
 			tableResult.PrimaryField.ID: "Alpha Road", locationField.ID: map[string]any{"lat": 31.2, "lng": 121.5}, selectField.ID: selectConfig.Options[0].ID,
 			attachmentField.ID:  []any{map[string]any{"id": attachment.ID, "source": attachment.Source, "filename": attachment.Filename, "mimeType": attachment.MimeType, "size": float64(*attachment.Size), "hash": attachment.Hash}},
-			convertibleField.ID: "Open",
+			convertibleField.ID: "Open", numberField.ID: 2.5,
 		}},
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
 			tableResult.PrimaryField.ID: "Beta", locationField.ID: map[string]any{"lat": 31.3, "lng": 121.6}, convertibleField.ID: "Closed",
 		}},
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
-			tableResult.PrimaryField.ID: "Gamma", convertibleField.ID: "Open",
+			tableResult.PrimaryField.ID: "Gamma", convertibleField.ID: "Open", numberField.ID: 5.0,
 		}},
 	})
 	if err != nil {
@@ -216,6 +228,109 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	}
 	if len(secondPage.Items) != 1 || secondPage.TotalCount != nil || secondPage.Items[0].ID == firstPage.Items[0].ID {
 		t.Fatalf("second page = %#v", secondPage)
+	}
+	if query.UnfilteredTotal == nil || *query.UnfilteredTotal != 3 {
+		t.Fatalf("unfilteredTotal = %#v, want 3", query.UnfilteredTotal)
+	}
+	if secondPage.UnfilteredTotal != nil {
+		t.Fatalf("second page unfilteredTotal = %#v, want nil", secondPage.UnfilteredTotal)
+	}
+
+	values, err := recordService.DistinctValues(ctx, actorID, tableResult.Table.ID, convertibleField.ID, loomrecord.DistinctValuesRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(values.Items) != 2 || values.EmptyCount != 0 {
+		t.Fatalf("distinct values = %#v", values)
+	}
+	valueCounts := make(map[string]int64)
+	for _, item := range values.Items {
+		valueCounts[item.Value.(string)] = item.Count
+	}
+	if valueCounts[optionIDs["Open"]] != 2 || valueCounts[optionIDs["Closed"]] != 1 {
+		t.Fatalf("distinct value counts = %#v", valueCounts)
+	}
+	selfFiltered, err := recordService.DistinctValues(ctx, actorID, tableResult.Table.ID, convertibleField.ID, loomrecord.DistinctValuesRequest{
+		FilterPresent: true,
+		Filter: &domain.FilterNode{
+			Kind: "rule", FieldID: convertibleField.ID, Operator: "is", Value: json.RawMessage(`"` + optionIDs["Closed"] + `"`),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selfFiltered.Items) != 2 {
+		t.Fatalf("self-filtered values = %#v, want both options kept", selfFiltered.Items)
+	}
+	narrowed, err := recordService.DistinctValues(ctx, actorID, tableResult.Table.ID, convertibleField.ID, loomrecord.DistinctValuesRequest{
+		FilterPresent: true,
+		Filter: &domain.FilterNode{
+			Kind: "rule", FieldID: tableResult.PrimaryField.ID, Operator: "contains", Value: json.RawMessage(`"alpha"`),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(narrowed.Items) != 1 || narrowed.Items[0].Count != 1 || narrowed.EmptyCount != 0 {
+		t.Fatalf("filtered distinct values = %#v", narrowed)
+	}
+	numbers, err := recordService.DistinctValues(ctx, actorID, tableResult.Table.ID, numberField.ID, loomrecord.DistinctValuesRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(numbers.Items) != 2 || numbers.Items[0].Value != 2.5 || numbers.Items[1].Value != float64(5) || numbers.EmptyCount != 1 {
+		t.Fatalf("number distinct values = %#v", numbers)
+	}
+	if _, err := recordService.DistinctValues(ctx, actorID, tableResult.Table.ID, locationField.ID, loomrecord.DistinctValuesRequest{}); err == nil {
+		t.Fatal("location field must reject distinct values")
+	}
+
+	multiConfig := multiField.Config.(domain.SelectFieldConfig)
+	gammaRecord := mutation.Results[2].Record
+	if _, err := recordService.Mutate(ctx, actorID, tableResult.Table.ID, newMutationID(t), []loomrecord.Command{{
+		Kind: "updateRecord", RecordID: gammaRecord.ID, ExpectedRevision: gammaRecord.Revision,
+		SetPresent: true, Set: map[string]any{multiField.ID: []any{multiConfig.Options[0].ID, multiConfig.Options[1].ID}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	multiValues, err := recordService.DistinctValues(ctx, actorID, tableResult.Table.ID, multiField.ID, loomrecord.DistinctValuesRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(multiValues.Items) != 2 || multiValues.EmptyCount != 2 ||
+		multiValues.Items[0].Display != "Urgent" || multiValues.Items[1].Display != "Later" {
+		t.Fatalf("multiSelect distinct values = %#v", multiValues)
+	}
+
+	aggregate, err := recordService.Aggregate(ctx, actorID, tableResult.Table.ID, loomrecord.AggregateRequest{
+		FieldIDs:  []string{numberField.ID, tableResult.PrimaryField.ID},
+		Functions: []string{"count", "sum", "avg", "min", "max"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	numberResults := aggregate.Results[numberField.ID]
+	if numberResults["count"] != int64(2) || numberResults["sum"] != 7.5 || numberResults["avg"] != 3.75 ||
+		numberResults["min"] != 2.5 || numberResults["max"] != float64(5) {
+		t.Fatalf("number aggregate = %#v", numberResults)
+	}
+	textResults := aggregate.Results[tableResult.PrimaryField.ID]
+	if textResults["count"] != int64(3) || textResults["sum"] != nil || textResults["min"] != nil {
+		t.Fatalf("text aggregate = %#v", textResults)
+	}
+	filteredAggregate, err := recordService.Aggregate(ctx, actorID, tableResult.Table.ID, loomrecord.AggregateRequest{
+		FieldIDs:  []string{numberField.ID},
+		Functions: []string{"count", "sum"},
+		Filter: &domain.FilterNode{
+			Kind: "rule", FieldID: tableResult.PrimaryField.ID, Operator: "contains", Value: json.RawMessage(`"gamma"`),
+		},
+		FilterPresent: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filteredAggregate.Results[numberField.ID]["count"] != int64(1) || filteredAggregate.Results[numberField.ID]["sum"] != float64(5) {
+		t.Fatalf("filtered aggregate = %#v", filteredAggregate.Results)
 	}
 
 	changeStart, err := recordService.Changes(ctx, actorID, tableResult.Table.ID, "", 100)

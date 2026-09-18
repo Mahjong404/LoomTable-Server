@@ -42,13 +42,16 @@ type stubCatalog struct {
 }
 
 type stubRecords struct {
-	actorID      string
-	tableID      string
-	command      loomrecord.Command
-	mutateErr    error
-	mutateCalls  int
-	queryRequest loomrecord.QueryRequest
-	mapRequest   loomrecord.MapQueryRequest
+	actorID          string
+	tableID          string
+	fieldID          string
+	command          loomrecord.Command
+	mutateErr        error
+	mutateCalls      int
+	queryRequest     loomrecord.QueryRequest
+	mapRequest       loomrecord.MapQueryRequest
+	valuesRequest    loomrecord.DistinctValuesRequest
+	aggregateRequest loomrecord.AggregateRequest
 }
 
 func (s *stubRecords) Get(_ context.Context, actorID, recordID string) (loomrecord.Record, error) {
@@ -105,6 +108,21 @@ func (s *stubRecords) QueryMapClusterRecords(_ context.Context, actorID, viewID 
 	s.actorID = actorID
 	s.tableID = viewID
 	return loomrecord.QueryResult{Items: []loomrecord.Record{}, HasMore: false, ChangeCursor: "v1.change.payload.signature"}, nil
+}
+
+func (s *stubRecords) DistinctValues(_ context.Context, actorID, tableID, fieldID string, request loomrecord.DistinctValuesRequest) (loomrecord.DistinctValuesPage, error) {
+	s.actorID = actorID
+	s.tableID = tableID
+	s.fieldID = fieldID
+	s.valuesRequest = request
+	return loomrecord.DistinctValuesPage{Items: []loomrecord.DistinctValue{}, ChangeCursor: "v1.change.payload.signature"}, nil
+}
+
+func (s *stubRecords) Aggregate(_ context.Context, actorID, tableID string, request loomrecord.AggregateRequest) (loomrecord.AggregateResult, error) {
+	s.actorID = actorID
+	s.tableID = tableID
+	s.aggregateRequest = request
+	return loomrecord.AggregateResult{Results: map[string]map[string]any{}, ChangeCursor: "v1.change.payload.signature"}, nil
 }
 
 func (s *stubCatalog) ListWorkspaces(context.Context, string) ([]domain.Workspace, error) {

@@ -98,19 +98,92 @@ type QueryPosition struct {
 }
 
 type StoredQueryPage struct {
-	Items          []Record
-	HasMore        bool
-	NextPosition   *QueryPosition
-	ChangeSequence int64
-	TotalCount     *int64
+	Items           []Record
+	HasMore         bool
+	NextPosition    *QueryPosition
+	ChangeSequence  int64
+	TotalCount      *int64
+	UnfilteredTotal *int64
 }
 
 type QueryResult struct {
-	Items        []Record `json:"items"`
-	NextCursor   string   `json:"nextCursor,omitempty"`
-	HasMore      bool     `json:"hasMore"`
-	ChangeCursor string   `json:"changeCursor"`
-	TotalCount   *int64   `json:"totalCount,omitempty"`
+	Items           []Record `json:"items"`
+	NextCursor      string   `json:"nextCursor,omitempty"`
+	HasMore         bool     `json:"hasMore"`
+	ChangeCursor    string   `json:"changeCursor"`
+	TotalCount      *int64   `json:"totalCount,omitempty"`
+	UnfilteredTotal *int64   `json:"unfilteredTotal,omitempty"`
+}
+
+type DistinctValuesRequest struct {
+	Filter        *domain.FilterNode
+	FilterPresent bool
+	Search        string
+	SearchPresent bool
+	Cursor        string
+	Limit         int
+}
+
+type DistinctValue struct {
+	Value   any    `json:"value"`
+	Display string `json:"display,omitempty"`
+	Count   int64  `json:"count"`
+}
+
+type DistinctValuesPage struct {
+	Items        []DistinctValue `json:"items"`
+	EmptyCount   int64           `json:"emptyCount"`
+	NextCursor   string          `json:"nextCursor,omitempty"`
+	HasMore      bool            `json:"hasMore"`
+	ChangeCursor string          `json:"changeCursor"`
+}
+
+type StoredDistinctValue struct {
+	Value   string
+	Display string
+	Count   int64
+}
+
+type StoredDistinctPage struct {
+	Items          []StoredDistinctValue
+	EmptyCount     int64
+	ChangeSequence int64
+}
+
+type DistinctPlan struct {
+	FieldID   string
+	FieldType string
+	Filter    *domain.FilterNode
+	Fields    map[string]FieldDefinition
+}
+
+type AggregateRequest struct {
+	Filter        *domain.FilterNode
+	FilterPresent bool
+	FieldIDs      []string
+	Functions     []string
+}
+
+type AggregatePlan struct {
+	Filter   *domain.FilterNode
+	Fields   map[string]FieldDefinition
+	Requests []AggregateFieldRequest
+}
+
+type AggregateFieldRequest struct {
+	FieldID   string
+	FieldType string
+	Functions []string
+}
+
+type StoredAggregateResult struct {
+	Results        map[string]map[string]any
+	ChangeSequence int64
+}
+
+type AggregateResult struct {
+	Results      map[string]map[string]any `json:"results"`
+	ChangeCursor string                    `json:"changeCursor"`
 }
 
 type FieldChange struct {

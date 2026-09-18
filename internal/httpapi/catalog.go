@@ -312,6 +312,30 @@ func (s *Server) table(w http.ResponseWriter, r *http.Request) {
 		s.queryRecords(w, r, tableID)
 		return
 	}
+	if strings.HasSuffix(trimmed, "/records/aggregate") {
+		tableID := strings.TrimSuffix(trimmed, "/records/aggregate")
+		if tableID == "" || strings.Contains(tableID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.aggregateRecords(w, r, tableID)
+		return
+	}
+	if strings.HasSuffix(trimmed, "/values/query") {
+		remainder := strings.TrimSuffix(trimmed, "/values/query")
+		separator := strings.Index(remainder, "/fields/")
+		if separator < 1 {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		tableID, fieldID := remainder[:separator], remainder[separator+len("/fields/"):]
+		if tableID == "" || fieldID == "" || strings.ContainsAny(tableID+fieldID, "/") {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.distinctFieldValues(w, r, tableID, fieldID)
+		return
+	}
 	if strings.HasSuffix(trimmed, "/changes") {
 		tableID := strings.TrimSuffix(trimmed, "/changes")
 		if tableID == "" || strings.Contains(tableID, "/") {

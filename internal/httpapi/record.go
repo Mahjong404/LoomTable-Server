@@ -131,6 +131,108 @@ func (s *Server) queryRecords(w http.ResponseWriter, r *http.Request, tableID st
 	writeJSON(w, http.StatusOK, result)
 }
 
+type distinctValuesRequest struct {
+	Filter json.RawMessage `json:"filter"`
+	Search json.RawMessage `json:"search"`
+	Cursor json.RawMessage `json:"cursor"`
+	Limit  json.RawMessage `json:"limit"`
+}
+
+type aggregateRequestWire struct {
+	Filter   json.RawMessage `json:"filter"`
+	FieldIDs *[]string       `json:"fieldIds"`
+	Fns      *[]string       `json:"fns"`
+}
+
+func (s *Server) distinctFieldValues(w http.ResponseWriter, r *http.Request, tableID, fieldID string) {
+	if s.records == nil {
+		writeDomainError(w, r, domain.ErrDependencyMissing)
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+		return
+	}
+	var wire distinctValuesRequest
+	if err := decodeJSONRequest(r, &wire); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	}
+	request := loomrecord.DistinctValuesRequest{}
+	if wire.Filter != nil {
+		filter, err := decodeFilterNode(wire.Filter, "/filter")
+		if err != nil {
+			writeDecodeError(w, r, err)
+			return
+		}
+		request.Filter = filter
+		request.FilterPresent = true
+	}
+	if value, present, err := decodeOptionalJSONString(wire.Search, "/search"); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	} else if present {
+		request.Search = value
+		request.SearchPresent = true
+	}
+	if value, present, err := decodeOptionalJSONString(wire.Cursor, "/cursor"); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	} else if present {
+		request.Cursor = value
+	}
+	if value, present, err := decodeOptionalJSONInt(wire.Limit, "/limit"); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	} else if present {
+		request.Limit = value
+	}
+	page, err := s.records.DistinctValues(r.Context(), actorIDFrom(r), tableID, fieldID, request)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (s *Server) aggregateRecords(w http.ResponseWriter, r *http.Request, tableID string) {
+	if s.records == nil {
+		writeDomainError(w, r, domain.ErrDependencyMissing)
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+		return
+	}
+	var wire aggregateRequestWire
+	if err := decodeJSONRequest(r, &wire); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	}
+	request := loomrecord.AggregateRequest{}
+	if wire.Filter != nil {
+		filter, err := decodeFilterNode(wire.Filter, "/filter")
+		if err != nil {
+			writeDecodeError(w, r, err)
+			return
+		}
+		request.Filter = filter
+		request.FilterPresent = true
+	}
+	if wire.FieldIDs != nil {
+		request.FieldIDs = *wire.FieldIDs
+	}
+	if wire.Fns != nil {
+		request.Functions = *wire.Fns
+	}
+	result, err := s.records.Aggregate(r.Context(), actorIDFrom(r), tableID, request)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) changes(w http.ResponseWriter, r *http.Request, tableID string) {
 	if s.records == nil {
 		writeDomainError(w, r, domain.ErrDependencyMissing)

@@ -56,6 +56,8 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 		{"queryMapClusterRecords", http.MethodPost, "/v1/views/view_00000000000000000000000000/map/cluster-records/query", `{"clusterToken":"token"}`, 200},
 		{"getRecord", http.MethodGet, "/v1/records/rec_00000000000000000000000000", "", 200},
 		{"queryRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/query", `{}`, 200},
+		{"queryFieldValues", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/fields/fld_00000000000000000000000000/values/query", `{}`, 200},
+		{"aggregateRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/aggregate", `{"fieldIds":["fld_00000000000000000000000000"],"fns":["count"]}`, 200},
 		{"mutateRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/mutate", `{"clientMutationId":"mut_00000000000000000000000000","commands":[{"kind":"createRecord","values":{}}]}`, 200},
 		{"pullChanges", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/changes", "", 200},
 		{"pullHistory", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/history", "", 200},

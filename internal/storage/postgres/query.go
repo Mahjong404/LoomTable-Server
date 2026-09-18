@@ -104,6 +104,11 @@ func (r *Repository) QueryRecords(
 			return loomrecord.StoredQueryPage{}, fmt.Errorf("count Records: %w", err)
 		}
 		result.TotalCount = &total
+		var unfiltered int64
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM records r WHERE r.table_id = $1 AND r.deleted_at IS NULL", tableID).Scan(&unfiltered); err != nil {
+			return loomrecord.StoredQueryPage{}, fmt.Errorf("count unfiltered Records: %w", err)
+		}
+		result.UnfilteredTotal = &unfiltered
 	}
 	if position != nil {
 		keyset, err := buildKeysetCondition(builder, terms, *position)
@@ -498,4 +503,3 @@ func locklessActiveTable(ctx context.Context, tx *sql.Tx, actorID, tableID strin
 	}
 	return nil
 }
-
