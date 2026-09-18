@@ -448,6 +448,10 @@ func normalizeLocation(path string, value any) (any, []domain.ValidationIssue) {
 	return result, nil
 }
 
+func BuildQueryProjection(values map[string]any, fields map[string]FieldDefinition) (map[string]any, string) {
+	return buildQueryProjection(values, fields)
+}
+
 func buildQueryProjection(values map[string]any, fields map[string]FieldDefinition) (map[string]any, string) {
 	projection := make(map[string]any, len(values))
 	searchParts := make([]string, 0)
@@ -574,4 +578,3 @@ func limitIssue(path, message string) []domain.ValidationIssue {
 func invalidReferenceIssue(path, message string) []domain.ValidationIssue {
 	return []domain.ValidationIssue{{Path: path, Code: "invalidReference", Message: message}}
 }
-

@@ -11,16 +11,29 @@ import (
 )
 
 type createFieldRequest struct {
-	Name   *string         `json:"name"`
-	Type   *string         `json:"type"`
-	Config json.RawMessage `json:"config"`
+	Name        *string         `json:"name"`
+	Type        *string         `json:"type"`
+	Config      json.RawMessage `json:"config"`
+	Description json.RawMessage `json:"description"`
 }
 
 type updateFieldRequest struct {
 	Name             *string         `json:"name"`
 	Type             *string         `json:"type"`
 	Config           json.RawMessage `json:"config"`
+	Description      json.RawMessage `json:"description"`
 	ExpectedRevision *int64          `json:"expectedRevision"`
+}
+
+type convertFieldPreviewRequest struct {
+	Type *string `json:"type"`
+}
+
+type convertFieldRequest struct {
+	Type             *string `json:"type"`
+	Mode             *string `json:"mode"`
+	ExpectedRevision *int64  `json:"expectedRevision"`
+	PreviewToken     *string `json:"previewToken"`
 }
 
 type selectFieldConfigRequest struct {
@@ -92,6 +105,70 @@ func (s *Server) field(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trimmed := strings.TrimPrefix(r.URL.Path, "/v1/fields/")
+	if strings.HasSuffix(trimmed, "/convert-preview") {
+		fieldID := strings.TrimSuffix(trimmed, "/convert-preview")
+		if fieldID == "" || strings.Contains(fieldID, "/") || r.Method != http.MethodPost {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		var request convertFieldPreviewRequest
+		if err := decodeJSONRequest(r, &request); err != nil {
+			writeDecodeError(w, r, err)
+			return
+		}
+		if request.Type == nil {
+			writeDomainError(w, r, requiredValidation("/type", "type is required"))
+			return
+		}
+		preview, err := s.catalog.PreviewFieldConversion(r.Context(), actorIDFrom(r), fieldID, *request.Type)
+		if err != nil {
+			writeDomainError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, preview)
+		return
+	}
+	if strings.HasSuffix(trimmed, "/convert") {
+		fieldID := strings.TrimSuffix(trimmed, "/convert")
+		if fieldID == "" || strings.Contains(fieldID, "/") || r.Method != http.MethodPost {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		var request convertFieldRequest
+		if err := decodeJSONRequest(r, &request); err != nil {
+			writeDecodeError(w, r, err)
+			return
+		}
+		issues := make([]domain.ValidationIssue, 0, 4)
+		if request.Type == nil {
+			issues = append(issues, requiredIssue("/type", "type is required"))
+		}
+		if request.Mode == nil {
+			issues = append(issues, requiredIssue("/mode", "mode is required"))
+		}
+		if request.ExpectedRevision == nil {
+			issues = append(issues, requiredIssue("/expectedRevision", "expectedRevision is required"))
+		}
+		if request.PreviewToken == nil {
+			issues = append(issues, requiredIssue("/previewToken", "previewToken is required"))
+		}
+		if len(issues) > 0 {
+			writeDomainError(w, r, domain.NewValidationError(issues...))
+			return
+		}
+		result, err := s.catalog.ConvertField(r.Context(), actorIDFrom(r), fieldID, catalog.ConversionRequest{
+			TargetType:       *request.Type,
+			Mode:             *request.Mode,
+			ExpectedRevision: *request.ExpectedRevision,
+			PreviewToken:     *request.PreviewToken,
+		})
+		if err != nil {
+			writeDomainError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
 	if strings.HasSuffix(trimmed, "/restore") {
 		fieldID := strings.TrimSuffix(trimmed, "/restore")
 		if fieldID == "" || strings.Contains(fieldID, "/") || r.Method != http.MethodPost {
@@ -296,7 +373,11 @@ func decodeCreateFieldRequest(r *http.Request) (catalog.FieldInput, error) {
 	if err != nil {
 		return catalog.FieldInput{}, err
 	}
-	return catalog.FieldInput{Name: *request.Name, Type: *request.Type, Config: config}, nil
+	description, err := decodeFieldDescription(request.Description)
+	if err != nil {
+		return catalog.FieldInput{}, err
+	}
+	return catalog.FieldInput{Name: *request.Name, Type: *request.Type, Config: config, Description: description}, nil
 }
 
 func decodeUpdateFieldRequest(r *http.Request) (catalog.FieldUpdate, error) {
@@ -311,8 +392,8 @@ func decodeUpdateFieldRequest(r *http.Request) (catalog.FieldUpdate, error) {
 	if request.ExpectedRevision == nil {
 		issues = append(issues, requiredIssue("/expectedRevision", "expectedRevision is required"))
 	}
-	if request.Name == nil && request.Config == nil {
-		issues = append(issues, requiredIssue("", "name or config is required"))
+	if request.Name == nil && request.Config == nil && request.Description == nil {
+		issues = append(issues, requiredIssue("", "name, config, or description is required"))
 	}
 	if len(issues) > 0 {
 		return catalog.FieldUpdate{}, validationDecodeError(domain.NewValidationError(issues...))
@@ -325,7 +406,22 @@ func decodeUpdateFieldRequest(r *http.Request) (catalog.FieldUpdate, error) {
 			return catalog.FieldUpdate{}, err
 		}
 	}
-	return catalog.FieldUpdate{Name: request.Name, Type: *request.Type, Config: config, ExpectedRevision: *request.ExpectedRevision}, nil
+	description, err := decodeFieldDescription(request.Description)
+	if err != nil {
+		return catalog.FieldUpdate{}, err
+	}
+	return catalog.FieldUpdate{Name: request.Name, Type: *request.Type, Config: config, Description: description, DescriptionPresent: request.Description != nil, ExpectedRevision: *request.ExpectedRevision}, nil
+}
+
+func decodeFieldDescription(raw json.RawMessage) (*string, error) {
+	if raw == nil || string(raw) == "null" {
+		return nil, nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, validationDecodeError(domain.NewValidationError(domain.ValidationIssue{Path: "/description", Code: "type", Message: "description must be a string"}))
+	}
+	return &value, nil
 }
 
 func decodeFieldConfig(fieldType string, raw json.RawMessage) (any, error) {
@@ -665,4 +761,3 @@ func prefixDecodeError(err error, prefix string) error {
 	copyError.Details = map[string]any{"issues": prefixed}
 	return &copyError
 }
-

@@ -205,3 +205,9 @@ func nullableInt(value *int) any {
 	return *value
 }
 
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}

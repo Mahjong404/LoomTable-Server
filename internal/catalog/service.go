@@ -25,9 +25,10 @@ const (
 )
 
 type FieldInput struct {
-	Name   string
-	Type   string
-	Config any
+	Name        string
+	Type        string
+	Config      any
+	Description *string
 }
 
 type SelectFieldConfigInput struct {
@@ -41,10 +42,12 @@ type SelectOptionInput struct {
 }
 
 type FieldUpdate struct {
-	Name             *string
-	Type             string
-	Config           any
-	ExpectedRevision int64
+	Name               *string
+	Type               string
+	Config             any
+	Description        *string
+	DescriptionPresent bool
+	ExpectedRevision   int64
 }
 
 type ViewInput struct {
@@ -84,6 +87,10 @@ type Store interface {
 	UpdateField(context.Context, string, string, int64, domain.Field) (domain.Field, error)
 	DeleteField(context.Context, string, string, int64) error
 	RestoreField(context.Context, string, string, int64) (domain.Field, error)
+	ScanFieldValues(context.Context, string, domain.Field, func(json.RawMessage) error) (bool, error)
+	ConvertField(context.Context, string, string, FieldConversionPlan) (domain.Field, error)
+
+	CursorKey(context.Context) ([]byte, error)
 
 	ListViews(context.Context, string, string, string) ([]domain.View, error)
 	GetView(context.Context, string, string) (domain.View, error)
@@ -423,6 +430,17 @@ func (s *Service) CreateField(ctx context.Context, actorID, idempotencyKey, tabl
 	if err != nil {
 		return domain.Field{}, err
 	}
+	var description string
+	var fingerprintDescription *string
+	if input.Description != nil {
+		description, err = domain.NormalizeFieldDescription("/description", *input.Description)
+		if err != nil {
+			return domain.Field{}, err
+		}
+		if description != "" {
+			fingerprintDescription = &description
+		}
+	}
 	fieldID, err := s.newID(id.FieldPrefix)
 	if err != nil {
 		return domain.Field{}, fmt.Errorf("generate field ID: %w", err)
@@ -431,13 +449,14 @@ func (s *Service) CreateField(ctx context.Context, actorID, idempotencyKey, tabl
 		ID:            fieldID,
 		TableID:       tableID,
 		Name:          name,
+		Description:   description,
 		SchemaVersion: 1,
 		Revision:      1,
 		Type:          input.Type,
 		Config:        config,
 	}
 	fingerprint, err := requestFingerprint("POST", "/v1/tables/"+tableID+"/fields", FieldInput{
-		Name: name, Type: input.Type, Config: fingerprintConfig,
+		Name: name, Type: input.Type, Config: fingerprintConfig, Description: fingerprintDescription,
 	})
 	if err != nil {
 		return domain.Field{}, err
@@ -470,8 +489,8 @@ func (s *Service) UpdateField(ctx context.Context, actorID, fieldID string, upda
 	if update.Type != current.Type {
 		return domain.Field{}, domain.NewValidationError(domain.ValidationIssue{Path: "/type", Code: "format", Message: "Field type is immutable in P0"})
 	}
-	if update.Name == nil && update.Config == nil {
-		return domain.Field{}, domain.NewValidationError(domain.ValidationIssue{Path: "", Code: "required", Message: "name or config is required"})
+	if update.Name == nil && update.Config == nil && !update.DescriptionPresent {
+		return domain.Field{}, domain.NewValidationError(domain.ValidationIssue{Path: "", Code: "required", Message: "name, config, or description is required"})
 	}
 
 	target := current
@@ -485,6 +504,16 @@ func (s *Service) UpdateField(ctx context.Context, actorID, fieldID string, upda
 		target.Config, err = s.normalizeUpdatedFieldConfig(current, update.Config)
 		if err != nil {
 			return domain.Field{}, err
+		}
+	}
+	if update.DescriptionPresent {
+		if update.Description == nil {
+			target.Description = ""
+		} else {
+			target.Description, err = domain.NormalizeFieldDescription("/description", *update.Description)
+			if err != nil {
+				return domain.Field{}, err
+			}
 		}
 	}
 	return s.store.UpdateField(ctx, actorID, fieldID, update.ExpectedRevision, target)

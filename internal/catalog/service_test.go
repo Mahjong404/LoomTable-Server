@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -17,6 +18,8 @@ type captureStore struct {
 	currentField     domain.Field
 	updatedField     domain.Field
 	fields           []domain.Field
+	fieldValues      []json.RawMessage
+	fieldPrimary     bool
 	createdView      domain.View
 	currentView      domain.View
 	updatedView      domain.View
@@ -117,6 +120,42 @@ func (s *captureStore) DeleteField(context.Context, string, string, int64) error
 
 func (s *captureStore) RestoreField(context.Context, string, string, int64) (domain.Field, error) {
 	return domain.Field{}, nil
+}
+
+func (s *captureStore) ScanFieldValues(_ context.Context, _ string, _ domain.Field, scan func(json.RawMessage) error) (bool, error) {
+	if s.fieldPrimary {
+		return true, nil
+	}
+	for _, raw := range s.fieldValues {
+		if err := scan(raw); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
+func (s *captureStore) ConvertField(_ context.Context, _ string, _ string, plan FieldConversionPlan) (domain.Field, error) {
+	for _, raw := range s.fieldValues {
+		if _, _, err := plan.Scan(raw); err != nil {
+			return domain.Field{}, err
+		}
+	}
+	if err := plan.Verify(); err != nil {
+		return domain.Field{}, err
+	}
+	config, err := plan.BuildConfig()
+	if err != nil {
+		return domain.Field{}, err
+	}
+	updated := s.currentField
+	updated.Type = plan.TargetType
+	updated.Config = json.RawMessage(config)
+	updated.Revision++
+	return updated, nil
+}
+
+func (s *captureStore) CursorKey(context.Context) ([]byte, error) {
+	return make([]byte, 32), nil
 }
 
 func (s *captureStore) ListViews(context.Context, string, string, string) ([]domain.View, error) {
@@ -305,6 +344,87 @@ func TestUpdateSelectFieldAppliesOptionLifecycle(t *testing.T) {
 	}
 	if store.updateCalls != 1 {
 		t.Fatalf("update calls = %d, want 1", store.updateCalls)
+	}
+}
+
+func TestCreateFieldNormalizesDescription(t *testing.T) {
+	store := &captureStore{}
+	service := NewWithIDGenerator(store, fixedID)
+	description := "  Primary column notes  "
+
+	created, err := service.CreateField(
+		context.Background(),
+		"act_test",
+		"mut_00000000000000000000000000",
+		"tbl_00000000000000000000000000",
+		FieldInput{Name: "Title", Type: "text", Config: domain.EmptyFieldConfig{}, Description: &description},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Description != "Primary column notes" {
+		t.Fatalf("description = %q", created.Description)
+	}
+}
+
+func TestUpdateFieldDescriptionLifecycle(t *testing.T) {
+	store := &captureStore{currentField: domain.Field{
+		ID:          "fld_00000000000000000000000000",
+		TableID:     "tbl_00000000000000000000000000",
+		Name:        "Title",
+		Description: "old",
+		Type:        "text",
+		Revision:    3,
+		Config:      domain.EmptyFieldConfig{},
+	}}
+	service := NewWithIDGenerator(store, fixedID)
+	description := "  new description  "
+
+	updated, err := service.UpdateField(
+		context.Background(),
+		"act_test",
+		store.currentField.ID,
+		FieldUpdate{Type: "text", ExpectedRevision: 3, Description: &description, DescriptionPresent: true},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Description != "new description" {
+		t.Fatalf("description = %q", updated.Description)
+	}
+
+	cleared, err := service.UpdateField(
+		context.Background(),
+		"act_test",
+		store.currentField.ID,
+		FieldUpdate{Type: "text", ExpectedRevision: 3, DescriptionPresent: true},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.Description != "" {
+		t.Fatalf("description = %q, want cleared", cleared.Description)
+	}
+}
+
+func TestUpdateFieldRejectsEmptyPatch(t *testing.T) {
+	store := &captureStore{currentField: domain.Field{
+		ID:       "fld_00000000000000000000000000",
+		TableID:  "tbl_00000000000000000000000000",
+		Name:     "Title",
+		Type:     "text",
+		Revision: 3,
+		Config:   domain.EmptyFieldConfig{},
+	}}
+	service := NewWithIDGenerator(store, fixedID)
+
+	if _, err := service.UpdateField(
+		context.Background(),
+		"act_test",
+		store.currentField.ID,
+		FieldUpdate{Type: "text", ExpectedRevision: 3},
+	); err == nil {
+		t.Fatal("expected validation error for empty patch")
 	}
 }
 

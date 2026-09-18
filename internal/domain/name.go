@@ -11,8 +11,23 @@ import (
 
 const ResourceNameMaxCodePoints = 200
 
+const FieldDescriptionMaxCodePoints = 200
+
 func NormalizeResourceName(path, value string) (string, error) {
 	return normalizeName(path, value, ResourceNameMaxCodePoints, "name")
+}
+
+func NormalizeFieldDescription(path, value string) (string, error) {
+	normalized := norm.NFC.String(trimUnicodeSpace(value))
+	for _, r := range normalized {
+		if unicode.IsControl(r) {
+			return "", NewValidationError(ValidationIssue{Path: path, Code: "format", Message: "description cannot contain control characters"})
+		}
+	}
+	if utf8.RuneCountInString(normalized) > FieldDescriptionMaxCodePoints {
+		return "", NewValidationError(ValidationIssue{Path: path, Code: "limit", Message: fmt.Sprintf("description exceeds %d Unicode code points", FieldDescriptionMaxCodePoints)})
+	}
+	return normalized, nil
 }
 
 func NormalizeOptionName(path, value string) (string, error) {

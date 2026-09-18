@@ -43,6 +43,8 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 		{"updateField", http.MethodPatch, "/v1/fields/fld_00000000000000000000000000", `{"name":"New","type":"text","expectedRevision":1}`, 200},
 		{"deleteField", http.MethodDelete, "/v1/fields/fld_00000000000000000000000000?expectedRevision=1", "", 204},
 		{"restoreField", http.MethodPost, "/v1/fields/fld_00000000000000000000000000/restore", `{"expectedRevision":1}`, 200},
+		{"previewFieldConversion", http.MethodPost, "/v1/fields/fld_00000000000000000000000000/convert-preview", `{"type":"number"}`, 200},
+		{"convertField", http.MethodPost, "/v1/fields/fld_00000000000000000000000000/convert", `{"type":"number","mode":"parse","expectedRevision":1,"previewToken":"tok"}`, 200},
 		{"listViews", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/views", "", 200},
 		{"createView", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/views", `{"name":"Map","type":"map","config":{"locationFieldId":"fld_00000000000000000000000000"}}`, 201},
 		{"getView", http.MethodGet, "/v1/views/view_00000000000000000000000000", "", 200},

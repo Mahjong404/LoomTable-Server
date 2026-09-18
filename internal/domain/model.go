@@ -38,6 +38,7 @@ type Field struct {
 	ID            string     `json:"id"`
 	TableID       string     `json:"tableId"`
 	Name          string     `json:"name"`
+	Description   string     `json:"description,omitempty"`
 	Position      int        `json:"position"`
 	SchemaVersion int        `json:"schemaVersion"`
 	Revision      int64      `json:"revision"`
@@ -233,4 +234,3 @@ type CreateTableResult struct {
 	PrimaryField Field    `json:"primaryField"`
 	InitialView  GridView `json:"initialView"`
 }
-

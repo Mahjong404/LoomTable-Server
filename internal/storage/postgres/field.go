@@ -30,7 +30,7 @@ func (r *Repository) ListFields(ctx context.Context, actorID, tableID, lifecycle
 	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT f.id, f.table_id, f.name, f.position_index, f.schema_version,
-		       f.revision, f.type, f.config, f.deleted_at
+		       f.revision, f.type, f.config, f.deleted_at, f.description
 		FROM fields f
 		WHERE f.table_id = $1 AND `+condition+`
 		ORDER BY f.position_index ASC, f.id ASC
@@ -107,13 +107,13 @@ func (r *Repository) CreateField(ctx context.Context, actorID, idempotencyKey st
 	created, err := scanField(tx.QueryRowContext(ctx, `
 		INSERT INTO fields (
 			id, table_id, name, type, position_index, schema_version,
-			config, is_primary, revision
+			config, is_primary, revision, description
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, FALSE, 1)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, FALSE, 1, $8)
 		RETURNING id, table_id, name, position_index, schema_version,
-		          revision, type, config, deleted_at
+		          revision, type, config, deleted_at, description
 	`, proposed.ID, proposed.TableID, proposed.Name, proposed.Type, position,
-		proposed.SchemaVersion, string(encoded)))
+		proposed.SchemaVersion, string(encoded), nullableString(proposed.Description)))
 	if err != nil {
 		return domain.Field{}, fmt.Errorf("insert field: %w", err)
 	}
@@ -151,7 +151,7 @@ func (r *Repository) UpdateField(ctx context.Context, actorID, fieldID string, e
 	if current.Type != target.Type {
 		return domain.Field{}, domain.NewValidationError(domain.ValidationIssue{Path: "/type", Code: "format", Message: "Field type is immutable in P0"})
 	}
-	if current.Name == target.Name && reflect.DeepEqual(current.Config, target.Config) {
+	if current.Name == target.Name && current.Description == target.Description && reflect.DeepEqual(current.Config, target.Config) {
 		if err := tx.Commit(); err != nil {
 			return domain.Field{}, fmt.Errorf("commit field no-op: %w", err)
 		}
@@ -163,12 +163,12 @@ func (r *Repository) UpdateField(ctx context.Context, actorID, fieldID string, e
 	}
 	updated, err := scanField(tx.QueryRowContext(ctx, `
 		UPDATE fields
-		SET name = $1, config = $2::jsonb, revision = revision + 1,
-		    updated_at = clock_timestamp()
+		SET name = $1, config = $2::jsonb, description = $4,
+		    revision = revision + 1, updated_at = clock_timestamp()
 		WHERE id = $3
 		RETURNING id, table_id, name, position_index, schema_version,
-		          revision, type, config, deleted_at
-	`, target.Name, string(encoded), fieldID))
+		          revision, type, config, deleted_at, description
+	`, target.Name, string(encoded), fieldID, nullableString(target.Description)))
 	if err != nil {
 		return domain.Field{}, fmt.Errorf("update field: %w", err)
 	}
@@ -209,7 +209,7 @@ func (r *Repository) DeleteField(ctx context.Context, actorID, fieldID string, e
 		    updated_at = clock_timestamp()
 		WHERE id = $1
 		RETURNING id, table_id, name, position_index, schema_version,
-		          revision, type, config, deleted_at
+		          revision, type, config, deleted_at, description
 	`, fieldID))
 	if err != nil {
 		return fmt.Errorf("delete field: %w", err)
@@ -248,7 +248,7 @@ func (r *Repository) RestoreField(ctx context.Context, actorID, fieldID string, 
 		    updated_at = clock_timestamp()
 		WHERE id = $1
 		RETURNING id, table_id, name, position_index, schema_version,
-		          revision, type, config, deleted_at
+		          revision, type, config, deleted_at, description
 	`, fieldID))
 	if err != nil {
 		return domain.Field{}, fmt.Errorf("restore field: %w", err)
@@ -264,7 +264,7 @@ func (r *Repository) RestoreField(ctx context.Context, actorID, fieldID string, 
 
 const accessibleFieldSQL = `
 	SELECT f.id, f.table_id, f.name, f.position_index, f.schema_version,
-	       f.revision, f.type, f.config, f.deleted_at
+	       f.revision, f.type, f.config, f.deleted_at, f.description
 	FROM fields f
 	JOIN tables t ON t.id = f.table_id
 	JOIN bases b ON b.id = t.base_id
@@ -276,12 +276,14 @@ const accessibleFieldSQL = `
 func scanField(row scanner) (domain.Field, error) {
 	var item domain.Field
 	var rawConfig []byte
+	var description sql.NullString
 	if err := row.Scan(
 		&item.ID, &item.TableID, &item.Name, &item.Position, &item.SchemaVersion,
-		&item.Revision, &item.Type, &rawConfig, &item.DeletedAt,
+		&item.Revision, &item.Type, &rawConfig, &item.DeletedAt, &description,
 	); err != nil {
 		return domain.Field{}, err
 	}
+	item.Description = description.String
 	config, err := decodeFieldConfig(item.Type, rawConfig)
 	if err != nil {
 		return domain.Field{}, err
@@ -323,10 +325,11 @@ func decodeFieldConfig(fieldType string, raw []byte) (any, error) {
 func lockAccessibleField(ctx context.Context, tx *sql.Tx, actorID, fieldID string) (domain.Field, bool, error) {
 	var item domain.Field
 	var rawConfig []byte
+	var description sql.NullString
 	var primary bool
 	err := tx.QueryRowContext(ctx, `
 		SELECT f.id, f.table_id, f.name, f.position_index, f.schema_version,
-		       f.revision, f.type, f.config, f.deleted_at, f.is_primary
+		       f.revision, f.type, f.config, f.deleted_at, f.description, f.is_primary
 		FROM fields f
 		JOIN tables t ON t.id = f.table_id
 		JOIN bases b ON b.id = t.base_id
@@ -336,7 +339,7 @@ func lockAccessibleField(ctx context.Context, tx *sql.Tx, actorID, fieldID strin
 		FOR UPDATE OF f
 	`, fieldID, actorID).Scan(
 		&item.ID, &item.TableID, &item.Name, &item.Position, &item.SchemaVersion,
-		&item.Revision, &item.Type, &rawConfig, &item.DeletedAt, &primary,
+		&item.Revision, &item.Type, &rawConfig, &item.DeletedAt, &description, &primary,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Field{}, false, domain.ErrNotFound
@@ -348,6 +351,7 @@ func lockAccessibleField(ctx context.Context, tx *sql.Tx, actorID, fieldID strin
 	if err != nil {
 		return domain.Field{}, false, err
 	}
+	item.Description = description.String
 	return item, primary, nil
 }
 
@@ -407,4 +411,3 @@ func insertMetadataChange(ctx context.Context, tx *sql.Tx, actorID, kind, tableI
 	}
 	return nil
 }
-

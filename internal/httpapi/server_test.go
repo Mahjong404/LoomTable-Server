@@ -36,6 +36,8 @@ type stubCatalog struct {
 	createdName       string
 	actorID           string
 	createdFieldInput catalog.FieldInput
+	updatedField      catalog.FieldUpdate
+	convertRequest    catalog.ConversionRequest
 	createdViewInput  catalog.ViewInput
 }
 
@@ -174,7 +176,8 @@ func (s *stubCatalog) CreateField(_ context.Context, actorID, _, tableID string,
 	return domain.Field{ID: "fld_00000000000000000000000000", TableID: tableID, Name: input.Name, Type: input.Type, Config: input.Config, Revision: 1}, nil
 }
 
-func (s *stubCatalog) UpdateField(context.Context, string, string, catalog.FieldUpdate) (domain.Field, error) {
+func (s *stubCatalog) UpdateField(_ context.Context, _ string, _ string, update catalog.FieldUpdate) (domain.Field, error) {
+	s.updatedField = update
 	return domain.Field{}, nil
 }
 
@@ -184,6 +187,15 @@ func (s *stubCatalog) DeleteField(context.Context, string, string, int64) error 
 
 func (s *stubCatalog) RestoreField(context.Context, string, string, int64) (domain.Field, error) {
 	return domain.Field{}, nil
+}
+
+func (s *stubCatalog) PreviewFieldConversion(context.Context, string, string, string) (catalog.ConversionPreview, error) {
+	return catalog.ConversionPreview{}, nil
+}
+
+func (s *stubCatalog) ConvertField(_ context.Context, _ string, _ string, request catalog.ConversionRequest) (catalog.ConversionResult, error) {
+	s.convertRequest = request
+	return catalog.ConversionResult{}, nil
 }
 
 func (s *stubCatalog) ListViews(context.Context, string, string, string) ([]domain.View, error) {
@@ -371,6 +383,124 @@ func TestCreateSelectFieldRouteDecodesTypedConfig(t *testing.T) {
 	config, ok := catalogService.createdFieldInput.Config.(catalog.SelectFieldConfigInput)
 	if !ok || len(config.Options) != 1 || config.Options[0].Name != "Open" {
 		t.Fatalf("decoded config = %#v (%T)", catalogService.createdFieldInput.Config, catalogService.createdFieldInput.Config)
+	}
+}
+
+func TestFieldRoutesDecodeDescription(t *testing.T) {
+	catalogService := &stubCatalog{}
+	server := New(testConfig(), func(context.Context) error { return nil }, Dependencies{
+		Authenticator: fixedAuthenticator{},
+		Catalog:       catalogService,
+	})
+
+	create := httptest.NewRequest(http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/fields", strings.NewReader(`{
+		"name":"Title",
+		"type":"text",
+		"config":{},
+		"description":"  column notes  "
+	}`))
+	create.Header.Set("Authorization", "Bearer test-token")
+	create.Header.Set("Content-Type", "application/json")
+	create.Header.Set("Idempotency-Key", "mut_00000000000000000000000000")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, create)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if catalogService.createdFieldInput.Description == nil || *catalogService.createdFieldInput.Description != "  column notes  " {
+		t.Fatalf("decoded description = %#v", catalogService.createdFieldInput.Description)
+	}
+
+	set := httptest.NewRequest(http.MethodPatch, "/v1/fields/fld_00000000000000000000000000", strings.NewReader(`{
+		"type":"text",
+		"expectedRevision":1,
+		"description":"new notes"
+	}`))
+	set.Header.Set("Authorization", "Bearer test-token")
+	set.Header.Set("Content-Type", "application/json")
+	recorder = httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, set)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("patch response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if !catalogService.updatedField.DescriptionPresent || catalogService.updatedField.Description == nil || *catalogService.updatedField.Description != "new notes" {
+		t.Fatalf("decoded update = %#v", catalogService.updatedField)
+	}
+
+	clear := httptest.NewRequest(http.MethodPatch, "/v1/fields/fld_00000000000000000000000000", strings.NewReader(`{
+		"type":"text",
+		"expectedRevision":1,
+		"description":null
+	}`))
+	clear.Header.Set("Authorization", "Bearer test-token")
+	clear.Header.Set("Content-Type", "application/json")
+	recorder = httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, clear)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("patch response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if !catalogService.updatedField.DescriptionPresent || catalogService.updatedField.Description != nil {
+		t.Fatalf("decoded update = %#v, want description cleared", catalogService.updatedField)
+	}
+}
+
+func TestFieldConversionRoutesDecodeRequests(t *testing.T) {
+	catalogService := &stubCatalog{}
+	server := New(testConfig(), func(context.Context) error { return nil }, Dependencies{
+		Authenticator: fixedAuthenticator{},
+		Catalog:       catalogService,
+	})
+
+	preview := httptest.NewRequest(http.MethodPost, "/v1/fields/fld_00000000000000000000000000/convert-preview", strings.NewReader(`{"type":"number"}`))
+	preview.Header.Set("Authorization", "Bearer test-token")
+	preview.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, preview)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("preview response = %d %s", recorder.Code, recorder.Body.String())
+	}
+
+	convert := httptest.NewRequest(http.MethodPost, "/v1/fields/fld_00000000000000000000000000/convert", strings.NewReader(`{
+		"type":"number",
+		"mode":"parse",
+		"expectedRevision":3,
+		"previewToken":"v1.field-convert-preview.token.sig"
+	}`))
+	convert.Header.Set("Authorization", "Bearer test-token")
+	convert.Header.Set("Content-Type", "application/json")
+	recorder = httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, convert)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("convert response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if catalogService.convertRequest.TargetType != "number" || catalogService.convertRequest.Mode != "parse" ||
+		catalogService.convertRequest.ExpectedRevision != 3 || catalogService.convertRequest.PreviewToken == "" {
+		t.Fatalf("decoded request = %#v", catalogService.convertRequest)
+	}
+
+	invalid := httptest.NewRequest(http.MethodPost, "/v1/fields/fld_00000000000000000000000000/convert", strings.NewReader(`{
+		"type":"number",
+		"expectedRevision":3,
+		"previewToken":"v1.field-convert-preview.token.sig"
+	}`))
+	invalid.Header.Set("Authorization", "Bearer test-token")
+	invalid.Header.Set("Content-Type", "application/json")
+	recorder = httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, invalid)
+
+	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), "/mode") {
+		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
 	}
 }
 

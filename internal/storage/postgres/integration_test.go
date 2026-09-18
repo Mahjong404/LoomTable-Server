@@ -74,11 +74,15 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	locationDescription := " Geographic column "
 	locationField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
-		Name: "Location", Type: "location", Config: domain.EmptyFieldConfig{},
+		Name: "Location", Type: "location", Config: domain.EmptyFieldConfig{}, Description: &locationDescription,
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if locationField.Description != "Geographic column" {
+		t.Fatalf("location description = %q", locationField.Description)
 	}
 	selectField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
 		Name: "Status", Type: "select", Config: catalog.SelectFieldConfigInput{Options: []catalog.SelectOptionInput{{Name: "Open", Color: "green"}}},
@@ -89,6 +93,21 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	selectConfig := selectField.Config.(domain.SelectFieldConfig)
 	attachmentField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
 		Name: "Attachments", Type: "attachment", Config: domain.AttachmentFieldConfig{MaxCount: 1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearedField, err := catalogService.UpdateField(ctx, actorID, locationField.ID, catalog.FieldUpdate{
+		Type: "location", ExpectedRevision: locationField.Revision, DescriptionPresent: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clearedField.Description != "" || clearedField.Revision != locationField.Revision+1 {
+		t.Fatalf("cleared field = %#v", clearedField)
+	}
+	convertibleField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
+		Name: "Convertible", Type: "text", Config: domain.EmptyFieldConfig{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -115,13 +134,14 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	mutation, err := recordService.Mutate(ctx, actorID, tableResult.Table.ID, newMutationID(t), []loomrecord.Command{
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
 			tableResult.PrimaryField.ID: "Alpha Road", locationField.ID: map[string]any{"lat": 31.2, "lng": 121.5}, selectField.ID: selectConfig.Options[0].ID,
-			attachmentField.ID: []any{map[string]any{"id": attachment.ID, "source": attachment.Source, "filename": attachment.Filename, "mimeType": attachment.MimeType, "size": float64(*attachment.Size), "hash": attachment.Hash}},
+			attachmentField.ID:  []any{map[string]any{"id": attachment.ID, "source": attachment.Source, "filename": attachment.Filename, "mimeType": attachment.MimeType, "size": float64(*attachment.Size), "hash": attachment.Hash}},
+			convertibleField.ID: "Open",
 		}},
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
-			tableResult.PrimaryField.ID: "Beta", locationField.ID: map[string]any{"lat": 31.3, "lng": 121.6},
+			tableResult.PrimaryField.ID: "Beta", locationField.ID: map[string]any{"lat": 31.3, "lng": 121.6}, convertibleField.ID: "Closed",
 		}},
 		{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{
-			tableResult.PrimaryField.ID: "Gamma",
+			tableResult.PrimaryField.ID: "Gamma", convertibleField.ID: "Open",
 		}},
 	})
 	if err != nil {
@@ -129,6 +149,44 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	}
 	if len(mutation.Results) != 3 {
 		t.Fatalf("mutation results = %d", len(mutation.Results))
+	}
+
+	preview, err := catalogService.PreviewFieldConversion(ctx, actorID, convertibleField.ID, "select")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !preview.Supported || len(preview.Modes) != 1 || preview.Modes[0].ID != "distinctOptions" {
+		t.Fatalf("preview = %#v", preview)
+	}
+	if preview.Modes[0].Stats.OK != 3 || preview.Modes[0].Stats.DistinctValues != 2 || preview.Modes[0].Stats.NewOptions != 2 {
+		t.Fatalf("preview stats = %#v", preview.Modes[0].Stats)
+	}
+	converted, err := catalogService.ConvertField(ctx, actorID, convertibleField.ID, catalog.ConversionRequest{
+		TargetType: "select", Mode: "distinctOptions", ExpectedRevision: convertibleField.Revision, PreviewToken: preview.PreviewToken,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if converted.Field.Type != "select" || converted.Field.Revision != convertibleField.Revision+1 {
+		t.Fatalf("converted field = %#v", converted.Field)
+	}
+	convertedConfig, ok := converted.Field.Config.(domain.SelectFieldConfig)
+	if !ok || len(convertedConfig.Options) != 2 {
+		t.Fatalf("converted config = %#v", converted.Field.Config)
+	}
+	optionIDs := make(map[string]string)
+	for _, option := range convertedConfig.Options {
+		optionIDs[option.Name] = option.ID
+	}
+	if optionIDs["Open"] == "" || optionIDs["Closed"] == "" {
+		t.Fatalf("options = %#v", convertedConfig.Options)
+	}
+	convertedRecord, err := recordService.Get(ctx, actorID, mutation.Results[0].Record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if convertedRecord.Values[convertibleField.ID] != optionIDs["Open"] {
+		t.Fatalf("converted value = %#v", convertedRecord.Values[convertibleField.ID])
 	}
 
 	query, err := recordService.Query(ctx, actorID, tableResult.Table.ID, loomrecord.QueryRequest{

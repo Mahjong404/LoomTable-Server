@@ -124,3 +124,36 @@ type ViewConfigurationRequiredError struct {
 func (e *ViewConfigurationRequiredError) Error() string {
 	return fmt.Sprintf("View %s references unavailable Fields", e.ViewID)
 }
+
+type UnsupportedFieldTypeError struct {
+	FieldType string
+}
+
+func (e *UnsupportedFieldTypeError) Error() string {
+	return fmt.Sprintf("Field type %s is unsupported", e.FieldType)
+}
+
+type UnsupportedConversionError struct {
+	SourceType string
+	TargetType string
+	Reason     string
+}
+
+func (e *UnsupportedConversionError) Error() string {
+	if e.Reason != "" {
+		return e.Reason
+	}
+	return fmt.Sprintf("Field type %s cannot be converted to %s", e.SourceType, e.TargetType)
+}
+
+type InvalidPreviewTokenError struct{}
+
+func (e *InvalidPreviewTokenError) Error() string {
+	return "preview token is invalid for this conversion"
+}
+
+type ConversionPreviewStaleError struct{}
+
+func (e *ConversionPreviewStaleError) Error() string {
+	return "record values changed after the conversion preview; run preview again"
+}

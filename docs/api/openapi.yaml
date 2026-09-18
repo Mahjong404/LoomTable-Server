@@ -683,6 +683,82 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /v1/fields/{fieldId}/convert-preview:
+    parameters:
+      - $ref: '#/components/parameters/FieldId'
+    post:
+      tags: [Fields]
+      operationId: previewFieldConversion
+      description: Dry-runs a Field type conversion. Reports whether the source/target type pair is supported, which conversion modes are available, and per-mode value statistics. Statistics and the later rewrite cover every record in the Table, including records in the recycle state. A primary Field never supports conversion. The returned previewToken binds the Field revision and value statistics and must be echoed by convertField.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConvertFieldPreviewRequest'
+      responses:
+        '200':
+          description: Conversion compatibility and per-mode statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/fields/{fieldId}/convert:
+    parameters:
+      - $ref: '#/components/parameters/FieldId'
+    post:
+      tags: [Fields]
+      operationId: convertField
+      description: Atomically converts a Field to a new type and rewrites every record value with the selected mode. Empty values stay empty; lost values are removed. The Field revision increments and a schemaChanged Change is emitted; record revisions are unchanged. Fails with INVALID_PREVIEW_TOKEN when the token does not decode or targets another Field or type, CONVERT_PREVIEW_STALE when the Field revision or value statistics drifted after the preview, UNSUPPORTED_CONVERSION for unsupported type pairs, UNSUPPORTED_FIELD_TYPE for unknown types, and INVALID_STATE_TRANSITION for deleted or primary Fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConvertFieldRequest'
+      responses:
+        '200':
+          description: Field converted and record values rewritten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /v1/tables/{tableId}/views:
     parameters:
       - $ref: '#/components/parameters/TableId'
@@ -1578,6 +1654,11 @@ components:
       maxLength: 200
       description: The Server trims leading/trailing Unicode whitespace, normalizes to NFC, rejects control characters, then enforces 1–200 Unicode code points. Sibling names need not be unique; IDs are authoritative.
 
+    FieldDescription:
+      type: string
+      maxLength: 200
+      description: Optional human-readable Field description. The Server trims leading/trailing Unicode whitespace, normalizes to NFC, rejects control characters, then enforces 0–200 Unicode code points; an empty normalized result clears the description. Omitted in responses when unset.
+
     WorkspaceId:
       type: string
       pattern: '^ws_[0-9A-HJKMNP-TV-Z]{26}$'
@@ -1748,6 +1829,7 @@ components:
         id: { $ref: '#/components/schemas/FieldId' }
         tableId: { $ref: '#/components/schemas/TableId' }
         name: { $ref: '#/components/schemas/ResourceName' }
+        description: { $ref: '#/components/schemas/FieldDescription' }
         position:
           type: integer
           minimum: 0
@@ -2126,6 +2208,105 @@ components:
           type: integer
           minimum: 1
 
+    ConvertFieldPreviewRequest:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment]
+
+    ConversionModeStats:
+      type: object
+      required: [ok, lossy, lost, empty]
+      properties:
+        ok:
+          type: integer
+          minimum: 0
+          description: Non-empty values that convert without data loss.
+        lossy:
+          type: integer
+          minimum: 0
+          description: Non-empty values that survive in a reduced form, such as a multi-option value keeping only its first option.
+        lost:
+          type: integer
+          minimum: 0
+          description: Non-empty values that cannot be represented in the target type and are removed.
+        empty:
+          type: integer
+          minimum: 0
+          description: Records without a value; they stay empty.
+        distinctValues:
+          type: integer
+          minimum: 0
+          description: Distinct source values that become select options. Present only for option-creating modes.
+        newOptions:
+          type: integer
+          minimum: 0
+          description: Options the conversion creates. Present only for option-creating modes.
+
+    ConversionMode:
+      type: object
+      required: [id, label, stats]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        disabled:
+          type: boolean
+          description: The mode is offered but cannot run, for example when distinct values exceed the 500 option limit.
+        reason:
+          type: string
+        stats:
+          $ref: '#/components/schemas/ConversionModeStats'
+
+    ConversionPreview:
+      type: object
+      required: [supported, totalRecords]
+      properties:
+        supported:
+          type: boolean
+        reason:
+          type: string
+          description: Present when supported is false.
+        totalRecords:
+          type: integer
+          minimum: 0
+        modes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversionMode'
+        previewToken:
+          type: string
+
+    ConvertFieldRequest:
+      type: object
+      additionalProperties: false
+      required: [type, mode, expectedRevision, previewToken]
+      properties:
+        type:
+          type: string
+          enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment]
+        mode:
+          type: string
+          description: One of the mode ids returned by previewFieldConversion.
+        expectedRevision:
+          type: integer
+          minimum: 1
+        previewToken:
+          type: string
+
+    ConversionResult:
+      type: object
+      required: [field, stats]
+      properties:
+        field:
+          $ref: '#/components/schemas/Field'
+        stats:
+          $ref: '#/components/schemas/ConversionModeStats'
+
     CreateFieldRequest:
       description: Strict type-discriminated Field creation request. The parent Table ID comes only from the route.
       oneOf:
@@ -2158,6 +2339,7 @@ components:
       required: [name]
       properties:
         name: { $ref: '#/components/schemas/ResourceName' }
+        description: { $ref: '#/components/schemas/FieldDescription' }
 
     CreateTextFieldRequest:
       allOf:
@@ -2260,7 +2442,7 @@ components:
       unevaluatedProperties: false
 
     UpdateFieldRequest:
-      description: Strict type-discriminated top-level PATCH. Type is immutable and must be echoed; omitted name or config is preserved, while a supplied config completely replaces the old config. expectedRevision is checked first; an identical normalized result returns the current Field without a Revision or Change.
+      description: Strict type-discriminated top-level PATCH. Type is immutable and must be echoed; omitted name, config, or description is preserved, while a supplied config completely replaces the old config and a supplied description (including null) replaces the current description. expectedRevision is checked first; an identical normalized result returns the current Field without a Revision or Change.
       oneOf:
         - $ref: '#/components/schemas/UpdateTextFieldRequest'
         - $ref: '#/components/schemas/UpdateLongTextFieldRequest'
@@ -2292,8 +2474,14 @@ components:
       anyOf:
         - required: [name]
         - required: [config]
+        - required: [description]
       properties:
         name: { $ref: '#/components/schemas/ResourceName' }
+        description:
+          anyOf:
+            - $ref: '#/components/schemas/FieldDescription'
+            - type: 'null'
+          description: Omitted preserves the current description; null or an empty normalized string clears it.
         type:
           type: string
           enum: [text, longText, number, checkbox, date, select, multiSelect, url, location, attachment]
@@ -3210,7 +3398,7 @@ components:
 
     ErrorResponse:
       type: object
-      description: Standard error envelope. HTTP status mapping is 400 BAD_REQUEST or INVALID_CURSOR, 401 UNAUTHENTICATED, 403 FORBIDDEN, 404 NOT_FOUND, 409 CONFLICT or IDEMPOTENCY_KEY_REUSED, 410 CURSOR_EXPIRED or QUERY_SNAPSHOT_EXPIRED, 413 PAYLOAD_TOO_LARGE, 415 UNSUPPORTED_MEDIA_TYPE, 422 VALIDATION_ERROR, RESOURCE_LIMIT_EXCEEDED, INVALID_STATE_TRANSITION, UNSUPPORTED_SORT, UNSUPPORTED_OPERATOR, or VIEW_CONFIGURATION_REQUIRED, 501 CAPABILITY_NOT_ENABLED, 503 readiness/dependency failure, and 500 INTERNAL_ERROR. Cursor errors never expose decoded token contents.
+      description: Standard error envelope. HTTP status mapping is 400 BAD_REQUEST, INVALID_CURSOR, or INVALID_PREVIEW_TOKEN, 401 UNAUTHENTICATED, 403 FORBIDDEN, 404 NOT_FOUND, 409 CONFLICT, IDEMPOTENCY_KEY_REUSED, or CONVERT_PREVIEW_STALE, 410 CURSOR_EXPIRED or QUERY_SNAPSHOT_EXPIRED, 413 PAYLOAD_TOO_LARGE, 415 UNSUPPORTED_MEDIA_TYPE, 422 VALIDATION_ERROR, RESOURCE_LIMIT_EXCEEDED, INVALID_STATE_TRANSITION, UNSUPPORTED_SORT, UNSUPPORTED_OPERATOR, UNSUPPORTED_FIELD_TYPE, UNSUPPORTED_CONVERSION, or VIEW_CONFIGURATION_REQUIRED, 501 CAPABILITY_NOT_ENABLED, 503 readiness/dependency failure, and 500 INTERNAL_ERROR. Cursor errors never expose decoded token contents.
       required: [error]
       properties:
         error:

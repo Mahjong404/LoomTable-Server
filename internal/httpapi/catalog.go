@@ -525,6 +525,30 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		})
 		return
 	}
+	var unsupportedFieldType *domain.UnsupportedFieldTypeError
+	if errors.As(err, &unsupportedFieldType) {
+		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "UNSUPPORTED_FIELD_TYPE", unsupportedFieldType.Error(), map[string]string{
+			"fieldType": unsupportedFieldType.FieldType,
+		})
+		return
+	}
+	var unsupportedConversion *domain.UnsupportedConversionError
+	if errors.As(err, &unsupportedConversion) {
+		writeAPIErrorWithDetails(w, r, http.StatusUnprocessableEntity, "UNSUPPORTED_CONVERSION", unsupportedConversion.Error(), map[string]string{
+			"sourceType": unsupportedConversion.SourceType, "targetType": unsupportedConversion.TargetType,
+		})
+		return
+	}
+	var invalidPreviewToken *domain.InvalidPreviewTokenError
+	if errors.As(err, &invalidPreviewToken) {
+		writeAPIError(w, r, http.StatusBadRequest, "INVALID_PREVIEW_TOKEN", invalidPreviewToken.Error())
+		return
+	}
+	var stalePreview *domain.ConversionPreviewStaleError
+	if errors.As(err, &stalePreview) {
+		writeAPIError(w, r, http.StatusConflict, "CONVERT_PREVIEW_STALE", stalePreview.Error())
+		return
+	}
 	if errors.Is(err, domain.ErrDependencyMissing) {
 		writeAPIError(w, r, http.StatusServiceUnavailable, "DEPENDENCY_UNAVAILABLE", "required application dependency is unavailable")
 		return

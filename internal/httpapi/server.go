@@ -48,6 +48,8 @@ type Catalog interface {
 	UpdateField(context.Context, string, string, catalog.FieldUpdate) (domain.Field, error)
 	DeleteField(context.Context, string, string, int64) error
 	RestoreField(context.Context, string, string, int64) (domain.Field, error)
+	PreviewFieldConversion(context.Context, string, string, string) (catalog.ConversionPreview, error)
+	ConvertField(context.Context, string, string, catalog.ConversionRequest) (catalog.ConversionResult, error)
 	ListViews(context.Context, string, string, string) ([]domain.View, error)
 	GetView(context.Context, string, string) (domain.View, error)
 	CreateView(context.Context, string, string, string, catalog.ViewInput) (domain.View, error)
