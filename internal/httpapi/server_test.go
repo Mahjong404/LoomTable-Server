@@ -39,6 +39,8 @@ type stubCatalog struct {
 	updatedField      catalog.FieldUpdate
 	convertRequest    catalog.ConversionRequest
 	createdViewInput  catalog.ViewInput
+	updatedViewID     string
+	updatedViewInput  catalog.ViewUpdate
 }
 
 type stubRecords struct {
@@ -246,8 +248,11 @@ func (s *stubCatalog) CreateView(_ context.Context, actorID, _, tableID string, 
 	return domain.View{ID: "view_00000000000000000000000000", TableID: tableID, Name: input.Name, Type: input.Type, Config: input.Config, Revision: 1}, nil
 }
 
-func (s *stubCatalog) UpdateView(context.Context, string, string, catalog.ViewUpdate) (domain.View, error) {
-	return domain.View{}, nil
+func (s *stubCatalog) UpdateView(_ context.Context, actorID, viewID string, update catalog.ViewUpdate) (domain.View, error) {
+	s.actorID = actorID
+	s.updatedViewID = viewID
+	s.updatedViewInput = update
+	return domain.View{ID: viewID, Type: update.Type, Config: update.Config, Revision: update.ExpectedRevision + 1}, nil
 }
 
 func (s *stubCatalog) DeleteView(context.Context, string, string, int64) error {
@@ -660,6 +665,28 @@ func TestMapQueryRouteDecodesViewport(t *testing.T) {
 
 	if recorder.Code != http.StatusOK || len(records.mapRequest.Viewport.Boxes) != 1 || records.mapRequest.PixelWidth != 1000 {
 		t.Fatalf("response = %d %s, request = %#v", recorder.Code, recorder.Body.String(), records.mapRequest)
+	}
+}
+
+func TestUpdateViewRouteDecodesManualSort(t *testing.T) {
+	catalogService := &stubCatalog{}
+	server := New(testConfig(), func(context.Context) error { return nil }, Dependencies{
+		Authenticator: fixedAuthenticator{}, Catalog: catalogService, Records: &stubRecords{},
+	})
+	body := `{"type":"grid","expectedRevision":3,"config":{"projection":[],"columnOrder":[],"columnWidths":{},"frozenFieldIds":[],"rowHeight":"standard","sort":[],"manualSort":true}}`
+	request := httptest.NewRequest(http.MethodPatch, "/v1/views/view_00000000000000000000000000", strings.NewReader(body))
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
+	}
+	config, ok := catalogService.updatedViewInput.Config.(domain.GridViewConfig)
+	if !ok || !config.ManualSort || catalogService.updatedViewInput.ExpectedRevision != 3 {
+		t.Fatalf("decoded update = %#v", catalogService.updatedViewInput)
 	}
 }
 

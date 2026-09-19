@@ -578,6 +578,7 @@ func decodeViewConfig(viewType string, raw json.RawMessage) (any, error) {
 			RowHeight      *string            `json:"rowHeight"`
 			Filter         json.RawMessage    `json:"filter"`
 			Sort           *[]domain.SortSpec `json:"sort"`
+			ManualSort     *bool              `json:"manualSort"`
 		}
 		if err := decodeStrictJSONBytes(raw, &request); err != nil {
 			return nil, prefixDecodeError(err, "/config")
@@ -612,7 +613,11 @@ func decodeViewConfig(viewType string, raw json.RawMessage) (any, error) {
 			}
 			filter = decoded
 		}
-		return domain.GridViewConfig{Projection: *request.Projection, ColumnOrder: *request.ColumnOrder, ColumnWidths: *request.ColumnWidths, FrozenFieldIDs: *request.FrozenFieldIDs, RowHeight: *request.RowHeight, Filter: filter, Sort: *request.Sort}, nil
+		var manualSort bool
+		if request.ManualSort != nil {
+			manualSort = *request.ManualSort
+		}
+		return domain.GridViewConfig{Projection: *request.Projection, ColumnOrder: *request.ColumnOrder, ColumnWidths: *request.ColumnWidths, FrozenFieldIDs: *request.FrozenFieldIDs, RowHeight: *request.RowHeight, Filter: filter, Sort: *request.Sort, ManualSort: manualSort}, nil
 	case "map":
 		var request struct {
 			LocationFieldID *string         `json:"locationFieldId"`
