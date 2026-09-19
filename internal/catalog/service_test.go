@@ -25,6 +25,7 @@ type captureStore struct {
 	updatedView      domain.View
 	fingerprint      [32]byte
 	updateCalls      int
+	setDefaultErr    error
 }
 
 func (s *captureStore) ListWorkspaces(context.Context, string) ([]domain.Workspace, error) {
@@ -186,6 +187,13 @@ func (s *captureStore) DeleteView(context.Context, string, string, int64) error 
 
 func (s *captureStore) RestoreView(context.Context, string, string, int64) (domain.View, error) {
 	return domain.View{}, nil
+}
+
+func (s *captureStore) SetDefaultView(_ context.Context, _, viewID string, expectedRevision int64) (domain.View, error) {
+	if s.setDefaultErr != nil {
+		return domain.View{}, s.setDefaultErr
+	}
+	return domain.View{ID: viewID, IsDefault: true, Revision: expectedRevision + 1}, nil
 }
 
 func TestCreateWorkspaceNormalizesBeforePersistence(t *testing.T) {
@@ -512,5 +520,86 @@ func fixedID(prefix string) (string, error) {
 		return prefix + "00000000000000000000000000", nil
 	default:
 		return "", errors.New("unexpected prefix")
+	}
+}
+
+func TestCreateNumberFieldNormalizesFormat(t *testing.T) {
+	store := &captureStore{}
+	service := NewWithIDGenerator(store, fixedID)
+	decimals := int64(2)
+
+	created, err := service.CreateField(
+		context.Background(),
+		"act_test",
+		"mut_00000000000000000000000000",
+		"tbl_00000000000000000000000000",
+		FieldInput{Name: "Amount", Type: "number", Config: domain.NumberFieldConfig{
+			Format: &domain.NumberFormatConfig{ThousandsSeparator: true, Decimals: &decimals, Currency: "CNY"},
+		}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, ok := store.createdField.Config.(domain.NumberFieldConfig)
+	if !ok {
+		t.Fatalf("config = %T, want NumberFieldConfig", store.createdField.Config)
+	}
+	if config.Format == nil || !config.Format.ThousandsSeparator || *config.Format.Decimals != 2 || config.Format.Currency != "CNY" {
+		t.Fatalf("format = %+v", config.Format)
+	}
+	if _, ok := created.Config.(domain.NumberFieldConfig); !ok {
+		t.Fatalf("created config = %T", created.Config)
+	}
+}
+
+func TestNumberFieldRejectsMalformedFormat(t *testing.T) {
+	store := &captureStore{}
+	service := NewWithIDGenerator(store, fixedID)
+	decimals := int64(11)
+
+	_, err := service.CreateField(
+		context.Background(),
+		"act_test",
+		"mut_00000000000000000000000000",
+		"tbl_00000000000000000000000000",
+		FieldInput{Name: "Amount", Type: "number", Config: domain.NumberFieldConfig{
+			Format: &domain.NumberFormatConfig{Decimals: &decimals},
+		}},
+	)
+	var validation *domain.ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("decimals error = %v, want ValidationError", err)
+	}
+
+	_, err = service.CreateField(
+		context.Background(),
+		"act_test",
+		"mut_00000000000000000000000000",
+		"tbl_00000000000000000000000000",
+		FieldInput{Name: "Amount", Type: "number", Config: domain.NumberFieldConfig{
+			Format: &domain.NumberFormatConfig{Currency: "cny"},
+		}},
+	)
+	if !errors.As(err, &validation) {
+		t.Fatalf("currency error = %v, want ValidationError", err)
+	}
+}
+
+func TestSetDefaultViewValidatesInput(t *testing.T) {
+	store := &captureStore{}
+	service := NewWithIDGenerator(store, fixedID)
+
+	if _, err := service.SetDefaultView(context.Background(), "act_test", "bad-id", 1); err == nil {
+		t.Fatal("expected error for malformed view id")
+	}
+	if _, err := service.SetDefaultView(context.Background(), "act_test", "view_00000000000000000000000000", 0); err == nil {
+		t.Fatal("expected error for missing expectedRevision")
+	}
+	view, err := service.SetDefaultView(context.Background(), "act_test", "view_00000000000000000000000000", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !view.IsDefault || view.Revision != 4 {
+		t.Fatalf("view = %+v", view)
 	}
 }

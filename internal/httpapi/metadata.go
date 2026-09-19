@@ -310,6 +310,29 @@ func (s *Server) view(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, item)
 		return
 	}
+	if strings.HasSuffix(trimmed, "/default") {
+		viewID := strings.TrimSuffix(trimmed, "/default")
+		if viewID == "" || strings.Contains(viewID, "/") || r.Method != http.MethodPost {
+			writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
+			return
+		}
+		var request restoreMetadataRequest
+		if err := decodeJSONRequest(r, &request); err != nil {
+			writeDecodeError(w, r, err)
+			return
+		}
+		if request.ExpectedRevision == nil {
+			writeDomainError(w, r, requiredValidation("/expectedRevision", "expectedRevision is required"))
+			return
+		}
+		item, err := s.catalog.SetDefaultView(r.Context(), actorIDFrom(r), viewID, *request.ExpectedRevision)
+		if err != nil {
+			writeDomainError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+		return
+	}
 	viewID, ok := singlePathID(r.URL.Path, "/v1/views/")
 	if !ok {
 		writeAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "resource not found")
@@ -429,7 +452,13 @@ func decodeFieldConfig(fieldType string, raw json.RawMessage) (any, error) {
 		return nil, validationDecodeError(domain.NewValidationError(domain.ValidationIssue{Path: "/config", Code: "type", Message: "config must be an object"}))
 	}
 	switch fieldType {
-	case "text", "longText", "number", "checkbox", "date", "url", "location":
+	case "number":
+		var config domain.NumberFieldConfig
+		if err := decodeStrictJSONBytes(raw, &config); err != nil {
+			return nil, prefixDecodeError(err, "/config")
+		}
+		return config, nil
+	case "text", "longText", "checkbox", "date", "url", "location":
 		var config domain.EmptyFieldConfig
 		if err := decodeStrictJSONBytes(raw, &config); err != nil {
 			return nil, prefixDecodeError(err, "/config")

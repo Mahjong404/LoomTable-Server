@@ -28,7 +28,7 @@ func (r *Repository) ListViews(ctx context.Context, actorID, tableID, lifecycle 
 		return nil, domain.ErrNotFound
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT v.id, v.table_id, v.name, v.type, v.config, v.revision,
+		SELECT v.id, v.table_id, v.name, v.type, v.config, v.is_default, v.revision,
 		       v.created_at, v.updated_at, v.deleted_at
 		FROM views v
 		WHERE v.table_id = $1 AND `+condition+`
@@ -103,7 +103,7 @@ func (r *Repository) CreateView(ctx context.Context, actorID, idempotencyKey str
 	created, err := scanView(tx.QueryRowContext(ctx, `
 		INSERT INTO views (id, table_id, name, type, config, revision)
 		VALUES ($1, $2, $3, $4, $5::jsonb, 1)
-		RETURNING id, table_id, name, type, config, revision,
+		RETURNING id, table_id, name, type, config, is_default, revision,
 		          created_at, updated_at, deleted_at
 	`, proposed.ID, proposed.TableID, proposed.Name, proposed.Type, string(encoded)))
 	if err != nil {
@@ -158,7 +158,7 @@ func (r *Repository) UpdateView(ctx context.Context, actorID, viewID string, exp
 		SET name = $1, config = $2::jsonb, revision = revision + 1,
 		    updated_at = clock_timestamp()
 		WHERE id = $3
-		RETURNING id, table_id, name, type, config, revision,
+		RETURNING id, table_id, name, type, config, is_default, revision,
 		          created_at, updated_at, deleted_at
 	`, target.Name, string(encoded), viewID))
 	if err != nil {
@@ -197,7 +197,7 @@ func (r *Repository) DeleteView(ctx context.Context, actorID, viewID string, exp
 		SET deleted_at = clock_timestamp(), revision = revision + 1,
 		    updated_at = clock_timestamp()
 		WHERE id = $1
-		RETURNING id, table_id, name, type, config, revision,
+		RETURNING id, table_id, name, type, config, is_default, revision,
 		          created_at, updated_at, deleted_at
 	`, viewID))
 	if err != nil {
@@ -233,10 +233,10 @@ func (r *Repository) RestoreView(ctx context.Context, actorID, viewID string, ex
 	}
 	restored, err := scanView(tx.QueryRowContext(ctx, `
 		UPDATE views
-		SET deleted_at = NULL, revision = revision + 1,
+		SET deleted_at = NULL, is_default = false, revision = revision + 1,
 		    updated_at = clock_timestamp()
 		WHERE id = $1
-		RETURNING id, table_id, name, type, config, revision,
+		RETURNING id, table_id, name, type, config, is_default, revision,
 		          created_at, updated_at, deleted_at
 	`, viewID))
 	if err != nil {
@@ -251,8 +251,86 @@ func (r *Repository) RestoreView(ctx context.Context, actorID, viewID string, ex
 	return restored, nil
 }
 
+func (r *Repository) SetDefaultView(ctx context.Context, actorID, viewID string, expectedRevision int64) (domain.View, error) {
+	if r == nil || r.db == nil {
+		return domain.View{}, domain.ErrDependencyMissing
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.View{}, fmt.Errorf("begin set default view: %w", err)
+	}
+	defer tx.Rollback()
+	current, err := lockAccessibleView(ctx, tx, actorID, viewID)
+	if err != nil {
+		return domain.View{}, err
+	}
+	if err := checkViewRevision(current, expectedRevision); err != nil {
+		return domain.View{}, err
+	}
+	if current.DeletedAt != nil {
+		return domain.View{}, &domain.InvalidStateTransitionError{Resource: "view", ID: viewID, Action: "setDefault", Current: "deleted"}
+	}
+	if current.IsDefault {
+		if err := tx.Commit(); err != nil {
+			return domain.View{}, fmt.Errorf("commit set default view no-op: %w", err)
+		}
+		return current, nil
+	}
+	cleared, err := tx.QueryContext(ctx, `
+		UPDATE views
+		SET is_default = false, revision = revision + 1,
+		    updated_at = clock_timestamp()
+		WHERE table_id = $1 AND is_default AND deleted_at IS NULL
+		RETURNING id, revision
+	`, current.TableID)
+	if err != nil {
+		return domain.View{}, fmt.Errorf("clear default views: %w", err)
+	}
+	type clearedView struct {
+		id       string
+		revision int64
+	}
+	clearedViews := make([]clearedView, 0, 1)
+	for cleared.Next() {
+		var item clearedView
+		if err := cleared.Scan(&item.id, &item.revision); err != nil {
+			cleared.Close()
+			return domain.View{}, fmt.Errorf("scan cleared view: %w", err)
+		}
+		clearedViews = append(clearedViews, item)
+	}
+	if err := cleared.Err(); err != nil {
+		cleared.Close()
+		return domain.View{}, fmt.Errorf("iterate cleared views: %w", err)
+	}
+	cleared.Close()
+	for _, item := range clearedViews {
+		if err := insertMetadataChange(ctx, tx, actorID, "viewChanged", current.TableID, item.id, item.revision); err != nil {
+			return domain.View{}, err
+		}
+	}
+	updated, err := scanView(tx.QueryRowContext(ctx, `
+		UPDATE views
+		SET is_default = true, revision = revision + 1,
+		    updated_at = clock_timestamp()
+		WHERE id = $1
+		RETURNING id, table_id, name, type, config, is_default, revision,
+		          created_at, updated_at, deleted_at
+	`, viewID))
+	if err != nil {
+		return domain.View{}, fmt.Errorf("set default view: %w", err)
+	}
+	if err := insertMetadataChange(ctx, tx, actorID, "viewChanged", updated.TableID, updated.ID, updated.Revision); err != nil {
+		return domain.View{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.View{}, fmt.Errorf("commit set default view: %w", err)
+	}
+	return updated, nil
+}
+
 const accessibleViewSQL = `
-	SELECT v.id, v.table_id, v.name, v.type, v.config, v.revision,
+	SELECT v.id, v.table_id, v.name, v.type, v.config, v.is_default, v.revision,
 	       v.created_at, v.updated_at, v.deleted_at
 	FROM views v
 	JOIN tables t ON t.id = v.table_id
@@ -266,7 +344,7 @@ func scanView(row scanner) (domain.View, error) {
 	var item domain.View
 	var rawConfig []byte
 	if err := row.Scan(
-		&item.ID, &item.TableID, &item.Name, &item.Type, &rawConfig, &item.Revision,
+		&item.ID, &item.TableID, &item.Name, &item.Type, &rawConfig, &item.IsDefault, &item.Revision,
 		&item.CreatedAt, &item.UpdatedAt, &item.DeletedAt,
 	); err != nil {
 		return domain.View{}, err

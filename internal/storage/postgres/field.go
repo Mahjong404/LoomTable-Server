@@ -315,7 +315,13 @@ func decodeFieldConfig(fieldType string, raw []byte) (any, error) {
 			config.MaxCount = 10
 		}
 		return config, nil
-	case "text", "longText", "number", "checkbox", "date", "url", "location":
+	case "number":
+		var config domain.NumberFieldConfig
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return nil, fmt.Errorf("decode %s Field config: %w", fieldType, err)
+		}
+		return config, nil
+	case "text", "longText", "checkbox", "date", "url", "location":
 		return domain.EmptyFieldConfig{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported persisted Field type %q", fieldType)

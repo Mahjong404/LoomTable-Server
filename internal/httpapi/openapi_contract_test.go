@@ -51,6 +51,7 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 		{"updateView", http.MethodPatch, "/v1/views/view_00000000000000000000000000", `{"type":"map","config":{"locationFieldId":"fld_00000000000000000000000000"},"expectedRevision":1}`, 200},
 		{"deleteView", http.MethodDelete, "/v1/views/view_00000000000000000000000000?expectedRevision=1", "", 204},
 		{"restoreView", http.MethodPost, "/v1/views/view_00000000000000000000000000/restore", `{"expectedRevision":1}`, 200},
+		{"setDefaultView", http.MethodPost, "/v1/views/view_00000000000000000000000000/default", `{"expectedRevision":1}`, 200},
 		{"queryMap", http.MethodPost, "/v1/views/view_00000000000000000000000000/map/query", `{"viewport":{"boxes":[{"west":100,"south":10,"east":120,"north":30}]},"zoom":8,"pixelWidth":1000,"pixelHeight":800}`, 200},
 		{"summarizeMap", http.MethodPost, "/v1/views/view_00000000000000000000000000/map/summary", "", 200},
 		{"queryMapClusterRecords", http.MethodPost, "/v1/views/view_00000000000000000000000000/map/cluster-records/query", `{"clusterToken":"token"}`, 200},

@@ -112,11 +112,18 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	scoreDecimals := int64(1)
 	numberField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
-		Name: "Score", Type: "number", Config: domain.EmptyFieldConfig{},
+		Name: "Score", Type: "number", Config: domain.NumberFieldConfig{
+			Format: &domain.NumberFormatConfig{ThousandsSeparator: true, Decimals: &scoreDecimals, Currency: "CNY"},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	numberConfig, ok := numberField.Config.(domain.NumberFieldConfig)
+	if !ok || numberConfig.Format == nil || numberConfig.Format.Currency != "CNY" {
+		t.Fatalf("number config = %#v", numberField.Config)
 	}
 	multiField, err := catalogService.CreateField(ctx, actorID, newMutationID(t), tableResult.Table.ID, catalog.FieldInput{
 		Name: "Tags", Type: "multiSelect", Config: catalog.SelectFieldConfigInput{Options: []catalog.SelectOptionInput{{Name: "Urgent", Color: "red"}, {Name: "Later", Color: "gray"}}},
@@ -341,6 +348,29 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	defaultView, err := catalogService.SetDefaultView(ctx, actorID, gridView.ID, gridView.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !defaultView.IsDefault {
+		t.Fatalf("default view = %+v", defaultView)
+	}
+	views, err := catalogService.ListViews(ctx, actorID, tableResult.Table.ID, "active")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := 0
+	for _, view := range views {
+		if view.IsDefault {
+			defaults++
+			if view.ID != gridView.ID {
+				t.Fatalf("unexpected default view %s", view.ID)
+			}
+		}
+	}
+	if defaults != 1 {
+		t.Fatalf("default count = %d", defaults)
 	}
 	manualQuery := func() []string {
 		page, err := recordService.Query(ctx, actorID, tableResult.Table.ID, loomrecord.QueryRequest{ViewIDPresent: true, ViewID: gridView.ID})

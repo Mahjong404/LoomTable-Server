@@ -56,6 +56,7 @@ type Catalog interface {
 	UpdateView(context.Context, string, string, catalog.ViewUpdate) (domain.View, error)
 	DeleteView(context.Context, string, string, int64) error
 	RestoreView(context.Context, string, string, int64) (domain.View, error)
+	SetDefaultView(context.Context, string, string, int64) (domain.View, error)
 }
 
 type Records interface {

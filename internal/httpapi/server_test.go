@@ -258,6 +258,10 @@ func (s *stubCatalog) RestoreView(context.Context, string, string, int64) (domai
 	return domain.View{}, nil
 }
 
+func (s *stubCatalog) SetDefaultView(context.Context, string, string, int64) (domain.View, error) {
+	return domain.View{}, nil
+}
+
 func testConfig() config.Config {
 	return config.Config{
 		ServerVersion:        "test",

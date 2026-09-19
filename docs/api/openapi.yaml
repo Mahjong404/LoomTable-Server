@@ -996,6 +996,45 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /v1/views/{viewId}/default:
+    parameters:
+      - $ref: '#/components/parameters/ViewId'
+    post:
+      tags: [Views]
+      operationId: setDefaultView
+      description: Marks the View as the table's default. Setting a new default clears the previous one atomically; both revisions are bumped and reported through viewChanged changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreMetadataRequest'
+      responses:
+        '200':
+          description: View marked as the table default
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/View'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /v1/views/{viewId}/map/query:
     parameters:
       - $ref: '#/components/parameters/ViewId'
@@ -2033,7 +2072,7 @@ components:
           required: [type, config]
           properties:
             type: { const: number }
-            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+            config: { $ref: '#/components/schemas/NumberFieldConfig' }
       unevaluatedProperties: false
 
     CheckboxField:
@@ -2120,7 +2159,7 @@ components:
     GridView:
       type: object
       additionalProperties: false
-      required: [id, tableId, name, type, config, revision, createdAt, updatedAt]
+      required: [id, tableId, name, type, config, isDefault, revision, createdAt, updatedAt]
       properties:
         id: { $ref: '#/components/schemas/ViewId' }
         tableId: { $ref: '#/components/schemas/TableId' }
@@ -2130,6 +2169,9 @@ components:
           const: grid
         config:
           $ref: '#/components/schemas/GridViewConfig'
+        isDefault:
+          type: boolean
+          description: Whether this View is the table default. Exactly one active View per table can be default.
         revision:
           type: integer
           minimum: 1
@@ -2140,7 +2182,7 @@ components:
     MapView:
       type: object
       additionalProperties: false
-      required: [id, tableId, name, type, config, revision, createdAt, updatedAt]
+      required: [id, tableId, name, type, config, isDefault, revision, createdAt, updatedAt]
       properties:
         id: { $ref: '#/components/schemas/ViewId' }
         tableId: { $ref: '#/components/schemas/TableId' }
@@ -2150,6 +2192,9 @@ components:
           const: map
         config:
           $ref: '#/components/schemas/MapViewConfig'
+        isDefault:
+          type: boolean
+          description: Whether this View is the table default. Exactly one active View per table can be default.
         revision:
           type: integer
           minimum: 1
@@ -2531,7 +2576,7 @@ components:
           required: [type, config]
           properties:
             type: { const: number }
-            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+            config: { $ref: '#/components/schemas/NumberFieldConfig' }
       unevaluatedProperties: false
 
     CreateCheckboxFieldRequest:
@@ -2676,7 +2721,7 @@ components:
         - type: object
           properties:
             type: { const: number }
-            config: { $ref: '#/components/schemas/EmptyFieldConfig' }
+            config: { $ref: '#/components/schemas/NumberFieldConfig' }
       unevaluatedProperties: false
 
     UpdateCheckboxFieldRequest:
@@ -2745,6 +2790,32 @@ components:
     EmptyFieldConfig:
       type: object
       additionalProperties: false
+
+    NumberFieldConfig:
+      type: object
+      additionalProperties: false
+      description: Number Cell configuration. format is optional display metadata; it never changes stored values.
+      properties:
+        format:
+          $ref: '#/components/schemas/NumberFormatConfig'
+
+    NumberFormatConfig:
+      type: object
+      additionalProperties: false
+      description: Display formatting hints for a Number Field.
+      properties:
+        thousandsSeparator:
+          type: boolean
+          description: Render grouping separators (for example 12,345).
+        decimals:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: Fixed fraction digits to display.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: ISO 4217 currency code rendered with the number (for example CNY).
 
     AttachmentFieldConfig:
       type: object

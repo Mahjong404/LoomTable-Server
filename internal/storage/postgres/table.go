@@ -158,10 +158,10 @@ func (r *Repository) CreateTable(ctx context.Context, actorID, idempotencyKey st
 	}
 	createdView := proposed.InitialView
 	if err := tx.QueryRowContext(ctx, `
-		INSERT INTO views (id, table_id, name, type, config, revision)
-		VALUES ($1, $2, $3, $4, $5::jsonb, 1)
+		INSERT INTO views (id, table_id, name, type, config, is_default, revision)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6, 1)
 		RETURNING created_at, updated_at
-	`, createdView.ID, createdTable.ID, createdView.Name, createdView.Type, string(viewConfig)).Scan(&createdView.CreatedAt, &createdView.UpdatedAt); err != nil {
+	`, createdView.ID, createdTable.ID, createdView.Name, createdView.Type, string(viewConfig), createdView.IsDefault).Scan(&createdView.CreatedAt, &createdView.UpdatedAt); err != nil {
 		return domain.CreateTableResult{}, fmt.Errorf("insert initial view: %w", err)
 	}
 

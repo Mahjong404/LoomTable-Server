@@ -98,6 +98,7 @@ type Store interface {
 	UpdateView(context.Context, string, string, int64, domain.View) (domain.View, error)
 	DeleteView(context.Context, string, string, int64) error
 	RestoreView(context.Context, string, string, int64) (domain.View, error)
+	SetDefaultView(context.Context, string, string, int64) (domain.View, error)
 }
 
 type IDGenerator func(string) (string, error)
@@ -329,11 +330,12 @@ func (s *Service) CreateTable(ctx context.Context, actorID, idempotencyKey, base
 			Config:        map[string]any{},
 		},
 		InitialView: domain.GridView{
-			ID:       viewID,
-			TableID:  tableID,
-			Name:     viewName,
-			Type:     "grid",
-			Revision: 1,
+			ID:        viewID,
+			TableID:   tableID,
+			Name:      viewName,
+			Type:      "grid",
+			IsDefault: true,
+			Revision:  1,
 			Config: domain.GridViewConfig{
 				Projection:     []string{fieldID},
 				ColumnOrder:    []string{fieldID},
@@ -678,9 +680,25 @@ func (s *Service) RestoreView(ctx context.Context, actorID, viewID string, expec
 	return s.store.RestoreView(ctx, actorID, viewID, expectedRevision)
 }
 
+func (s *Service) SetDefaultView(ctx context.Context, actorID, viewID string, expectedRevision int64) (domain.View, error) {
+	if err := validateID("/viewId", id.ViewPrefix, viewID); err != nil {
+		return domain.View{}, err
+	}
+	if expectedRevision < 1 {
+		return domain.View{}, domain.NewValidationError(domain.ValidationIssue{Path: "/expectedRevision", Code: "required", Message: "expectedRevision must be at least 1"})
+	}
+	if s == nil || s.store == nil {
+		return domain.View{}, domain.ErrDependencyMissing
+	}
+	return s.store.SetDefaultView(ctx, actorID, viewID, expectedRevision)
+}
+
 func (s *Service) normalizeNewFieldConfig(fieldType string, raw any) (any, any, error) {
 	switch fieldType {
-	case "text", "longText", "number", "checkbox", "date", "url", "location":
+	case "number":
+		config, err := normalizeNumberFieldConfig(raw)
+		return config, config, err
+	case "text", "longText", "checkbox", "date", "url", "location":
 		if _, ok := raw.(domain.EmptyFieldConfig); !ok {
 			return nil, nil, domain.NewValidationError(domain.ValidationIssue{Path: "/config", Code: "type", Message: "config must be an empty object"})
 		}
@@ -749,7 +767,9 @@ func (s *Service) normalizeNewSelectConfig(input SelectFieldConfigInput) (domain
 
 func (s *Service) normalizeUpdatedFieldConfig(current domain.Field, raw any) (any, error) {
 	switch current.Type {
-	case "text", "longText", "number", "checkbox", "date", "url", "location":
+	case "number":
+		return normalizeNumberFieldConfig(raw)
+	case "text", "longText", "checkbox", "date", "url", "location":
 		if _, ok := raw.(domain.EmptyFieldConfig); !ok {
 			return nil, domain.NewValidationError(domain.ValidationIssue{Path: "/config", Code: "type", Message: "config must be an empty object"})
 		}
@@ -769,6 +789,36 @@ func (s *Service) normalizeUpdatedFieldConfig(current domain.Field, raw any) (an
 	default:
 		return nil, fmt.Errorf("unsupported persisted Field type %q", current.Type)
 	}
+}
+
+func normalizeNumberFieldConfig(raw any) (domain.NumberFieldConfig, error) {
+	config, ok := raw.(domain.NumberFieldConfig)
+	if !ok {
+		return domain.NumberFieldConfig{}, domain.NewValidationError(domain.ValidationIssue{Path: "/config", Code: "type", Message: "config must contain an optional format object"})
+	}
+	if config.Format == nil {
+		return config, nil
+	}
+	format := config.Format
+	if format.Decimals != nil && (*format.Decimals < 0 || *format.Decimals > 10) {
+		return domain.NumberFieldConfig{}, domain.NewValidationError(domain.ValidationIssue{Path: "/config/format/decimals", Code: "limit", Message: "decimals must be from 0 to 10"})
+	}
+	if format.Currency != "" && !isCurrencyCode(format.Currency) {
+		return domain.NumberFieldConfig{}, domain.NewValidationError(domain.ValidationIssue{Path: "/config/format/currency", Code: "format", Message: "currency must be an ISO 4217 code"})
+	}
+	return config, nil
+}
+
+func isCurrencyCode(value string) bool {
+	if len(value) != 3 {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if value[i] < 'A' || value[i] > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeAttachmentFieldConfig(raw any) (domain.AttachmentFieldConfig, error) {

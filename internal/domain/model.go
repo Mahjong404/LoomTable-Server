@@ -104,7 +104,13 @@ func decodeFieldConfig(fieldType string, raw json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("decode %s Field config: %w", fieldType, err)
 		}
 		return config, nil
-	case "text", "longText", "number", "checkbox", "date", "url", "location":
+	case "number":
+		var config NumberFieldConfig
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return nil, fmt.Errorf("decode %s Field config: %w", fieldType, err)
+		}
+		return config, nil
+	case "text", "longText", "checkbox", "date", "url", "location":
 		var config EmptyFieldConfig
 		if err := json.Unmarshal(raw, &config); err != nil {
 			return nil, fmt.Errorf("decode %s Field config: %w", fieldType, err)
@@ -116,6 +122,16 @@ func decodeFieldConfig(fieldType string, raw json.RawMessage) (any, error) {
 }
 
 type EmptyFieldConfig struct{}
+
+type NumberFieldConfig struct {
+	Format *NumberFormatConfig `json:"format,omitempty"`
+}
+
+type NumberFormatConfig struct {
+	ThousandsSeparator bool   `json:"thousandsSeparator,omitempty"`
+	Decimals           *int64 `json:"decimals,omitempty"`
+	Currency           string `json:"currency,omitempty"`
+}
 
 type SelectOption struct {
 	ID    string `json:"id"`
@@ -178,6 +194,7 @@ type View struct {
 	Name      string     `json:"name"`
 	Type      string     `json:"type"`
 	Config    any        `json:"config"`
+	IsDefault bool       `json:"isDefault"`
 	Revision  int64      `json:"revision"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -224,6 +241,7 @@ type GridView struct {
 	Name      string         `json:"name"`
 	Type      string         `json:"type"`
 	Config    GridViewConfig `json:"config"`
+	IsDefault bool           `json:"isDefault"`
 	Revision  int64          `json:"revision"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
