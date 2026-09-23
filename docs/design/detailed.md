@@ -156,7 +156,6 @@ Change Log 用于：
 - OpenAPI 合同测试。
 - Attachment 文件卷和恢复测试。
 - 20k/50k 数据集性能测试。
-- Docker Compose 健康检查、升级和恢复 Smoke Test。
 
 ## 11. P0 合同决策
 
@@ -388,7 +387,7 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 
 ### P0 合并门槛
 
-历史发布门禁：Server P0 PR 只有在没有待定合同标记，且全部 P0 路由和业务模块、Migration、认证管理、备份恢复、OpenAPI Contract Test、PostgreSQL 集成测试、Query/Map 基准、Docker Smoke/Backup Restore、Go Test/Vet 全部通过后，才可转为 Ready 并通过 GitHub PR 合并到 `main`。该门禁已用于 v0.1.0 release point `ef0c6bd751642f4a604fe1bf88980f64e39dd992`；当前文档同步提交位于其后的 `main` 文档主线上。
+P0 路由和业务模块、Migration、认证管理、备份恢复、OpenAPI Contract Test、PostgreSQL 集成测试、Query/Map 基准及 Go Test/Vet 是 v0.1.0 的历史交付范围，发布点为 `ef0c6bd751642f4a604fe1bf88980f64e39dd992`。P1.5 客户端开发不以重新部署或重复历史验收为前置条件。
 
 ## 16. Q171–Q185 已确认的实现边界
 
@@ -431,4 +430,3 @@ Record、Field、Table 和 View 均使用软删除。Record 的删除和恢复�
 - 后续增加 `DateTime` 和 `Time` Field Type；两者都支持单值和范围模式。DateTime 保存 UTC，Time 保存不带日期的本地时刻。
 - 后续为 Location 增加 `geoWithin` 查询操作，先支持矩形和圆形，Polygon 后置，并允许作为 View Filter 保存。
 - 手机号、身份证号等作为 Text 的区域化 Validation Preset；Currency、Percent 作为 Number 格式；Rating、Duration、User 等独立语义类型后续再评估。
-

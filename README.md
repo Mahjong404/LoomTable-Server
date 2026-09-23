@@ -11,7 +11,7 @@ v0.1.0 P0 已完成并发布，发布点为 `main` commit `ef0c6bd751642f4a604fe
 - Server v0.1.0 以 `main@ef0c6bd751642f4a604fe1bf88980f64e39dd992` 作为发布点；运行环境应显式设置 `LOOMTABLE_SERVER_VERSION=v0.1.0`，使 `/v1/meta` 的 `serverVersion` 与发布版本一致。
 - 当前个人部署通过 Nginx 对外提供 `https://loomtable.mahjong404.cn`；Server 仍监听宿主机回环地址 `127.0.0.1:31201`，PostgreSQL 不对公网开放。
 - 已验收公网 `/healthz`、`/readyz`、`/v1/meta` 及 Plugin 的认证访问。
-- Map live smoke 的范围包括 OSM 和天地图在 Obsidian/Electron 中的真实瓦片加载。天地图直连必须使用浏览器端应用 Key；该凭据和行为属于 Plugin/第三方瓦片访问条件，不代表 Server 提供天地图代理或瓦片能力。未将任何 Token、Key 或 Secret 写入仓库。
+- 天地图凭据和瓦片访问属于 Plugin/第三方服务边界，不代表 Server 提供瓦片代理能力。未将任何 Token、Key 或 Secret 写入仓库。
 
 ## 文档
 
@@ -75,5 +75,4 @@ docker compose up -d server
 备份、校验和恢复入口位于 `scripts/operations/`，PowerShell 与 Bash 版本执行相同的版本化归档合同。恢复必须在 Server 停止后显式确认。
 
 许可证：GPL-3.0。
-
 

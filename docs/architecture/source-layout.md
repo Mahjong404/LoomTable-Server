@@ -19,7 +19,7 @@ internal/
 ├── id/                   typed identifier generation and validation
 └── status/               readiness dependency states
 migrations/               ordered PostgreSQL schema migrations
-scripts/operations/       backup, validation, restore, and smoke-test entrypoints
+scripts/operations/       backup, validation, restore, and isolated recovery verification
 ```
 
 Directories that are not implemented yet are shown to reserve their intended location; do not add empty placeholder directories.

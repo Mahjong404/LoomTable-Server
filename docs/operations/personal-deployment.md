@@ -44,7 +44,7 @@ P1 默认启用 Attachment capability；可以通过配置关闭。Managed Attac
 - Secret 不写入日志。
 - 生产远程部署应使用 HTTPS 或可信内网通道。
 - v0.1.0 当前部署使用 Nginx 终止 TLS，并将 `https://loomtable.mahjong404.cn` 根路径反代到宿主机回环地址 `127.0.0.1:31201`；已验收 `/healthz`、`/readyz`、`/v1/meta` 和 Plugin 公网认证。部署环境应显式设置 `LOOMTABLE_SERVER_VERSION=v0.1.0`。
-- Map live smoke 的第三方瓦片结果不扩展 Server 能力边界：Plugin 直连天地图必须使用浏览器端应用 Key，仓库不记录具体凭据。
+- 第三方瓦片访问不扩展 Server 能力边界，仓库不记录具体凭据。
 
 ## Actor 和 Token 初始化
 
@@ -158,4 +158,3 @@ Server 在启动时及其后每 24 小时运行一次有界后台任务，按实
 ## Migration 生命周期
 
 首个公开 P0 发布前允许把 Schema 调整折叠进 `001_initial.sql`，本阶段开发数据库视为可重建。P0 发布后冻结 001，只新增有序 Forward Migration；普通 Server 启动始终只报告 Migration 状态，不自动执行。
-

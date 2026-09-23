@@ -75,7 +75,7 @@
 
 ## P0 验收门槛
 
-历史 P0 发布门禁：20k Query/Map 基准、OpenAPI Contract、PostgreSQL Integration、Docker Compose Smoke、完整 Backup/Restore 与 Go Test/Vet 均须通过后，P0 PR 才能转为 Ready 并合并到 `main`。该门禁已满足并用于 v0.1.0 release point `ef0c6bd751642f4a604fe1bf88980f64e39dd992`；本文件不把已完成门禁描述为当前未发布状态。
+P0 的历史验证包括 20k Query/Map 基准、OpenAPI Contract、PostgreSQL Integration、完整 Backup/Restore 与 Go Test/Vet，发布点为 `ef0c6bd751642f4a604fe1bf88980f64e39dd992`。这些不是 P1.5 客户端的前置任务；当前不要求重复部署验收。
 
 参考环境固定为 4 vCPU、8 GiB、本地 Docker Compose 和热缓存。每项先预热 5 次，再测量 30 次：
 
