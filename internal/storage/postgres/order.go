@@ -129,7 +129,9 @@ func moveTargetPosition(ctx context.Context, tx *sql.Tx, tableID, recordID strin
 		return position, nil
 	}
 	neighbor := func(query string, args ...any) (*float64, error) {
-		var position float64
+		// max()/min() over an empty set returns one NULL row, not ErrNoRows —
+		// scanning it into a plain float64 fails the whole move at the edges.
+		var position sql.NullFloat64
 		err := tx.QueryRowContext(ctx, query, args...).Scan(&position)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -137,7 +139,10 @@ func moveTargetPosition(ctx context.Context, tx *sql.Tx, tableID, recordID strin
 		if err != nil {
 			return nil, fmt.Errorf("read neighbor record position: %w", err)
 		}
-		return &position, nil
+		if !position.Valid {
+			return nil, nil
+		}
+		return &position.Float64, nil
 	}
 
 	switch {

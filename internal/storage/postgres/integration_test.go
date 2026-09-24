@@ -400,11 +400,25 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if order := manualQuery(); order[0] != gammaRecord.ID || order[1] != betaRecordID || order[2] != firstRecordID {
 		t.Fatalf("order after move-to-end = %v", order)
 	}
+	// Single-anchor moves at the head/tail hit the empty-neighbor scan; a NULL
+	// aggregate must fall back to the boundary position instead of failing.
+	if _, err := recordService.Move(ctx, actorID, tableResult.Table.ID, betaRecordID, loomrecord.MoveRequest{BeforeRecordID: gammaRecord.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if order := manualQuery(); order[0] != betaRecordID || order[1] != gammaRecord.ID || order[2] != firstRecordID {
+		t.Fatalf("order after move-to-head = %v", order)
+	}
+	if _, err := recordService.Move(ctx, actorID, tableResult.Table.ID, betaRecordID, loomrecord.MoveRequest{AfterRecordID: firstRecordID}); err != nil {
+		t.Fatal(err)
+	}
+	if order := manualQuery(); order[0] != gammaRecord.ID || order[1] != firstRecordID || order[2] != betaRecordID {
+		t.Fatalf("order after move-to-tail-anchor = %v", order)
+	}
 	movedHistory, err := recordService.History(ctx, actorID, tableResult.Table.ID, loomrecord.HistoryRequest{Kind: "recordMoved"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(movedHistory.Items) != 2 || movedHistory.Items[0].RecordID != firstRecordID {
+	if len(movedHistory.Items) != 4 || movedHistory.Items[0].RecordID != betaRecordID {
 		t.Fatalf("recordMoved history = %#v", movedHistory.Items)
 	}
 
