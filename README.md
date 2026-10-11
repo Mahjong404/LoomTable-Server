@@ -17,6 +17,7 @@ v0.1.0 P0 已完成并发布，发布点为 `main` commit `ef0c6bd751642f4a604fe
 
 - [贡献与分支规范](./CONTRIBUTING.md)
 - [Server 文档索引](./docs/README.md)
+- [Wave 1.5 / Devin Server API-first 入口](./docs/wave1.5/README.md)
 - [领域上下文](./CONTEXT.md)
 - [术语对照表](./docs/terminology.md)
 - [架构总览](./docs/architecture/overview.md)

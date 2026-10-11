@@ -92,3 +92,7 @@ LoomTable 自身使用带默认值的 `--loom-*` 语义变量，并映射到 Obs
 
 所有插件 CSS 使用 `.loom-*` 命名空间。任何外部视觉参考只用于开发和测试，不作为运行时依赖。
 
+
+## Wave 1.5 跨仓库实施
+
+新能力遵循 [Server API-first 执行入口](../wave1.5/README.md)：获授权 Gate 的领域/OpenAPI 合同先审查，再实现/隔离验证 Server，交付固定 commit 与真实 capability；Plugin 随后同步固定快照接入。现有合同支持的 UI 可独立先做，架构说明不代表新 Gate 已批准。
