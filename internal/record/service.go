@@ -82,6 +82,7 @@ func (s *Service) Mutate(ctx context.Context, actorID, tableID, clientMutationID
 		ClientMutationID: stored.ClientMutationID,
 		Results:          stored.Results,
 		ChangeCursor:     changeCursor,
+		ChoiceFields:     stored.ChoiceFields,
 	}, nil
 }
 
@@ -103,8 +104,8 @@ func validateCommands(commands []Command) error {
 			}
 		case "updateRecord":
 			issues = append(issues, validateTargetCommand(path, command)...)
-			if !command.SetPresent && !command.UnsetFieldsPresent {
-				issues = append(issues, domain.ValidationIssue{Path: path, Code: "required", Message: "set or unsetFieldIds is required"})
+			if !command.SetPresent && !command.UnsetFieldsPresent && len(command.Choices) == 0 {
+				issues = append(issues, domain.ValidationIssue{Path: path, Code: "required", Message: "set, unsetFieldIds, or choices is required"})
 			}
 			if command.SetPresent && len(command.Set) == 0 {
 				issues = append(issues, domain.ValidationIssue{Path: path + "/set", Code: "required", Message: "set cannot be empty when supplied"})
@@ -125,6 +126,7 @@ func validateCommands(commands []Command) error {
 			}
 		}
 	}
+	issues = append(issues, validateChoices(commands)...)
 	if len(issues) > 0 {
 		return domain.NewValidationError(issues...)
 	}

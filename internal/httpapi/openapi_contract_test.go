@@ -151,3 +151,33 @@ func TestAggregateSearchOpenAPIContract(t *testing.T) {
 		t.Fatal("Aggregate Search capability missing from Meta contract")
 	}
 }
+
+func TestAtomicChoiceOpenAPIAdditiveContract(t *testing.T) {
+	spec, err := os.ReadFile(filepath.Join("..", "..", "docs", "api", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"CreateRecordCommand", "UpdateRecordCommand"} {
+		match := regexp.MustCompile(`(?ms)^    ` + name + `:\n(.*?)^    [A-Z]`).FindSubmatch(spec)
+		if match == nil || !strings.Contains(string(match[1]), "#/components/schemas/ChoiceAssignments") {
+			t.Fatalf("%s must accept optional choices", name)
+		}
+		if strings.Contains(string(match[1]), "required: [choices, ") {
+			t.Fatal("legacy commands must remain valid without choices")
+		}
+	}
+	for _, name := range []string{"DeleteRecordCommand", "RestoreRecordCommand"} {
+		match := regexp.MustCompile(`(?ms)^    ` + name + `:\n(.*?)^    [A-Z]`).FindSubmatch(spec)
+		if match == nil || strings.Contains(string(match[1]), "ChoiceAssignments") {
+			t.Fatalf("%s scope changed", name)
+		}
+	}
+	for _, part := range []string{"version: 0.5.0", "`atomicChoice`", "ChoiceFieldResult:", "fieldConflicts:", "MUTATION_RECEIPT_EXPIRED", "MutationReceiptExpiredDetails:", "x-loomtable-normalized-max-length: 100"} {
+		if !strings.Contains(string(spec), part) {
+			t.Fatalf("G2 contract missing %s", part)
+		}
+	}
+	if strings.Contains(string(spec), "operationId: createChoice") {
+		t.Fatal("G2 must use mutateRecords rather than a new endpoint")
+	}
+}

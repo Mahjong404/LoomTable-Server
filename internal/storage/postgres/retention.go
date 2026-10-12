@@ -35,7 +35,9 @@ func (r *Repository) CleanupRetention(
 	if !acquired {
 		return maintenance.CleanupStats{}, nil
 	}
-	defer connection.QueryRowContext(context.Background(), `SELECT pg_advisory_unlock(hashtext('loomtable-retention-v1'))`).Scan(new(bool))
+	defer func() {
+		connection.QueryRowContext(context.Background(), `SELECT pg_advisory_unlock(hashtext('loomtable-retention-v1'))`).Scan(new(bool))
+	}()
 
 	stats := maintenance.CleanupStats{}
 	if changeAge > 0 {

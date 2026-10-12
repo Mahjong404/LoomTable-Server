@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -936,13 +935,10 @@ func (s *Service) normalizeUpdatedSelectConfig(current domain.SelectFieldConfig,
 // writer may assign to Select and MultiSelect Options, in the canonical
 // contract order mirrored by the OpenAPI SelectOptionColor enum. Do not
 // reorder or extend without a reviewed contract change.
-var SelectOptionColors = []string{
-	"gray", "red", "orange", "yellow", "lime", "green",
-	"cyan", "blue", "indigo", "purple", "pink", "brown",
-}
+var SelectOptionColors = domain.SelectOptionColors
 
 func validOptionColor(value string) bool {
-	return slices.Contains(SelectOptionColors, value)
+	return domain.ValidSelectOptionColor(value)
 }
 
 func normalizeViewConfig(viewType string, raw any, fields []domain.Field) (any, error) {
