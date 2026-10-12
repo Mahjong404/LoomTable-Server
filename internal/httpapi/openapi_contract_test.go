@@ -134,3 +134,20 @@ func TestSelectOptionColorEnumMatchesCatalogAllowance(t *testing.T) {
 		t.Fatalf("OpenAPI SelectOptionColor = %v, catalog.SelectOptionColors = %v", listed, catalog.SelectOptionColors)
 	}
 }
+
+func TestAggregateSearchOpenAPIContract(t *testing.T) {
+	spec, err := os.ReadFile(filepath.Join("..", "..", "docs", "api", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := regexp.MustCompile(`(?ms)^    AggregateRequest:\n(.*?)^    AggregateResult:`).FindSubmatch(spec)
+	if request == nil {
+		t.Fatal("AggregateRequest schema missing")
+	}
+	if !strings.Contains(string(request[1]), "required: [fieldIds, fns]") || !regexp.MustCompile(`search:\s*\n\s+type: string\s*\n\s+x-loomtable-normalized-max-length: 500`).Match(request[1]) || strings.Contains(string(request[1]), "maxLength: 500") {
+		t.Fatal("Aggregate Search must be an optional string bounded after Trim/NFC, without a raw string length restriction")
+	}
+	if !strings.Contains(string(spec), "`aggregateSearch`") {
+		t.Fatal("Aggregate Search capability missing from Meta contract")
+	}
+}

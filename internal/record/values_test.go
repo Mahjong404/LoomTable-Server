@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
@@ -288,5 +289,36 @@ func TestAggregateValidation(t *testing.T) {
 				t.Fatalf("Aggregate error = %v, want ValidationError", err)
 			}
 		})
+	}
+}
+
+func TestAggregateSearchUsesRecordQueryNormalization(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"", ""}, {"\u2003 \t", ""}, {"\u2003Straße\u2003", "strasse"},
+		{"CAFE\u0301", "café"}, {strings.Repeat("界", 500), strings.Repeat("界", 500)},
+		{"\u2003" + strings.Repeat("界", 500) + "\u2003", strings.Repeat("界", 500)},
+		{strings.Repeat("e\u0301", 500), strings.Repeat("é", 500)},
+	} {
+		store := &valuesTestStore{metadata: valuesMetadata()}
+		_, err := New(store).Aggregate(context.Background(), valuesActor, valuesTable, AggregateRequest{
+			FieldIDs: []string{valuesNumber}, Functions: []string{"count"}, Search: tc.input,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if store.gotAggregatePlan.Search != tc.want {
+			t.Fatalf("normalized Search = %q, want %q", store.gotAggregatePlan.Search, tc.want)
+		}
+	}
+	store := &valuesTestStore{metadata: valuesMetadata()}
+	_, err := New(store).Aggregate(context.Background(), valuesActor, valuesTable, AggregateRequest{
+		FieldIDs: []string{valuesNumber}, Functions: []string{"count"}, Search: strings.Repeat("界", 501),
+	})
+	var validation *domain.ValidationError
+	if !errors.As(err, &validation) || validation.Issues[0].Path != "/search" || validation.Issues[0].Code != "limit" {
+		t.Fatalf("Search error = %v", err)
+	}
+	if len(store.gotAggregatePlan.Requests) != 0 {
+		t.Fatal("invalid Search reached storage")
 	}
 }
