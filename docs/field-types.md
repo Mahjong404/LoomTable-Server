@@ -162,7 +162,7 @@ Tag 不是独立 Field Type：
 - Option 配置输入是期望的 Active 列表：无 ID 创建，当前 Active ID 更新，Deleted ID 恢复，遗漏 Active ID 软删除；响应分别返回 Active 与 Deleted Option，Active 数组顺序即显示顺序。
 - Option 名称最多 100 个 Unicode 码点并执行 Unicode Trim、NFC 和控制字符拒绝；Active 名称按 locale-neutral Unicode Default Case Folding 后唯一，Deleted Option 可以与 Active Option 同名。
 - 每个 Field 最多 500 个 Active Option、5,000 个 Active + Deleted Option；Deleted Option 按 `deletedAt ASC, id ASC` 返回。
-- Option `color` 是必填的 Server 语义色板 Token，只允许 `gray`、`red`、`orange`、`yellow`、`green`、`cyan`、`blue`、`purple`、`pink`，不接受 CSS 颜色值。
+- Option `color` 是必填的 Server 语义色板 Token，只允许 `gray`、`red`、`orange`、`yellow`、`lime`、`green`、`cyan`、`blue`、`indigo`、`purple`、`pink`、`brown`，不接受 CSS 颜色值。
 - Chip、颜色和标签样式属于 Renderer。
 - 跨 Table 共享标签、标签层级和标签权限属于未来 Tag Domain，不属于第一阶段。
 

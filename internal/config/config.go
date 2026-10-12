@@ -23,7 +23,7 @@ type Config struct {
 
 func Load() Config {
 	attachmentsEnabled := boolean("LOOMTABLE_ATTACHMENTS_ENABLED", true)
-	capabilities := []string{"grid", "map"}
+	capabilities := []string{"grid", "map", "choicePalette12"}
 	if attachmentsEnabled {
 		capabilities = append(capabilities, "attachments")
 	}
@@ -73,4 +73,3 @@ func boolean(name string, fallback bool) bool {
 	}
 	return parsed
 }
-

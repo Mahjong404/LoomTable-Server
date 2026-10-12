@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: LoomTable Server API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     LoomTable Server 的初版 REST API 合同。
     Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
@@ -1932,7 +1932,7 @@ components:
           type: string
         capabilities:
           type: array
-          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available.
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`.
           items:
             type: string
         changeRetention:
@@ -2895,7 +2895,7 @@ components:
 
     SelectOptionColor:
       type: string
-      enum: [gray, red, orange, yellow, green, cyan, blue, purple, pink]
+      enum: [gray, red, orange, yellow, lime, green, cyan, blue, indigo, purple, pink, brown]
       description: Required Server-defined semantic palette token. Clients map the token to their active theme; CSS color values are never stored.
 
     SelectOptionName:

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -931,13 +932,17 @@ func (s *Service) normalizeUpdatedSelectConfig(current domain.SelectFieldConfig,
 	return domain.SelectFieldConfig{Options: active, DeletedOptions: deleted}, nil
 }
 
+// SelectOptionColors is the single authoritative set of palette tokens a
+// writer may assign to Select and MultiSelect Options, in the canonical
+// contract order mirrored by the OpenAPI SelectOptionColor enum. Do not
+// reorder or extend without a reviewed contract change.
+var SelectOptionColors = []string{
+	"gray", "red", "orange", "yellow", "lime", "green",
+	"cyan", "blue", "indigo", "purple", "pink", "brown",
+}
+
 func validOptionColor(value string) bool {
-	switch value {
-	case "gray", "red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(SelectOptionColors, value)
 }
 
 func normalizeViewConfig(viewType string, raw any, fields []domain.Field) (any, error) {

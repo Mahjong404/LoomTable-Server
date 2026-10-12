@@ -32,7 +32,7 @@ func TestLoadUsesAttachmentDefaults(t *testing.T) {
 	if cfg.AttachmentRoot != "data/attachments" || cfg.AttachmentMaxBytes != 50*1024*1024 || !cfg.AttachmentsEnabled {
 		t.Fatalf("attachment config = %#v", cfg)
 	}
-	if len(cfg.Capabilities) != 3 || cfg.Capabilities[2] != "attachments" {
+	if len(cfg.Capabilities) != 4 || cfg.Capabilities[2] != "choicePalette12" || cfg.Capabilities[3] != "attachments" {
 		t.Fatalf("capabilities = %#v", cfg.Capabilities)
 	}
 }
@@ -44,4 +44,3 @@ func TestLoadRejectsInvalidAttachmentLimit(t *testing.T) {
 		t.Fatalf("AttachmentMaxBytes = %d, want default", got)
 	}
 }
-
