@@ -111,7 +111,7 @@ func (r *Repository) AggregateRecords(
 	for _, request := range plan.Requests {
 		builder := &querySQLBuilder{}
 		where, err := buildRecordWhere(builder, tableID, loomrecord.QueryPlan{
-			Lifecycle: "active", Filter: plan.Filter, Fields: plan.Fields,
+			Lifecycle: "active", Filter: plan.Filter, Search: plan.Search, Fields: plan.Fields,
 		})
 		if err != nil {
 			return loomrecord.StoredAggregateResult{}, err

@@ -161,12 +161,14 @@ type DistinctPlan struct {
 type AggregateRequest struct {
 	Filter        *domain.FilterNode
 	FilterPresent bool
+	Search        string
 	FieldIDs      []string
 	Functions     []string
 }
 
 type AggregatePlan struct {
 	Filter   *domain.FilterNode
+	Search   string
 	Fields   map[string]FieldDefinition
 	Requests []AggregateFieldRequest
 }

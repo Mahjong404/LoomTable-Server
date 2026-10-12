@@ -140,6 +140,7 @@ type distinctValuesRequest struct {
 
 type aggregateRequestWire struct {
 	Filter   json.RawMessage `json:"filter"`
+	Search   json.RawMessage `json:"search"`
 	FieldIDs *[]string       `json:"fieldIds"`
 	Fns      *[]string       `json:"fns"`
 }
@@ -210,6 +211,12 @@ func (s *Server) aggregateRecords(w http.ResponseWriter, r *http.Request, tableI
 		return
 	}
 	request := loomrecord.AggregateRequest{}
+	if value, _, err := decodeOptionalJSONString(wire.Search, "/search"); err != nil {
+		writeDecodeError(w, r, err)
+		return
+	} else {
+		request.Search = value
+	}
 	if wire.Filter != nil {
 		filter, err := decodeFilterNode(wire.Filter, "/filter")
 		if err != nil {

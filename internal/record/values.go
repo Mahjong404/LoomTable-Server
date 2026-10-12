@@ -242,12 +242,16 @@ func (s *Service) Aggregate(ctx context.Context, actorID, tableID string, reques
 	if err := validateFilter(filter, metadata, false); err != nil {
 		return AggregateResult{}, err
 	}
+	search, err := normalizeSearch(request.Search)
+	if err != nil {
+		return AggregateResult{}, err
+	}
 
 	signer, err := s.cursorSigner(ctx)
 	if err != nil {
 		return AggregateResult{}, err
 	}
-	plan := AggregatePlan{Filter: filter, Fields: metadata.Fields}
+	plan := AggregatePlan{Filter: filter, Search: search, Fields: metadata.Fields}
 	for _, fieldID := range request.FieldIDs {
 		plan.Requests = append(plan.Requests, AggregateFieldRequest{
 			FieldID:   fieldID,
