@@ -22,7 +22,7 @@ DatePicker、当前 Choice ID、Query Panels、Display、Grid 几何、Date消�
 
 本仓库的合同文件/PR保留 Server 实施与验证证据，整体状态只引用它们；不要再建立第二份全 Wave 完成表。一次交付一个明确 Gate；用户本轮已授权六 Gate 的 Server 工程工作，按依赖顺序逐项交付，真正缺失的产品决策、不兼容协议或危险迁移仍须裁决。
 
-已交付 G1 的固定 SHA、CI、备份/恢复、部署及 Plugin 接入条件见 [G1 交付](deliveries/g1-choice-palette.md)。下一切片的精确合同见 [G6 Aggregate Search](contracts/g6-aggregate-search.md)。
+已交付 G1/G6 的固定 SHA、CI、备份/恢复、部署及 Plugin 接入条件见 [G1 交付](deliveries/g1-choice-palette.md) / [G6 交付](deliveries/g6-aggregate-search.md)；G6 精确语义见 [Aggregate Search 合同](contracts/g6-aggregate-search.md)。下一工程切片为 G2，先冻结双 CAS、receipt 与 writer 锁序合同，再实施原子事务。
 
 ## 六条合同 Gate 的 Server 任务边界
 
