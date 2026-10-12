@@ -272,7 +272,7 @@ func testConfig() config.Config {
 		ServerVersion:        "test",
 		APIVersion:           "v1",
 		MinPluginVersion:     "0.1.0",
-		Capabilities:         []string{"grid", "map"},
+		Capabilities:         []string{"grid", "map", "choicePalette12"},
 		ChangeRetention:      "30d",
 		IdempotencyRetention: "30d",
 	}
@@ -311,6 +311,42 @@ func TestPublicEndpointsAndAuthBoundary(t *testing.T) {
 	_ = response.Body.Close()
 }
 
+func TestMetaDeclaresChoicePaletteCapability(t *testing.T) {
+	server := New(testConfig(), func(context.Context) error { return nil })
+	request := httptest.NewRequest(http.MethodGet, "/v1/meta", nil)
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("meta status = %d, want 200", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"choicePalette12"`) {
+		t.Fatalf("meta body = %s, want choicePalette12 capability", recorder.Body.String())
+	}
+}
+
+func TestMetaStripsOnlyAttachmentsWhenModuleAbsent(t *testing.T) {
+	cfg := testConfig()
+	cfg.Capabilities = []string{"grid", "map", "choicePalette12", "attachments"}
+	server := New(cfg, func(context.Context) error { return nil })
+	request := httptest.NewRequest(http.MethodGet, "/v1/meta", nil)
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("meta status = %d, want 200", recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, `"choicePalette12"`) {
+		t.Fatalf("meta body = %s, want choicePalette12 capability", body)
+	}
+	if strings.Contains(body, `"attachments"`) {
+		t.Fatalf("meta body = %s, want attachments stripped", body)
+	}
+}
+
 func TestReadyzReportsMigration(t *testing.T) {
 	server := New(testConfig(), func(context.Context) error { return appstatus.ErrMigrationRequired })
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
@@ -335,6 +371,9 @@ func TestMetaReflectsMigrationState(t *testing.T) {
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("meta status = %d, want 200", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"choicePalette12"`) {
+		t.Fatalf("meta body = %s, want choicePalette12 capability", recorder.Body.String())
 	}
 	if !strings.Contains(recorder.Body.String(), `"migrationRequired":true`) {
 		t.Fatalf("meta body = %s, want migrationRequired=true", recorder.Body.String())

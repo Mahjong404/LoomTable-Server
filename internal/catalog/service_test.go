@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -352,6 +353,114 @@ func TestUpdateSelectFieldAppliesOptionLifecycle(t *testing.T) {
 	}
 	if store.updateCalls != 1 {
 		t.Fatalf("update calls = %d, want 1", store.updateCalls)
+	}
+}
+
+func TestCreateSelectFieldAcceptsAllTwelvePaletteColors(t *testing.T) {
+	for _, color := range SelectOptionColors {
+		store := &captureStore{}
+		service := NewWithIDGenerator(store, fixedID)
+
+		created, err := service.CreateField(
+			context.Background(),
+			"act_test",
+			"mut_00000000000000000000000000",
+			"tbl_00000000000000000000000000",
+			FieldInput{Name: "Status", Type: "select", Config: SelectFieldConfigInput{Options: []SelectOptionInput{
+				{Name: "Open", Color: color},
+			}}},
+		)
+		if err != nil {
+			t.Fatalf("color %q rejected: %v", color, err)
+		}
+		config := created.Config.(domain.SelectFieldConfig)
+		if len(config.Options) != 1 || config.Options[0].Color != color {
+			t.Fatalf("color %q stored options = %#v", color, config.Options)
+		}
+	}
+}
+
+func TestSelectOptionColorRejectsInvalidTokens(t *testing.T) {
+	invalid := []string{"", "Lime", "LIME", "lime ", " lime", "#EFF3D6", "grey", "magenta", "lightgreen"}
+	for _, color := range invalid {
+		store := &captureStore{}
+		service := NewWithIDGenerator(store, fixedID)
+
+		_, err := service.CreateField(
+			context.Background(),
+			"act_test",
+			"mut_00000000000000000000000000",
+			"tbl_00000000000000000000000000",
+			FieldInput{Name: "Status", Type: "select", Config: SelectFieldConfigInput{Options: []SelectOptionInput{
+				{Name: "Open", Color: color},
+			}}},
+		)
+		var validation *domain.ValidationError
+		if !errors.As(err, &validation) {
+			t.Fatalf("color %q error = %v, want ValidationError", color, err)
+		}
+		found := false
+		for _, issue := range validation.Issues {
+			if issue.Code == "format" && strings.HasSuffix(issue.Path, "/color") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("color %q issues = %#v, want format issue on /color", color, validation.Issues)
+		}
+	}
+}
+
+func TestUpdateSelectFieldPreservesNewPaletteTokensAcrossLifecycle(t *testing.T) {
+	now := time.Date(2026, time.August, 13, 10, 0, 0, 0, time.UTC)
+	oldDeletedAt := now.Add(-time.Hour)
+	limeActive := "opt_00000000000000000000000001"
+	redActive := "opt_00000000000000000000000002"
+	brownDeleted := "opt_00000000000000000000000003"
+	store := &captureStore{currentField: domain.Field{
+		ID:       "fld_00000000000000000000000000",
+		TableID:  "tbl_00000000000000000000000000",
+		Name:     "Status",
+		Type:     "multiSelect",
+		Revision: 4,
+		Config: domain.SelectFieldConfig{
+			Options: []domain.SelectOption{
+				{ID: limeActive, Name: "A", Color: "lime"},
+				{ID: redActive, Name: "B", Color: "red"},
+			},
+			DeletedOptions: []domain.DeletedSelectOption{
+				{ID: brownDeleted, Name: "C", Color: "brown", DeletedAt: oldDeletedAt},
+			},
+		},
+	}}
+	service := NewWithIDGeneratorAndClock(store, fixedID, func() time.Time { return now })
+
+	updated, err := service.UpdateField(
+		context.Background(),
+		"act_test",
+		store.currentField.ID,
+		FieldUpdate{
+			Type:             "multiSelect",
+			ExpectedRevision: 4,
+			Config: SelectFieldConfigInput{Options: []SelectOptionInput{
+				{ID: &limeActive, Name: "A", Color: "indigo"},
+				{ID: &brownDeleted, Name: "C", Color: "brown"},
+				{Name: "D", Color: "lime"},
+			}},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := updated.Config.(domain.SelectFieldConfig)
+	if len(config.Options) != 3 ||
+		config.Options[0].Color != "indigo" ||
+		config.Options[1].ID != brownDeleted || config.Options[1].Color != "brown" ||
+		config.Options[2].Color != "lime" {
+		t.Fatalf("active options = %#v", config.Options)
+	}
+	if len(config.DeletedOptions) != 1 || config.DeletedOptions[0].ID != redActive || config.DeletedOptions[0].Color != "red" {
+		t.Fatalf("deleted options = %#v", config.DeletedOptions)
 	}
 }
 

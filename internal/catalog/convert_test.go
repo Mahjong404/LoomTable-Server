@@ -139,6 +139,40 @@ func TestConvertFieldTextToSelect(t *testing.T) {
 	}
 }
 
+func TestConvertFieldDistinctOptionsKeepsNineColorRotation(t *testing.T) {
+	store := conversionStore(textField(), `"A"`, `"B"`, `"C"`, `"D"`, `"E"`, `"F"`, `"G"`, `"H"`, `"I"`, `"J"`)
+	service := NewWithIDGenerator(store, fixedID)
+	preview, err := service.PreviewFieldConversion(context.Background(), "act_test", store.currentField.ID, "select")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := service.ConvertField(context.Background(), "act_test", store.currentField.ID, ConversionRequest{
+		TargetType: "select", Mode: "distinctOptions",
+		ExpectedRevision: store.currentField.Revision, PreviewToken: preview.PreviewToken,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, ok := result.Field.Config.(json.RawMessage)
+	if !ok {
+		t.Fatalf("config type = %T", result.Field.Config)
+	}
+	var decoded domain.SelectFieldConfig
+	if err := json.Unmarshal(config, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"blue", "green", "red", "orange", "yellow", "purple", "pink", "cyan", "gray", "blue"}
+	if len(decoded.Options) != len(want) {
+		t.Fatalf("options = %#v", decoded.Options)
+	}
+	for index, option := range decoded.Options {
+		if option.Color != want[index] {
+			t.Fatalf("option %d color = %q, want %q (options = %#v)", index, option.Color, want[index], decoded.Options)
+		}
+	}
+}
+
 func TestConvertFieldRejectsStalePreview(t *testing.T) {
 	store := conversionStore(textField(), `"1"`, `"2"`)
 	service := NewWithIDGenerator(store, fixedID)

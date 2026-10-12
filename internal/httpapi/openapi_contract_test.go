@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 )
 
 func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
@@ -111,5 +114,23 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 				t.Fatalf("%s %s = %d %s, want %d", current.method, current.path, recorder.Code, recorder.Body.String(), current.wantStatus)
 			}
 		})
+	}
+}
+
+func TestSelectOptionColorEnumMatchesCatalogAllowance(t *testing.T) {
+	specification, err := os.ReadFile(filepath.Join("..", "..", "docs", "api", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := regexp.MustCompile(`(?ms)SelectOptionColor:\s*\n\s+type:\s*string\s*\n\s+enum:\s*\[([^\]]+)\]`).FindSubmatch(specification)
+	if match == nil {
+		t.Fatal("SelectOptionColor enum not found in openapi.yaml")
+	}
+	listed := strings.Split(string(match[1]), ",")
+	for index := range listed {
+		listed[index] = strings.TrimSpace(listed[index])
+	}
+	if !slices.Equal(listed, catalog.SelectOptionColors) {
+		t.Fatalf("OpenAPI SelectOptionColor = %v, catalog.SelectOptionColors = %v", listed, catalog.SelectOptionColors)
 	}
 }

@@ -28,6 +28,7 @@ jobs:
           --health-retries 12
     env:
       LOOMTABLE_TEST_DATABASE_URL: postgres://loomtable:loomtable@127.0.0.1:5432/loomtable_test?sslmode=disable
+      LOOMTABLE_TEST_DATABASE_DISPOSABLE: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
