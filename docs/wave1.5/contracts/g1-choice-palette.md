@@ -1,10 +1,10 @@
-# G1 Contract Proposal — 12-Color Choice Palette Server Writer
+# G1 Contract — 12-Color Choice Palette Server Writer
 
-**Status: PROPOSAL / PENDING APPROVAL。** 本文是 Gate G1 的正式合同评审草案,不是已生效的生产 API 合同。在批准、实现、固定 commit 与部署验证完成前,权威传输合同仍以 `docs/api/openapi.yaml`(v0.2.0,9 色 enum)为准。批准本文不等于授权实现;实现按单独指令进行。
+**Status: APPROVED FOR IMPLEMENTATION(2026-10-12)。** 用户已批准本文的 G1 合同方向并授权 Server 实现(实现分支 `feature/g1-choice-palette12`)。批准范围限 D1–D5 记录的决策;**实现 ≠ 合并、部署或 Plugin 启用**——PR 合并、生产部署与 Plugin 三色 writer 仍为三个独立待授权动作。在实现交付前,权威传输合同以 `docs/api/openapi.yaml`(v0.2.0,9 色 enum)为准;同分支实现提交落地 v0.3.0/12 色后,以该分支 OpenAPI 为准。
 
 - Gate:G1 — 12-color write compatibility(Server writer)
-- Date:2026-10-12(R2 复核增补:Plugin 兼容代码证据、Rollback/Capability 合同、Storage 复核)
-- Review baseline:Server `5d430cd641e5a210eab3371c9864919837cd69a9`(main,文档入口已发布);OpenAPI v0.2.0;Plugin `bde37b9`(W15-02 后工作树)
+- Date:2026-10-12(R2 复核增补:Plugin 兼容代码证据、Rollback/Capability 合同、Storage 复核;R3 批准基线)
+- Review baseline:Server `5d430cd641e5a210eab3371c9864919837cd69a9`(main,文档入口已发布);OpenAPI v0.2.0;Plugin `bde37b9`(W15-02 后工作树);Proposal `c99c3fb96f4e9610abcb72ece19fb76a3534c8f8`
 - 上游设计:Plugin `docs/ui/design-system.md` 批准色板;Plugin `docs/wave1.5/api-boundary.md` G1 节
 - 范围:仅 Server writer 侧接受三个新增语义色 Token。不改 Record 值模型、选项生命周期、排序、Distinct、History 或任何其他 Gate。
 
@@ -176,9 +176,9 @@ G1 部署声明:新色一旦写入生产数据,降级前须先完成 §4.5.4 的
 - 不涉及 Time/DateTime、bulk mutation、View trash、Table rollback。
 - 不自动执行颜色重写/gray 迁移;rollback 数据修正为独立审批运维项。
 
-## 8. 决策记录(D1–D5 已确认)与待裁决项
+## 8. 决策记录(D1–D5 已批准)与待裁决项
 
-已确认基线(2026-10-12 复核轮授权为合同基线):
+已批准基线(2026-10-12 用户正式批准):
 
 | ID | 决策 | 结论 |
 | --- | --- | --- |
@@ -188,14 +188,17 @@ G1 部署声明:新色一旦写入生产数据,降级前须先完成 §4.5.4 的
 | D4 | enum 顺序 | 按 Design System 表序 |
 | D5 | Go 允许集合 | 单一常量表 + OpenAPI 合同对账测试(新增) |
 
+已授权:G1 Server 实现(Go writer 校验、OpenAPI 更新、`choicePalette12` capability、测试)、实现分支提交与 Review PR。
+
 待用户裁决(真正开放项):
 
 | ID | 事项 | 说明 |
 | --- | --- | --- |
-| R1 | 本 PR 是否合并 | 合并代表"合同文档入库",仍非实施授权;亦可保持分支开放至批准 |
-| R2 | G1 实施授权 | 批准合同后需另行明确指令才动 Go/OpenAPI/测试 |
+| R1 | 实现 PR 审查与合并 | 合同批准不覆盖合并;Review PR 由用户审查决定 |
+| R2 | 生产部署 | 未授权;部署后才存在 Deployed Capability |
 | R3 | §4.5.7 rollback-writer 缓解补丁 | 默认不采用;仅运维场景需要时再评审 |
 | R4 | Plugin 侧能力评估点的最终形态 | 建议会话级缓存(§4.4.4),细节留给 Plugin 接入切片 |
+| R5 | Plugin `api:sync`/三色 writer 启用 | 需 Server 合并 + 部署证据后的单独授权 |
 
 ## 9. G6 附带影响说明(不展开设计)
 
@@ -203,4 +206,4 @@ G1 部署声明:新色一旦写入生产数据,降级前须先完成 §4.5.4 的
 
 ---
 
-**G1 Contract Proposal — Pending Approval.** 批准前不修改 `docs/api/openapi.yaml`、Go 实现、数据库或部署。
+**G1 Contract — Approved for Implementation.** 实现限本分支;合并、部署与 Plugin 启用均需单独授权。
