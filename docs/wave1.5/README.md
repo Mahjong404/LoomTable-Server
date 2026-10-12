@@ -1,8 +1,8 @@
-# Devin — Server 独立执行入口
+# Server/API — Codex 工程执行入口
 
 Repository: https://github.com/Mahjong404/LoomTable-Server.git
 
-2026-10-12。Wave 1.5 设计已批准；本入口只准备合同驱动的 Server 执行流程。**当前没有自动启动任何 Gate 或 Server 代码变更。** Devin 输入须指定获授权 Gate ID、合同评审/实施范围与隔离验证环境。可以只克隆本仓库，不要求 Plugin 同级工作树或本地研究。
+2026-10-12。用户已授权 Codex 接管 Server/API 的合同、实现、集成验证、部署与维护，在已批准产品语义内连续推进 G1–G6；Devin 负责合同与设计明确后的 Plugin 实施。本仓库维护合同与 Server 交付事实，跨仓库唯一状态表仍由 Plugin 规划工作线维护。
 
 ## 必读输入与当前边界
 
@@ -20,11 +20,11 @@ DatePicker、当前 Choice ID、Query Panels、Display、Grid 几何、Date消�
 4. **审查与交付**：按明确授权进行 PR/提交/发布，交付完整40位 Server commit SHA、OpenAPI/合同路径、测试、必要迁移/回滚和 capability/版本范围。合并与部署分别记录，未部署不能声称能力可用。
 5. **Plugin 才接入**：Plugin 以批准 SHA显式 api:sync/生成/decoder/client/Queue/消费者；由其集成切片把 Server PR/commit/能力证据同步到唯一 Wave status。Server 不自行改 Plugin 代码或 pin，也不要求另一个 Session 消息作为依赖。
 
-本仓库的合同文件/PR保留 Server 实施与验证证据，整体状态只引用它们；不要再建立第二份全 Wave 完成表。一次交付一个明确 Gate，完成一个不会自动开启其余 Gate。
+本仓库的合同文件/PR保留 Server 实施与验证证据，整体状态只引用它们；不要再建立第二份全 Wave 完成表。一次交付一个明确 Gate；用户本轮已授权六 Gate 的 Server 工程工作，按依赖顺序逐项交付，真正缺失的产品决策、不兼容协议或危险迁移仍须裁决。
 
 ## 六条合同 Gate 的 Server 任务边界
 
-这些是待批准的交付目标，具体 Schema 先经过合同评审；当前实现事实以实际源码为准。所有 Gate 共用上述 API-first、兼容/安全验证和交付清单。
+这些产品目标已获本轮 Server 工程授权；具体 Schema 仍需逐 Gate 合同审查，当前实现事实以源码和固定交付 SHA 为准。所有 Gate 共用上述 API-first、兼容/安全验证和交付清单。
 
 | Gate                               | 目标 / 当前缺口                                                                        | Server 修改入口                                                                                                                                    | 核心验收 / Plugin 交付                                                                                                                                                                                                |
 | ---------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -47,11 +47,17 @@ DatePicker、当前 Choice ID、Query Panels、Display、Grid 几何、Date消�
 
 实际命令以 go.mod、CONTRIBUTING 和 CI为准。源码切片通常运行 targeted go test、go test ./...、go vet ./...、修改Go文件的gofmt检查与git diff --check；涉及部署文件时才验证Compose。HTTP/OpenAPI合同测试位于 internal/httpapi，domain/service在各模块 *_test.go，事务/并发在 internal/storage/postgres/integration_test.go。
 
-集成测试读取 LOOMTABLE_TEST_DATABASE_URL，会执行 DROP SCHEMA public CASCADE。仅用专用可销毁CI/test数据库和合成数据；名字含test不代表可重置长期共享DB。不要默认启动本机Docker/PostgreSQL，不运行migration/管理命令指向生产，不重置远端部署。没有该环境时 go test 跳过DB测试，必须明确写未验证，不能报integration通过。
+集成测试读取 LOOMTABLE_TEST_DATABASE_URL，会执行 DROP SCHEMA public CASCADE；连接前要求 LOOMTABLE_TEST_DATABASE_DISPOSABLE=true。安全入口为 bash scripts/operations/integration.sh：新建私有网络和 tmpfs PostgreSQL，不发布端口，不接受已有 URL/容器/卷，退出清理本次资源。仅用专用可销毁CI/test数据库和合成数据；名字含test不代表可重置长期共享DB。不要默认启动本机Docker/PostgreSQL，不运行migration/管理命令指向生产，不重置远端部署。没有该环境时 go test 跳过DB测试，必须明确写未验证，不能报integration通过。
 
 DoD：批准合同与OpenAPI一致；真实实现/权限/事务/兼容测试完成；必要迁移/rollout/回滚审查；没有凭据/真实数据/临时产物；PR/合同/40位SHA/实际部署能力/测试限制可交给单独Plugin环境。新consumer不得依赖内部SQL或未公布endpoint。
 
-## 可直接提供给 Devin 的启动输入
+## 推荐执行顺序与持续工作入口
+
+顺序维持 G1 → G6 → G2 → G3 → G4 → G5。G6 复用现有 Query Search normalization、search_text 与只读快照，零迁移，独立修正聚合口径；G2 需先冻结双 CAS、receipt 与 writer 锁序；G3 有独立 order migration；G4 需真实 Query snapshot/expiry 决策；G5 覆盖所有已交付 writer，因此安排在 G2/G3 之后。若 Plugin 需求改变优先级，由合同影响说明调整，不修改产品语义。
+
+每个 Gate 的合同与交付证据留在 contracts/ 和 deliveries/；不新建全 Wave 第二份状态表。Server 不改 Plugin 源码、API pin 或状态表。
+
+## 可直接提供给后续 Server Session 的启动输入
 
 > 在本Server仓库读取docs/wave1.5/README.md、CONTRIBUTING、领域/架构与当前OpenAPI。处理本次明确授权的Gx Gate，先产出并审查领域与OpenAPI合同，再在合同批准后实现Server及隔离测试。保持其他Gate/Future关闭，保留用户改动。交付合同/PR/完整Server commit、capability与兼容矩阵、真实测试和回滚信息，供Plugin之后固定pin接入。不修改Plugin/Figma或生产数据，不自动部署/合并。
 

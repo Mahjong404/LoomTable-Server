@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -20,18 +21,22 @@ import (
 	"github.com/Mahjong404/LoomTable-Server/internal/storage/postgres"
 )
 
-func TestRepositoryEndToEnd(t *testing.T) {
+// The caller must provision a dedicated disposable database. Tests are serial:
+// each call resets public, so this helper must never be used with t.Parallel.
+func integrationDatabase(t *testing.T, ctx context.Context) *sql.DB {
+	t.Helper()
 	databaseURL := os.Getenv("LOOMTABLE_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("LOOMTABLE_TEST_DATABASE_URL is not set")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
-	defer cancel()
+	if os.Getenv("LOOMTABLE_TEST_DATABASE_DISPOSABLE") != "true" {
+		t.Fatal("refusing destructive integration setup: LOOMTABLE_TEST_DATABASE_DISPOSABLE=true is required; use scripts/operations/integration.sh")
+	}
 	db, err := postgres.Open(databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 	var databaseName string
 	if err := db.QueryRowContext(ctx, `SELECT current_database()`).Scan(&databaseName); err != nil {
 		t.Fatal(err)
@@ -46,6 +51,13 @@ func TestRepositoryEndToEnd(t *testing.T) {
 	if err := postgres.ApplyMigrations(ctx, db, migrationDirectory); err != nil {
 		t.Fatal(err)
 	}
+	return db
+}
+
+func TestRepositoryEndToEnd(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	defer cancel()
+	db := integrationDatabase(t, ctx)
 
 	repository := postgres.NewRepository(db)
 	admin := loomauth.NewAdmin(repository)

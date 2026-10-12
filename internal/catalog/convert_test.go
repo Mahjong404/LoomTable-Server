@@ -140,7 +140,7 @@ func TestConvertFieldTextToSelect(t *testing.T) {
 }
 
 func TestConvertFieldDistinctOptionsKeepsNineColorRotation(t *testing.T) {
-	store := conversionStore(textField(), `"Alpha"`, `"Beta"`, `"Gamma"`)
+	store := conversionStore(textField(), `"A"`, `"B"`, `"C"`, `"D"`, `"E"`, `"F"`, `"G"`, `"H"`, `"I"`, `"J"`)
 	service := NewWithIDGenerator(store, fixedID)
 	preview, err := service.PreviewFieldConversion(context.Background(), "act_test", store.currentField.ID, "select")
 	if err != nil {
@@ -162,7 +162,7 @@ func TestConvertFieldDistinctOptionsKeepsNineColorRotation(t *testing.T) {
 	if err := json.Unmarshal(config, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"blue", "green", "red"}
+	want := []string{"blue", "green", "red", "orange", "yellow", "purple", "pink", "cyan", "gray", "blue"}
 	if len(decoded.Options) != len(want) {
 		t.Fatalf("options = %#v", decoded.Options)
 	}
