@@ -1938,7 +1938,7 @@ components:
           type: string
         capabilities:
           type: array
-          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch` and `atomicChoice`.
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds.
           items:
             type: string
         changeRetention:
