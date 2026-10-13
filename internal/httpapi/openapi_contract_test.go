@@ -24,6 +24,7 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 		wantStatus int
 	}
 	operations := []operation{
+		{"reorderViews", http.MethodPut, "/v1/tables/tbl_00000000000000000000000000/views/order", `{"expectedOrderRevision":1,"viewIds":[]}`, 200},
 		{"healthz", http.MethodGet, "/healthz", "", 200},
 		{"readyz", http.MethodGet, "/readyz", "", 200},
 		{"getServerMeta", http.MethodGet, "/v1/meta", "", 200},
@@ -105,7 +106,7 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 			if current.body != "" {
 				request.Header.Set("Content-Type", "application/json")
 			}
-			if strings.HasPrefix(current.id, "create") || current.id == "initializeAttachment" {
+			if strings.HasPrefix(current.id, "create") || current.id == "initializeAttachment" || current.id == "reorderViews" {
 				request.Header.Set("Idempotency-Key", "mut_00000000000000000000000000")
 			}
 			recorder := httptest.NewRecorder()
@@ -172,7 +173,7 @@ func TestAtomicChoiceOpenAPIAdditiveContract(t *testing.T) {
 			t.Fatalf("%s scope changed", name)
 		}
 	}
-	for _, part := range []string{"version: 0.5.0", "`atomicChoice`", "ChoiceFieldResult:", "fieldConflicts:", "MUTATION_RECEIPT_EXPIRED", "MutationReceiptExpiredDetails:", "x-loomtable-normalized-max-length: 100"} {
+	for _, part := range []string{"version: 0.6.0", "`atomicChoice`", "ChoiceFieldResult:", "fieldConflicts:", "MUTATION_RECEIPT_EXPIRED", "MutationReceiptExpiredDetails:", "x-loomtable-normalized-max-length: 100"} {
 		if !strings.Contains(string(spec), part) {
 			t.Fatalf("G2 contract missing %s", part)
 		}

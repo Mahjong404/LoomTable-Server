@@ -51,6 +51,8 @@ type Catalog interface {
 	PreviewFieldConversion(context.Context, string, string, string) (catalog.ConversionPreview, error)
 	ConvertField(context.Context, string, string, catalog.ConversionRequest) (catalog.ConversionResult, error)
 	ListViews(context.Context, string, string, string) ([]domain.View, error)
+	ListViewsSnapshot(context.Context, string, string, string) (domain.ViewListSnapshot, error)
+	ReorderViews(context.Context, string, string, string, catalog.ViewOrderInput) (domain.ViewOrderResult, error)
 	GetView(context.Context, string, string) (domain.View, error)
 	CreateView(context.Context, string, string, string, catalog.ViewInput) (domain.View, error)
 	UpdateView(context.Context, string, string, catalog.ViewUpdate) (domain.View, error)

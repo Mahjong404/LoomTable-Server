@@ -712,3 +712,10 @@ func TestSetDefaultViewValidatesInput(t *testing.T) {
 		t.Fatalf("view = %+v", view)
 	}
 }
+
+func (s *captureStore) ListViewsSnapshot(context.Context, string, string, string) (domain.ViewListSnapshot, error) {
+	return domain.ViewListSnapshot{Items: []domain.View{}, Order: domain.ViewOrder{TableID: "tbl_00000000000000000000000000", Revision: 1, ViewIDs: []string{}}}, nil
+}
+func (s *captureStore) ReorderViews(ctx context.Context, actor, key, table string, hash [32]byte, input ViewOrderInput) (domain.ViewOrderResult, error) {
+	return domain.ViewOrderResult{ClientMutationID: key, Status: "unchanged", Order: domain.ViewOrder{TableID: table, Revision: input.ExpectedOrderRevision, ViewIDs: input.ViewIDs}}, nil
+}

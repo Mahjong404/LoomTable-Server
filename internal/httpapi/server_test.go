@@ -921,3 +921,10 @@ func TestAttachmentCapabilityIsExplicitlyDisabled(t *testing.T) {
 		t.Fatalf("attachment body = %s, want capability code", recorder.Body.String())
 	}
 }
+
+func (s *stubCatalog) ListViewsSnapshot(context.Context, string, string, string) (domain.ViewListSnapshot, error) {
+	return domain.ViewListSnapshot{Items: []domain.View{}, Order: domain.ViewOrder{TableID: "tbl_00000000000000000000000000", Revision: 1, ViewIDs: []string{}}}, nil
+}
+func (s *stubCatalog) ReorderViews(ctx context.Context, actor, key, table string, input catalog.ViewOrderInput) (domain.ViewOrderResult, error) {
+	return domain.ViewOrderResult{ClientMutationID: key, Status: "unchanged", Order: domain.ViewOrder{TableID: table, Revision: input.ExpectedOrderRevision, ViewIDs: input.ViewIDs}}, nil
+}

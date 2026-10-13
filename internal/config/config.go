@@ -23,7 +23,7 @@ type Config struct {
 
 func Load() Config {
 	attachmentsEnabled := boolean("LOOMTABLE_ATTACHMENTS_ENABLED", true)
-	capabilities := []string{"grid", "map", "choicePalette12", "aggregateSearch", "atomicChoice"}
+	capabilities := []string{"grid", "map", "choicePalette12", "aggregateSearch", "atomicChoice", "viewOrderCAS"}
 	if attachmentsEnabled {
 		capabilities = append(capabilities, "attachments")
 	}
