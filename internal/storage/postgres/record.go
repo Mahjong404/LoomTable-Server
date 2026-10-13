@@ -69,7 +69,20 @@ func (r *Repository) MutateRecords(
 	if err := lockActiveTable(ctx, tx, actorID, tableID); err != nil {
 		return loomrecord.StoredMutationResult{}, err
 	}
-	fields, err := loadFieldDefinitions(ctx, tx, tableID)
+	hasChoices := false
+	for _, command := range commands {
+		if len(command.Choices) > 0 {
+			hasChoices = true
+			break
+		}
+	}
+	var fields map[string]loomrecord.FieldDefinition
+	var choiceFields []loomrecord.ChoiceFieldResult
+	if hasChoices {
+		commands, fields, choiceFields, err = prepareChoiceMutation(ctx, tx, actorID, tableID, clientMutationID, commands)
+	} else {
+		fields, err = loadFieldDefinitions(ctx, tx, tableID)
+	}
 	if err != nil {
 		return loomrecord.StoredMutationResult{}, err
 	}
@@ -107,6 +120,12 @@ func (r *Repository) MutateRecords(
 		ClientMutationID: clientMutationID,
 		Results:          results,
 		ChangeSequence:   changeSequence,
+		ChoiceFields:     choiceFields,
+	}
+	if hasChoices {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO mutation_identity_guards (actor_id, client_mutation_id, request_hash) VALUES ($1, $2, $3)`, actorID, clientMutationID, fingerprint[:]); err != nil {
+			return loomrecord.StoredMutationResult{}, fmt.Errorf("save mutation identity guard: %w", err)
+		}
 	}
 	if err := saveIdempotent(ctx, tx, actorID, clientMutationID, fingerprint, stored); err != nil {
 		return loomrecord.StoredMutationResult{}, err

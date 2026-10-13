@@ -527,6 +527,11 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	var reused *domain.IdempotencyKeyReusedError
+	var receiptExpired *domain.MutationReceiptExpiredError
+	if errors.As(err, &receiptExpired) {
+		writeAPIErrorWithDetails(w, r, http.StatusGone, "MUTATION_RECEIPT_EXPIRED", receiptExpired.Error(), map[string]any{"clientMutationId": receiptExpired.ClientMutationID, "operationCommitted": true})
+		return
+	}
 	if errors.As(err, &reused) {
 		writeAPIError(w, r, http.StatusConflict, "IDEMPOTENCY_KEY_REUSED", reused.Error())
 		return

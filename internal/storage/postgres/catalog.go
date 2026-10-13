@@ -340,7 +340,9 @@ func scanBase(row scanner) (domain.Base, error) {
 
 func lockActor(ctx context.Context, tx *sql.Tx, actorID string) error {
 	var lockedID string
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM actors WHERE id = $1 FOR UPDATE`, actorID).Scan(&lockedID); errors.Is(err, sql.ErrNoRows) {
+	// Serialize Actor-scoped receipt writers without blocking Actor FK checks
+	// from a metadata writer that already owns the Table lock. Actor IDs never change.
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM actors WHERE id = $1 FOR NO KEY UPDATE`, actorID).Scan(&lockedID); errors.Is(err, sql.ErrNoRows) {
 		return domain.ErrNotFound
 	} else if err != nil {
 		return fmt.Errorf("lock actor: %w", err)
@@ -358,7 +360,17 @@ func replayIdempotent[T any](ctx context.Context, tx *sql.Tx, actorID, key strin
 		WHERE actor_id = $1 AND client_mutation_id = $2
 	`, actorID, key).Scan(&storedHash, &response)
 	if errors.Is(err, sql.ErrNoRows) {
-		return zero, false, nil
+		err = tx.QueryRowContext(ctx, `SELECT request_hash FROM mutation_identity_guards WHERE actor_id = $1 AND client_mutation_id = $2`, actorID, key).Scan(&storedHash)
+		if errors.Is(err, sql.ErrNoRows) {
+			return zero, false, nil
+		}
+		if err != nil {
+			return zero, false, fmt.Errorf("read mutation identity guard: %w", err)
+		}
+		if !bytes.Equal(storedHash, fingerprint[:]) {
+			return zero, false, &domain.IdempotencyKeyReusedError{}
+		}
+		return zero, false, &domain.MutationReceiptExpiredError{ClientMutationID: key}
 	}
 	if err != nil {
 		return zero, false, fmt.Errorf("read idempotency result: %w", err)

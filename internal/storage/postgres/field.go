@@ -329,11 +329,31 @@ func decodeFieldConfig(fieldType string, raw []byte) (any, error) {
 }
 
 func lockAccessibleField(ctx context.Context, tx *sql.Tx, actorID, fieldID string) (domain.Field, bool, error) {
+	// Resolve the immutable parent without a Field lock, then establish the
+	// same Table-before-Field boundary used by Record Mutation and Convert.
+	var tableID string
+	err := tx.QueryRowContext(ctx, `
+		SELECT f.table_id FROM fields f
+		JOIN tables t ON t.id = f.table_id
+		JOIN bases b ON b.id = t.base_id
+		JOIN workspaces w ON w.id = b.workspace_id
+		WHERE f.id = $1 AND t.deleted_at IS NULL AND b.deleted_at IS NULL
+		  AND w.actor_id = $2 AND w.deleted_at IS NULL
+	`, fieldID, actorID).Scan(&tableID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Field{}, false, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Field{}, false, fmt.Errorf("resolve Field parent: %w", err)
+	}
+	if err := lockActiveTable(ctx, tx, actorID, tableID); err != nil {
+		return domain.Field{}, false, err
+	}
 	var item domain.Field
 	var rawConfig []byte
 	var description sql.NullString
 	var primary bool
-	err := tx.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		SELECT f.id, f.table_id, f.name, f.position_index, f.schema_version,
 		       f.revision, f.type, f.config, f.deleted_at, f.description, f.is_primary
 		FROM fields f

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: LoomTable Server API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     LoomTable Server 的初版 REST API 合同。
     Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
@@ -1355,6 +1355,7 @@ paths:
     post:
       tags: [Records]
       operationId: mutateRecords
+      description: Applies all commands atomically. Optional choices on createRecord/updateRecord require atomicChoice capability and migrationRequired=false; resolves active Option identities and creates missing Options in the same transaction as Records. Full results replay before CAS. G2 identities remain guarded after Receipt expiry.
       requestBody:
         required: true
         content:
@@ -1404,6 +1405,11 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
+        '410':
+          description: Original G2 operation committed, but the full Receipt expired. Reconcile; do not execute again or automatically create a replacement key.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '422':
           description: Field value or command semantics are invalid
           content:
@@ -1932,7 +1938,7 @@ components:
           type: string
         capabilities:
           type: array
-          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`.
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds.
           items:
             type: string
         changeRetention:
@@ -3544,14 +3550,18 @@ components:
             - $ref: '#/components/schemas/RecordValues'
           description: May be an empty object; a Primary Field value is not required. Explicit null or natural empty values are distinct from omitted, Unset Fields.
 
+        choices:
+          $ref: '#/components/schemas/ChoiceAssignments'
+
     UpdateRecordCommand:
       type: object
       additionalProperties: false
-      description: Writes fields in set and removes keys in unsetFieldIds. A Field present in both is invalid; omitted Fields are unchanged. expectedRevision is checked first; an identical normalized result returns status unchanged without a Revision or Change.
+      description: Writes fields in set and removes keys in unsetFieldIds. A Field present in both is invalid; omitted Fields are unchanged. Choice Field CAS and Record CAS are checked before writes when choices is present; otherwise expectedRevision is checked first. An identical normalized result returns status unchanged without a Revision or Change.
       required: [kind, recordId, expectedRevision]
       anyOf:
         - required: [set]
         - required: [unsetFieldIds]
+        - required: [choices]
       properties:
         kind: { const: updateRecord }
         recordId: { $ref: '#/components/schemas/RecordId' }
@@ -3569,6 +3579,70 @@ components:
           uniqueItems: true
           items: { $ref: '#/components/schemas/FieldId' }
           description: Field IDs whose keys are removed from Record.values.
+
+        choices:
+          $ref: '#/components/schemas/ChoiceAssignments'
+
+    ChoiceAssignments:
+      type: array
+      minItems: 1
+      maxItems: 50
+      description: Requires atomicChoice capability. Each Field occurs once per command and cannot overlap values/set/unsetFieldIds. Across the request at most 50 distinct Fields and 500 Option inputs; repeated Fields use the same transaction-start expectedFieldRevision.
+      items:
+        $ref: '#/components/schemas/ChoiceAssignment'
+
+    ChoiceAssignment:
+      type: object
+      additionalProperties: false
+      required: [fieldId, expectedFieldRevision, options]
+      properties:
+        fieldId: { $ref: '#/components/schemas/FieldId' }
+        expectedFieldRevision: { type: integer, minimum: 1 }
+        options:
+          type: array
+          maxItems: 100
+          description: Complete final Cell selection in input order. Select requires exactly one entry; MultiSelect allows zero to 100. Duplicate resolved IDs are invalid. Deleted IDs may only be retained in the existing target Cell; they are never implicitly restored.
+          items:
+            $ref: '#/components/schemas/ChoiceOptionReference'
+
+    ChoiceOptionReference:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [optionId]
+          properties:
+            optionId: { $ref: '#/components/schemas/OptionId' }
+        - type: object
+          additionalProperties: false
+          required: [name, color]
+          properties:
+            name:
+              type: string
+              x-loomtable-normalized-max-length: 100
+              description: Unicode Trim then NFC; nonempty, no control characters, at most 100 normalized code points. Active lookup uses Default Case Folding, accent-sensitive. Reuse retains existing spelling/color/rank; only missing active names create a new server-owned identity at the tail.
+            color: { $ref: '#/components/schemas/SelectOptionColor' }
+
+    ChoiceFieldResult:
+      type: object
+      additionalProperties: false
+      required: [fieldId, beforeRevision, revision, resolvedOptions, createdOptions]
+      properties:
+        fieldId: { $ref: '#/components/schemas/FieldId' }
+        beforeRevision: { type: integer, minimum: 1 }
+        revision:
+          type: integer
+          minimum: 1
+          description: One increment iff this request created any Options in this Field. Reuse-only is unchanged.
+        resolvedOptions:
+          type: array
+          maxItems: 500
+          description: Distinct actual Option identities selected in this request, including retained tombstones; does not restore them. Bounded by the total 500 Option input budget.
+          items: { $ref: '#/components/schemas/SelectOption' }
+        createdOptions:
+          type: array
+          maxItems: 500
+          description: Subset truly created by this operation. Append by actual ID only against the matching beforeRevision; stale responses must not overwrite newer Field state.
+          items: { $ref: '#/components/schemas/SelectOption' }
 
     DeleteRecordCommand:
       type: object
@@ -3608,6 +3682,13 @@ components:
         changeCursor:
           type: string
           description: Current Table Change Cursor after the transaction. It remains at the existing position when every command is unchanged.
+
+        choiceFields:
+          type: array
+          minItems: 1
+          maxItems: 50
+          description: Present only for requests with choices. One entry per distinct Field in Field ID order, persisted and replayed with all command results. This is a bounded delta, not the complete Field config.
+          items: { $ref: '#/components/schemas/ChoiceFieldResult' }
 
     CommandResult:
       type: object
@@ -3650,6 +3731,17 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConflictBody'
+
+            fieldConflicts:
+              type: array
+              description: Choice Field CAS failures; conflicts is empty for a Field-only failure. Whole request rolls back. Refresh both Field and Record before an explicit new request.
+              items:
+                type: object
+                required: [fieldId, expectedRevision, currentRevision]
+                properties:
+                  fieldId: { $ref: '#/components/schemas/FieldId' }
+                  expectedRevision: { type: integer, minimum: 1 }
+                  currentRevision: { type: integer, minimum: 1 }
 
     ConflictBody:
       type: object
@@ -3757,7 +3849,7 @@ components:
 
     ErrorResponse:
       type: object
-      description: Standard error envelope. HTTP status mapping is 400 BAD_REQUEST, INVALID_CURSOR, or INVALID_PREVIEW_TOKEN, 401 UNAUTHENTICATED, 403 FORBIDDEN, 404 NOT_FOUND, 409 CONFLICT, IDEMPOTENCY_KEY_REUSED, or CONVERT_PREVIEW_STALE, 410 CURSOR_EXPIRED or QUERY_SNAPSHOT_EXPIRED, 413 PAYLOAD_TOO_LARGE, 415 UNSUPPORTED_MEDIA_TYPE, 422 VALIDATION_ERROR, RESOURCE_LIMIT_EXCEEDED, INVALID_STATE_TRANSITION, UNSUPPORTED_SORT, UNSUPPORTED_OPERATOR, UNSUPPORTED_FIELD_TYPE, UNSUPPORTED_CONVERSION, or VIEW_CONFIGURATION_REQUIRED, 501 CAPABILITY_NOT_ENABLED, 503 readiness/dependency failure, and 500 INTERNAL_ERROR. Cursor errors never expose decoded token contents.
+      description: Standard error envelope. HTTP status mapping is 400 BAD_REQUEST, INVALID_CURSOR, or INVALID_PREVIEW_TOKEN, 401 UNAUTHENTICATED, 403 FORBIDDEN, 404 NOT_FOUND, 409 CONFLICT, IDEMPOTENCY_KEY_REUSED, or CONVERT_PREVIEW_STALE, 410 CURSOR_EXPIRED, QUERY_SNAPSHOT_EXPIRED, or MUTATION_RECEIPT_EXPIRED, 413 PAYLOAD_TOO_LARGE, 415 UNSUPPORTED_MEDIA_TYPE, 422 VALIDATION_ERROR, RESOURCE_LIMIT_EXCEEDED, INVALID_STATE_TRANSITION, UNSUPPORTED_SORT, UNSUPPORTED_OPERATOR, UNSUPPORTED_FIELD_TYPE, UNSUPPORTED_CONVERSION, or VIEW_CONFIGURATION_REQUIRED, 501 CAPABILITY_NOT_ENABLED, 503 readiness/dependency failure, and 500 INTERNAL_ERROR. Cursor errors never expose decoded token contents.
       required: [error]
       properties:
         error:
@@ -3781,6 +3873,15 @@ components:
             - $ref: '#/components/schemas/UnsupportedOperatorDetails'
             - $ref: '#/components/schemas/ViewConfigurationRequiredDetails'
             - $ref: '#/components/schemas/PayloadTooLargeDetails'
+            - $ref: '#/components/schemas/MutationReceiptExpiredDetails'
+
+    MutationReceiptExpiredDetails:
+      type: object
+      additionalProperties: false
+      required: [clientMutationId, operationCommitted]
+      properties:
+        clientMutationId: { $ref: '#/components/schemas/MutationId' }
+        operationCommitted: { const: true }
 
     ValidationErrorDetails:
       type: object

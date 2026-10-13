@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -96,7 +95,7 @@ func (s *Server) mutateRecords(w http.ResponseWriter, r *http.Request, tableID s
 	for index, raw := range *request.Commands {
 		command, err := decodeMutationCommand(raw)
 		if err != nil {
-			writeDecodeError(w, r, prefixCommandDecodeError(err, index))
+			writeDecodeError(w, r, prefixDecodeError(err, fmt.Sprintf("/commands/%d", index)))
 			return
 		}
 		commands = append(commands, command)
@@ -683,8 +682,9 @@ func decodeMutationCommand(raw json.RawMessage) (loomrecord.Command, error) {
 	switch *discriminant.Kind {
 	case "createRecord":
 		var input struct {
-			Kind   string          `json:"kind"`
-			Values json.RawMessage `json:"values"`
+			Kind    string          `json:"kind"`
+			Values  json.RawMessage `json:"values"`
+			Choices json.RawMessage `json:"choices"`
 		}
 		if err := decodeStrictJSONBytes(raw, &input); err != nil {
 			return loomrecord.Command{}, err
@@ -696,6 +696,11 @@ func decodeMutationCommand(raw json.RawMessage) (loomrecord.Command, error) {
 				return loomrecord.Command{}, validationDecodeError(validation)
 			}
 		}
+		choices, present, err := decodeChoiceAssignments(input.Choices)
+		if err != nil {
+			return loomrecord.Command{}, err
+		}
+		command.Choices, command.ChoicesPresent = choices, present
 		return command, nil
 	case "updateRecord":
 		var input struct {
@@ -704,6 +709,7 @@ func decodeMutationCommand(raw json.RawMessage) (loomrecord.Command, error) {
 			ExpectedRevision *int64          `json:"expectedRevision"`
 			Set              json.RawMessage `json:"set"`
 			UnsetFieldIDs    *[]string       `json:"unsetFieldIds"`
+			Choices          json.RawMessage `json:"choices"`
 		}
 		if err := decodeStrictJSONBytes(raw, &input); err != nil {
 			return loomrecord.Command{}, err
@@ -728,6 +734,11 @@ func decodeMutationCommand(raw json.RawMessage) (loomrecord.Command, error) {
 		if input.UnsetFieldIDs != nil {
 			command.UnsetFieldIDs = *input.UnsetFieldIDs
 		}
+		choices, present, err := decodeChoiceAssignments(input.Choices)
+		if err != nil {
+			return loomrecord.Command{}, err
+		}
+		command.Choices, command.ChoicesPresent = choices, present
 		return command, nil
 	case "deleteRecord", "restoreRecord":
 		var input struct {
@@ -761,40 +772,19 @@ func validationDecodeError(validation *domain.ValidationError) *requestDecodeErr
 	}
 }
 
-func prefixCommandDecodeError(err error, index int) error {
-	var decodeError *requestDecodeError
-	if !errors.As(err, &decodeError) {
-		return err
-	}
-	copyError := *decodeError
-	details, ok := decodeError.Details.(map[string]any)
-	if !ok {
-		return &copyError
-	}
-	issues, ok := details["issues"].([]domain.ValidationIssue)
-	if !ok {
-		return &copyError
-	}
-	prefixed := make([]domain.ValidationIssue, len(issues))
-	for issueIndex, issue := range issues {
-		issue.Path = fmt.Sprintf("/commands/%d%s", index, issue.Path)
-		prefixed[issueIndex] = issue
-	}
-	copyError.Details = map[string]any{"issues": prefixed}
-	return &copyError
-}
-
 func writeRecordConflict(w http.ResponseWriter, r *http.Request, conflict *loomrecord.ConflictError) {
-	writeJSON(w, http.StatusConflict, map[string]any{
-		"error": map[string]any{
-			"code":               "CONFLICT",
-			"message":            conflict.Error(),
-			"requestId":          requestIDFrom(r),
-			"clientMutationId":   conflict.ClientMutationID,
-			"failedCommandIndex": conflict.FailedCommandIndex,
-			"conflicts":          conflict.Conflicts,
-		},
-	})
+	body := map[string]any{
+		"code":               "CONFLICT",
+		"message":            conflict.Error(),
+		"requestId":          requestIDFrom(r),
+		"clientMutationId":   conflict.ClientMutationID,
+		"failedCommandIndex": conflict.FailedCommandIndex,
+		"conflicts":          conflict.Conflicts,
+	}
+	if len(conflict.FieldConflicts) > 0 {
+		body["fieldConflicts"] = conflict.FieldConflicts
+	}
+	writeJSON(w, http.StatusConflict, map[string]any{"error": body})
 }
 
 func isRecordMutationPath(path string) bool {

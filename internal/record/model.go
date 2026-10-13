@@ -18,15 +18,37 @@ type Record struct {
 }
 
 type Command struct {
-	Kind               string         `json:"kind"`
-	RecordID           string         `json:"recordId,omitempty"`
-	ExpectedRevision   int64          `json:"expectedRevision,omitempty"`
-	Values             map[string]any `json:"values,omitempty"`
-	Set                map[string]any `json:"set,omitempty"`
-	UnsetFieldIDs      []string       `json:"unsetFieldIds,omitempty"`
-	ValuesPresent      bool           `json:"-"`
-	SetPresent         bool           `json:"-"`
-	UnsetFieldsPresent bool           `json:"-"`
+	Kind               string             `json:"kind"`
+	RecordID           string             `json:"recordId,omitempty"`
+	ExpectedRevision   int64              `json:"expectedRevision,omitempty"`
+	Values             map[string]any     `json:"values,omitempty"`
+	Set                map[string]any     `json:"set,omitempty"`
+	UnsetFieldIDs      []string           `json:"unsetFieldIds,omitempty"`
+	Choices            []ChoiceAssignment `json:"choices,omitempty"`
+	ValuesPresent      bool               `json:"-"`
+	SetPresent         bool               `json:"-"`
+	UnsetFieldsPresent bool               `json:"-"`
+	ChoicesPresent     bool               `json:"-"`
+}
+
+type ChoiceAssignment struct {
+	FieldID               string         `json:"fieldId"`
+	ExpectedFieldRevision int64          `json:"expectedFieldRevision"`
+	Options               []ChoiceOption `json:"options"`
+}
+
+type ChoiceOption struct {
+	OptionID string `json:"optionId,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Color    string `json:"color,omitempty"`
+}
+
+type ChoiceFieldResult struct {
+	FieldID         string                `json:"fieldId"`
+	BeforeRevision  int64                 `json:"beforeRevision"`
+	Revision        int64                 `json:"revision"`
+	ResolvedOptions []domain.SelectOption `json:"resolvedOptions"`
+	CreatedOptions  []domain.SelectOption `json:"createdOptions"`
 }
 
 type CommandResult struct {
@@ -36,15 +58,17 @@ type CommandResult struct {
 }
 
 type MutationResult struct {
-	ClientMutationID string          `json:"clientMutationId"`
-	Results          []CommandResult `json:"results"`
-	ChangeCursor     string          `json:"changeCursor"`
+	ClientMutationID string              `json:"clientMutationId"`
+	Results          []CommandResult     `json:"results"`
+	ChangeCursor     string              `json:"changeCursor"`
+	ChoiceFields     []ChoiceFieldResult `json:"choiceFields,omitempty"`
 }
 
 type StoredMutationResult struct {
-	ClientMutationID string          `json:"clientMutationId"`
-	Results          []CommandResult `json:"results"`
-	ChangeSequence   int64           `json:"changeSequence"`
+	ClientMutationID string              `json:"clientMutationId"`
+	Results          []CommandResult     `json:"results"`
+	ChangeSequence   int64               `json:"changeSequence"`
+	ChoiceFields     []ChoiceFieldResult `json:"choiceFields,omitempty"`
 }
 
 type FieldDefinition struct {
@@ -359,8 +383,18 @@ type ConflictError struct {
 	ClientMutationID   string
 	FailedCommandIndex int
 	Conflicts          []Conflict
+	FieldConflicts     []FieldConflict
+}
+
+type FieldConflict struct {
+	FieldID          string `json:"fieldId"`
+	ExpectedRevision int64  `json:"expectedRevision"`
+	CurrentRevision  int64  `json:"currentRevision"`
 }
 
 func (e *ConflictError) Error() string {
+	if len(e.FieldConflicts) > 0 {
+		return "one or more Choice Fields have a revision conflict"
+	}
 	return "one or more records have a revision conflict"
 }

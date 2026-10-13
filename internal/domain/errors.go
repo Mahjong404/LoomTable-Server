@@ -60,6 +60,12 @@ func (e *RevisionConflictError) Error() string {
 
 type IdempotencyKeyReusedError struct{}
 
+type MutationReceiptExpiredError struct{ ClientMutationID string }
+
+func (e *MutationReceiptExpiredError) Error() string {
+	return "operation committed but its complete receipt has expired; reconciliation is required"
+}
+
 func (e *IdempotencyKeyReusedError) Error() string {
 	return "idempotency key was used for a different request"
 }
