@@ -1,6 +1,6 @@
-# G2 后端候选交付 — 2026-10-13
+# G2 后端交付 — 2026-10-14（生产待发布）
 
-G2 实现与隔离验证完成，进入 PR Review Ready；尚未合并或部署，独立实现审查仍待完成。固定验证源码 SHA：`9fa266ab95868640dc0b3e261bd263706ef924df`；基线 main：`bb00e6ad3d100a6e5e0879d1e8c1fb25ab51bfec`。后续交付文档提交不改变此实现。分支 feature/g2-atomic-choice；本轮到 G2 停止，不启动 G3–G5。
+G2 最终错误合同修复、独立实现审查与隔离验证完成。固定最终验证源码 SHA：`8553749b0f0ea514b8a8874e65835a52f6c19820`；基线 main：`bb00e6ad3d100a6e5e0879d1e8c1fb25ab51bfec`。[PR #13](https://github.com/Mahjong404/LoomTable-Server/pull/13) 保留实际 HEAD、CI 与 merge 状态；本地审查与测试已无阻塞，生产尚未部署。后续交付文档提交不改变此实现。本轮到 G2 停止，不启动 G3–G5。
 
 ## 合同与真实事务
 
@@ -13,7 +13,23 @@ G2 实现与隔离验证完成，进入 PR Review Ready；尚未合并或部署�
 - Option/Record/Change/Receipt/identity guard 在同一 PostgreSQL transaction；不组合两个 Service 的独立事务。响应 choiceFields 提供 bounded resolvedOptions/createdOptions 与 beforeRevision/revision，真实生成 ID 和 delta 原样持久化/replay。
 - 原 Actor + clientMutationId + Table/path + 原 command body 是重试身份；name/color/revisions 不在 hash 前改写。response 丢失/timeout/commit error 不换 key、不自动 rebase。Receipt replay 先于 CAS；过期 guard 同 hash 返回 410 MUTATION_RECEIPT_EXPIRED、operationCommitted=true，改 body 409 IDEMPOTENCY_KEY_REUSED。
 
-## 验证证据
+## 2026-10-14 最终修复与独立审查
+
+[Devin finding](https://github.com/Mahjong404/LoomTable-Server/pull/13#discussion_r4251285820) 确认成立：deleted Choice Field 的 InvalidStateTransitionDetails.action 原为 assign choice，超出既有 enum。现使用 update，HTTP422与资源/状态详情保持，无公共 enum 或 OpenAPI版本扩大。其他 G2新错误路径逐一检查：deleted Record使用update，type/limit/duplicate/invalidReference/name/color使用既有ValidationIssue codes，CAS/expiry使用已批准schema。
+
+新增测试直接从正式 OpenAPI 解析完整 operation response Schema，JSON Schema2020-12、递归本地$ref与format校验，拒绝外部加载；CONFLICT另校验完整ConflictResponse，防止409 generic分支掩盖CAS形状错误。测试用jsonschema/yaml库仅在_test.go导入，Go1.22不变，YAML测试间接依赖固定兼容版本。
+
+真实HTTP/PG回归覆盖422 deletedField Existing/Draft、deletedField staleCAS409、RecordCAS409、Select数量/type/color/foreignOption/重复canonicalID/foreignField404、正常200及历史replay、改body409、Receipt过期410、deletedRecord422和旧无choices响应。负向Schema测试证明非法action、缺requestId、非法resource及额外detail都会被拒绝。修复前隔离red实际拒绝完整assign choice响应；新增fixture最初置于旧no-op测试之前，改变了cursor断言的前置状态；已移到原断言后。首次green又因text fixture缺config失败，补EmptyFieldConfig后，最终固定源码全green。
+
+Standards：完整旧候选26文件独立静态审查及1934141→8553749最终补查，0硬违反/0可执行heuristic发现。审查者与实现作者分离，检查模块边界、scope、锁序、guard、legacy DTO/fingerprint与并发测试cleanup；没有宣称自己复跑QA。
+
+Spec：完整合同/最终源码独立审查，既知Action finding修复后无剩余发现；另复核正式Schema与Go1.22依赖。旧候选QA也由Spec独立读证据，新日志最终证据复核见审查报告。该独立审查不等于生产验证：生产迁移/发布仍未执行。
+
+固定8553749的新验证：本地Go Test/Vet/Format/diff通过；隔离完整 go test -race -p1 -count1 ./... + Vet通过（postgres10.187s），专跑G2事务fixture7.456s；001–006→007/reapply、15public表restore内容与行数摘要一致，18 guards/7 migrations，固定旧G6image health/ready/meta成功且无atomicChoice。新network/tmpfs PG/no host ports，仅合成数据，退出资源清理已复核。
+
+最终源码归档SHA-256：`1d7b1c4c0f14c7d10668c561517ebb73f5416e8254d77a533dd9d6acfe90f4c4`；green log：`9b49006008b2a08697588374200df644a755416fa34cf5d51385af5dd21c5fc8`；修复前red log：`f064b9f4a28fc07384587b98688eac7894ce91d1df3b24bc29fa467650ea8189`；恢复摘要：`08f8c4939ba4016f46cd6b5cb4bb60d830f21083634c1ac3894beabfc39424ca`。日志/归档/dump不提交。最终PR CI在集中Push后核对，不复用旧HEAD的CI作为新HEAD通过证据。
+
+## 首次候选验证证据（9fa266a）
 
 固定源码归档 SHA-256：`056d2b2786243b7db140566a3e5762c4eb4dfdd5654bf877c1db349367439016`。只归档 Git 跟踪的固定源码，不带 .env、凭据、用户数据或 Plugin 文件。
 
@@ -31,7 +47,7 @@ G2 实现与隔离验证完成，进入 PR Review Ready；尚未合并或部署�
 
 ## 审查、Migration 与部署边界
 
-合同双轴审查无未解决发现。实现 Spec 审查返回一项 capability 描述错误，已在固定源码中修正；独立 Standards/Spec 实现审查随后因 workspace credits 错误中断，不能记为通过。当前手动复核与全部自动化验证完成，适合 review；Merge Ready 仍需完成独立代码审查和 PR CI。CI 结果以主要 PR 检查为准，不关闭质量门禁。
+首次候选的独立实现审查因workspace credits错误中断，当时正确标记未完成。本轮已补齐完整独立Standards/Spec审查与最终源码验证，历史capability及Action finding均已修复；新的PR CI结果以最终HEAD检查为准，不关闭质量门禁。
 
 007 仅新增 mutation_identity_guards 小表/复合主键/Actor FK，无 backfill、无既有数据改写。只保存成功 G2 Actor/key/hash（含 unchanged），不保存业务值，不随 Receipt retention 删除；必要性是防止过期未知结果重复创建。生产迁移尚未执行。
 
@@ -46,3 +62,17 @@ G2 实现与隔离验证完成，进入 PR Review Ready；尚未合并或部署�
 5. G2 消费者只在真实 Server ready、migrationRequired=false、atomicChoice 存在后开放。验收并发同名、双 CAS、取消未提交 Draft、失败无部分数据、响应丢失和重启 Queue、deleted Option、多 Field、12 色、旧 Server/降级 Queue 暂停。
 
 本工作线未改 Plugin 代码、API pin 或唯一跨仓状态表。没有待用户裁决的新增产品事项；剩余为独立代码审查、CI、合并与单独安全发布，当前 G2 UI 不可宣称可用。
+
+## 2026-10-14 发布检查表与持久风险
+
+本轮仅合并代码；生产 007 Migration 和切换镜像需用户另行确认发布窗口与以下风险。私有部署说明已授权读取，生产 Meta/healthz/readyz 只读核查正常，仍为 v0.4.0+f3980b1b4126，无 atomicChoice。
+
+1. 固定审查/CI 成功的源码与发布镜像 revision/digest，核对生产当前镜像和原 override，确认只有 migration 007；版本记录只按文件名标记，不自动校验 checksum，所以人工核对既有 001–006 与已交付基线一致。普通启动不执行迁移。
+2. 用户确认维护窗口、可接受的写入暂停与恢复责任后停止应用写入；保留 PostgreSQL、Attachment volumes，记录版本/Schema。使用现有 backup.sh / validate-backup.sh 备份并校验数据库 custom dump + Managed Attachment + manifest；包含 Actor/token hash/HMAC/业务值的归档仅存私有运维位置。必须在新隔离 PG/附件目录恢复，核对对象/附件引用及身份 guard，不把生产 URL 传给会 DROP SCHEMA 的集成测试。
+3. 只运行一个显式迁移进程，防止既有版本检查器的并行执行竞争。007 的 CREATE TABLE + schema_migrations 版本写入同 transaction，无 backfill 或旧记录 UPDATE；Actor FK 需要短暂 DDL 锁，因此迁移前停止应用写入，避免长事务，设定受控超时。失败整次007回滚；未查证状态不启动 G2。
+4. 迁移核查完成后启动固定 G2 镜像，验证 healthz/readyz/meta、migrationRequired=false、atomicChoice 和旧 capabilities、Actor/Token 可用、只读旧 Record/Field；正常 Plugin 不自动改变 Queue/API pin。必要写入验收使用明确隔离的 synthetic QA scope，随后才恢复业务流量。
+5. 切换失败优先恢复旧 G6 镜像和原运行配置，保持原数据库/附件卷与007/guards。G6 已在带007的恢复测试库验证 ready；它不接受 choices，Plugin G2 Queue 必须暂停并保留原 body/key。恢复 G2 后才恢复原身份 replay。普通 binary rollback 不恢复旧备份覆盖期间新数据，也不 DROP guard；若确需整体灾难恢复，停写并独立确认目标备份、RPO/新增数据损失和 DB+附件一致性后处理。
+
+Guard 复合主键 Actor/key 阻止并发重复身份；同事务成功才创建，失败没有 guard。Receipt 清理不删 guard。cleanup 与 replay 相遇时，可返回已读到的原 Receipt 或永久guard的410，不能重新执行；same Actor writer lock 与唯一键仍序列化并发请求。成功 unchanged 也保留 guard；没有历史非G2回填。guard 永久增长，部署后监测行数/索引体积/备份与恢复耗时；不通过TTL删除减小表，这会撤销安全保证。Actor FK 还限制未来 Actor 物理删除，当前没有该产品操作，未来必须单独设计。007的加法性质降低即时数据风险，但持久增长和不可自动 down 的约束仍须在发布窗口确认。
+
+代码合并不等于线上能力可用；生产合同仍0.4.0。G2消费者须固定已交付SHA做 api:sync/api:generate、Client/decoder/InMemory/Queue v3改造，保留v1/v2原身份，ready+atomicChoice+无migrationRequired后才接入。Field lifecycle422的action现在使用既有update；409 fieldConflicts/Record conflicts、410 operationCommitted reconciliation、choiceFields revision单调合并等精确合同不变。
