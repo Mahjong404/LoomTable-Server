@@ -267,7 +267,7 @@ func TestAtomicChoiceTransactions(t *testing.T) {
 			call(key, cmd, 422)
 			noReceipt(t, key)
 		}
-		plain, err := cat.CreateField(ctx, actor, newMutationID(t), table.Table.ID, catalog.FieldInput{Name: "Schema text", Type: "text"})
+		plain, err := cat.CreateField(ctx, actor, newMutationID(t), table.Table.ID, catalog.FieldInput{Name: "Schema text", Type: "text", Config: domain.EmptyFieldConfig{}})
 		if err != nil {
 			t.Fatal(err)
 		}
