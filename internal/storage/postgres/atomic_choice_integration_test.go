@@ -75,6 +75,7 @@ func TestAtomicChoiceTransactions(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("atomic HTTP = %d %s", w.Code, w.Body.String())
 	}
+	validateMutationHTTPResponse(t, w)
 	var result loomrecord.MutationResult
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
@@ -197,6 +198,128 @@ func TestAtomicChoiceTransactions(t *testing.T) {
 		if !errors.As(err, &reused) {
 			t.Fatalf("changed immutable payload=%v", err)
 		}
+	})
+
+	t.Run("complete HTTP response schemas", func(t *testing.T) {
+		f := makeField(t, "select")
+		r := freshRecord(t, map[string]any{})
+		call := func(key string, command map[string]any, status int) map[string]any {
+			t.Helper()
+			body, err := json.Marshal(map[string]any{"clientMutationId": key, "commands": []any{command}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/v1/tables/"+table.Table.ID+"/records/mutate", bytes.NewReader(body))
+			request.Header.Set("Authorization", "Bearer "+bootstrap.Token.Secret)
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, request)
+			if response.Code != status {
+				t.Fatalf("HTTP status=%d want=%d %s", response.Code, status, response.Body.String())
+			}
+			return validateMutationHTTPResponse(t, response)
+		}
+		command := func(fieldRevision, recordRevision int64) map[string]any {
+			return map[string]any{"kind": "updateRecord", "recordId": r.ID, "expectedRevision": recordRevision,
+				"choices": []any{map[string]any{"fieldId": f.ID, "expectedFieldRevision": fieldRevision, "options": []any{map[string]any{"name": "Schema", "color": "lime"}}}}}
+		}
+		if err := cat.DeleteField(ctx, actor, f.ID, f.Revision); err != nil {
+			t.Fatal(err)
+		}
+		f = fieldNow(t, f.ID)
+		for _, kind := range []string{"updateRecord", "createRecord"} {
+			key := newMutationID(t)
+			cmd := command(f.Revision, r.Revision)
+			if kind == "createRecord" {
+				delete(cmd, "recordId")
+				delete(cmd, "expectedRevision")
+				cmd["kind"], cmd["values"] = kind, map[string]any{}
+			}
+			body := call(key, cmd, 422)
+			errBody := body["error"].(map[string]any)
+			details := errBody["details"].(map[string]any)
+			if errBody["code"] != "INVALID_STATE_TRANSITION" || details["action"] != "update" || details["current"] != "deleted" || details["resource"].(map[string]any)["id"] != f.ID {
+				t.Fatalf("deleted Field details=%v", errBody)
+			}
+			noReceipt(t, key)
+		}
+		// Field CAS takes priority even when the Field is deleted.
+		key := newMutationID(t)
+		call(key, command(f.Revision-1, r.Revision), 409)
+		noReceipt(t, key)
+		f, err = cat.RestoreField(ctx, actor, f.ID, f.Revision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key = newMutationID(t)
+		call(key, command(f.Revision, r.Revision+1), 409)
+		noReceipt(t, key)
+		// Select cardinality, bad color and foreign Option references retain schema-valid errors.
+		for _, options := range []any{
+			[]any{},
+			[]any{map[string]any{"name": "A", "color": "red"}, map[string]any{"name": "B", "color": "blue"}},
+			[]any{map[string]any{"name": "Bad", "color": "unknown"}},
+			[]any{map[string]any{"optionId": "opt_00000000000000000000000000"}},
+		} {
+			cmd := command(f.Revision, r.Revision)
+			cmd["choices"].([]any)[0].(map[string]any)["options"] = options
+			key = newMutationID(t)
+			call(key, cmd, 422)
+			noReceipt(t, key)
+		}
+		plain, err := cat.CreateField(ctx, actor, newMutationID(t), table.Table.ID, catalog.FieldInput{Name: "Schema text", Type: "text"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		multi := makeField(t, "multiSelect")
+		for _, target := range []domain.Field{plain, multi} {
+			cmd := command(target.Revision, r.Revision)
+			entry := cmd["choices"].([]any)[0].(map[string]any)
+			entry["fieldId"] = target.ID
+			entry["options"] = []any{map[string]any{"name": "A", "color": "red"}, map[string]any{"name": "a", "color": "blue"}}
+			key = newMutationID(t)
+			call(key, cmd, 422)
+			noReceipt(t, key)
+		}
+		foreign := command(f.Revision, r.Revision)
+		foreign["choices"].([]any)[0].(map[string]any)["fieldId"] = "fld_00000000000000000000000000"
+		key = newMutationID(t)
+		call(key, foreign, 404)
+		noReceipt(t, key)
+		key = newMutationID(t)
+		original := command(f.Revision, r.Revision)
+		applied := call(key, original, 200)
+		replay := call(key, original, 200)
+		a, _ := json.Marshal(applied)
+		b, _ := json.Marshal(replay)
+		if !bytes.Equal(a, b) {
+			t.Fatal("HTTP replay changed full response")
+		}
+		call(key, command(f.Revision, r.Revision+1), 409)
+		if _, err := db.ExecContext(ctx, `UPDATE idempotency_keys SET created_at=clock_timestamp()-interval '31 days' WHERE actor_id=$1 AND client_mutation_id=$2`, actor, key); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.CleanupRetention(ctx, 0, 30*24*time.Hour, 10, 10000); err != nil {
+			t.Fatal(err)
+		}
+		call(key, original, 410)
+		// Legacy HTTP response remains schema-valid and omits the G2 delta.
+		legacy := call(newMutationID(t), map[string]any{"kind": "createRecord", "values": map[string]any{}}, 200)
+		if _, found := legacy["choiceFields"]; found {
+			t.Fatal("legacy HTTP gained choiceFields")
+		}
+		current, err := records.Get(ctx, actor, r.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		deleted, err := records.Mutate(ctx, actor, table.Table.ID, newMutationID(t), []loomrecord.Command{{Kind: "deleteRecord", RecordID: r.ID, ExpectedRevision: current.Revision}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f = fieldNow(t, f.ID)
+		key = newMutationID(t)
+		call(key, command(f.Revision, deleted.Results[0].Record.Revision), 422)
+		noReceipt(t, key)
 	})
 
 	t.Run("multi Field Draft and batch initial Field revision", func(t *testing.T) {

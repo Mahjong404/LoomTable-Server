@@ -46,7 +46,7 @@ func prepareChoiceMutation(ctx context.Context, tx *sql.Tx, actorID, tableID, mu
 			return nil, nil, nil, &loomrecord.ConflictError{ClientMutationID: mutationID, FailedCommandIndex: firstCommand[fieldID], Conflicts: []loomrecord.Conflict{}, FieldConflicts: []loomrecord.FieldConflict{{FieldID: fieldID, ExpectedRevision: expected[fieldID], CurrentRevision: field.Revision}}}
 		}
 		if field.DeletedAt != nil {
-			return nil, nil, nil, &domain.InvalidStateTransitionError{Resource: "field", ID: fieldID, Action: "assign choice", Current: "deleted"}
+			return nil, nil, nil, &domain.InvalidStateTransitionError{Resource: "field", ID: fieldID, Action: "update", Current: "deleted"}
 		}
 		config, ok := field.Config.(domain.SelectFieldConfig)
 		if !ok {
