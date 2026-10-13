@@ -233,9 +233,30 @@ func (s *Server) views(w http.ResponseWriter, r *http.Request, tableID string) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		lifecycle, ok := lifecycleQuery(r)
+		query := r.URL.Query()
+		include := false
+		if values, found := query["includeOrder"]; found {
+			if len(values) != 1 || (values[0] != "true" && values[0] != "false") {
+				writeAPIError(w, r, 400, "BAD_REQUEST", "includeOrder must be one true or false value")
+				return
+			}
+			include = values[0] == "true"
+			delete(query, "includeOrder")
+		}
+		listRequest := r.Clone(r.Context())
+		listRequest.URL.RawQuery = query.Encode()
+		lifecycle, ok := lifecycleQuery(listRequest)
 		if !ok {
 			writeAPIError(w, r, http.StatusBadRequest, "BAD_REQUEST", "only one lifecycle query parameter is accepted")
+			return
+		}
+		if include {
+			snapshot, err := s.catalog.ListViewsSnapshot(r.Context(), actorIDFrom(r), tableID, lifecycle)
+			if err != nil {
+				writeDomainError(w, r, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, snapshot)
 			return
 		}
 		items, err := s.catalog.ListViews(r.Context(), actorIDFrom(r), tableID, lifecycle)

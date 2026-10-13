@@ -93,6 +93,8 @@ type Store interface {
 	CursorKey(context.Context) ([]byte, error)
 
 	ListViews(context.Context, string, string, string) ([]domain.View, error)
+	ListViewsSnapshot(context.Context, string, string, string) (domain.ViewListSnapshot, error)
+	ReorderViews(context.Context, string, string, string, [32]byte, ViewOrderInput) (domain.ViewOrderResult, error)
 	GetView(context.Context, string, string) (domain.View, error)
 	CreateView(context.Context, string, string, [32]byte, domain.View) (domain.View, error)
 	UpdateView(context.Context, string, string, int64, domain.View) (domain.View, error)

@@ -864,7 +864,7 @@ func TestAtomicChoiceMigrationForwardPreservesLegacyData(t *testing.T) {
 	}
 	// Reconstruct the prior six-migration schema only while the disposable
 	// identity table is empty. This is not a production down migration.
-	if _, err := db.ExecContext(ctx, `DROP TABLE mutation_identity_guards; DELETE FROM schema_migrations WHERE version='007_mutation_identity_guards'`); err != nil {
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER views_maintain_order ON views; DROP FUNCTION maintain_view_order(); ALTER TABLE tables DROP COLUMN view_order, DROP COLUMN view_order_revision; DELETE FROM schema_migrations WHERE version='008_view_order'; DROP TABLE mutation_identity_guards; DELETE FROM schema_migrations WHERE version='007_mutation_identity_guards'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := postgres.ReadyChecker(db)(ctx); !errors.Is(err, appstatus.ErrMigrationRequired) {
@@ -903,7 +903,7 @@ func TestAtomicChoiceMigrationForwardPreservesLegacyData(t *testing.T) {
 		t.Fatal("007 rewrote legacy Field")
 	}
 	var migrations int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&migrations); err != nil || migrations != 7 {
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&migrations); err != nil || migrations != 8 {
 		t.Fatalf("migration count=%d %v", migrations, err)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM mutation_identity_guards`).Scan(&guards); err != nil || guards != 0 {

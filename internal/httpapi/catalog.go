@@ -285,6 +285,15 @@ func (s *Server) table(w http.ResponseWriter, r *http.Request) {
 		s.fields(w, r, tableID)
 		return
 	}
+	if strings.HasSuffix(trimmed, "/views/order") {
+		tableID := strings.TrimSuffix(trimmed, "/views/order")
+		if tableID == "" || strings.Contains(tableID, "/") {
+			writeAPIError(w, r, 404, "NOT_FOUND", "resource not found")
+			return
+		}
+		s.reorderViews(w, r, tableID)
+		return
+	}
 	if strings.HasSuffix(trimmed, "/views") {
 		tableID := strings.TrimSuffix(trimmed, "/views")
 		if tableID == "" || strings.Contains(tableID, "/") {
@@ -487,6 +496,11 @@ func requiredPositiveRevisionQuery(r *http.Request, name string) (int64, bool) {
 }
 
 func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
+	var orderConflict *domain.ViewOrderConflictError
+	if errors.As(err, &orderConflict) {
+		writeAPIErrorWithDetails(w, r, 409, "CONFLICT", orderConflict.Error(), orderConflict)
+		return
+	}
 	var recordConflict *loomrecord.ConflictError
 	if errors.As(err, &recordConflict) {
 		writeRecordConflict(w, r, recordConflict)

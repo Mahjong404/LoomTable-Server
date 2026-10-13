@@ -18,10 +18,10 @@ import (
 // No copied error enums or network-loaded schemas can mask contract drift.
 func mutationResponseSchema(t *testing.T, status int) *jsonschema.Schema {
 	t.Helper()
-	return compileMutationSchema(t, fmt.Sprintf("#/paths/~1v1~1tables~1{tableId}~1records~1mutate/post/responses/%d/content/application~1json/schema", status))
+	return compileOpenAPIResponseSchema(t, fmt.Sprintf("#/paths/~1v1~1tables~1{tableId}~1records~1mutate/post/responses/%d/content/application~1json/schema", status))
 }
 
-func compileMutationSchema(t *testing.T, pointer string) *jsonschema.Schema {
+func compileOpenAPIResponseSchema(t *testing.T, pointer string) *jsonschema.Schema {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "api", "openapi.yaml"))
 	if err != nil {
@@ -67,7 +67,7 @@ func validateMutationHTTPResponse(t *testing.T, response *httptest.ResponseRecor
 	// The published 409 operation also allows generic errors (key reuse).
 	// A CAS error must satisfy its more specific, complete ConflictResponse.
 	if e, ok := body["error"].(map[string]any); ok && e["code"] == "CONFLICT" {
-		if err := compileMutationSchema(t, "#/components/schemas/ConflictResponse").Validate(body); err != nil {
+		if err := compileOpenAPIResponseSchema(t, "#/components/schemas/ConflictResponse").Validate(body); err != nil {
 			t.Fatalf("CAS response violates OpenAPI: %v", err)
 		}
 	}

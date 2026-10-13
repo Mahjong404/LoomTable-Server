@@ -13,43 +13,8 @@ import (
 )
 
 func (r *Repository) ListViews(ctx context.Context, actorID, tableID, lifecycle string) ([]domain.View, error) {
-	if r == nil || r.db == nil {
-		return nil, domain.ErrDependencyMissing
-	}
-	condition, err := lifecycleCondition("v.deleted_at", lifecycle)
-	if err != nil {
-		return nil, err
-	}
-	visible, err := activeTableVisible(ctx, r.db, actorID, tableID)
-	if err != nil {
-		return nil, err
-	}
-	if !visible {
-		return nil, domain.ErrNotFound
-	}
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT v.id, v.table_id, v.name, v.type, v.config, v.is_default, v.revision,
-		       v.created_at, v.updated_at, v.deleted_at
-		FROM views v
-		WHERE v.table_id = $1 AND `+condition+`
-		ORDER BY v.created_at ASC, v.id ASC
-	`, tableID)
-	if err != nil {
-		return nil, fmt.Errorf("list views: %w", err)
-	}
-	defer rows.Close()
-	items := make([]domain.View, 0)
-	for rows.Next() {
-		item, err := scanView(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan view: %w", err)
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list views: %w", err)
-	}
-	return items, nil
+	snapshot, err := r.ListViewsSnapshot(ctx, actorID, tableID, lifecycle)
+	return snapshot.Items, err
 }
 
 func (r *Repository) GetView(ctx context.Context, actorID, viewID string) (domain.View, error) {
@@ -268,7 +233,7 @@ func (r *Repository) SetDefaultView(ctx context.Context, actorID, viewID string,
 		return domain.View{}, err
 	}
 	if current.DeletedAt != nil {
-		return domain.View{}, &domain.InvalidStateTransitionError{Resource: "view", ID: viewID, Action: "setDefault", Current: "deleted"}
+		return domain.View{}, &domain.InvalidStateTransitionError{Resource: "view", ID: viewID, Action: "update", Current: "deleted"}
 	}
 	if current.IsDefault {
 		if err := tx.Commit(); err != nil {
@@ -392,6 +357,15 @@ func decodeViewConfig(viewType string, raw []byte) (any, error) {
 }
 
 func lockAccessibleView(ctx context.Context, tx *sql.Tx, actorID, viewID string) (domain.View, error) {
+	var tableID string
+	if err := tx.QueryRowContext(ctx, `SELECT v.table_id FROM views v JOIN tables t ON t.id=v.table_id JOIN bases b ON b.id=t.base_id JOIN workspaces w ON w.id=b.workspace_id WHERE v.id=$1 AND t.deleted_at IS NULL AND b.deleted_at IS NULL AND w.actor_id=$2 AND w.deleted_at IS NULL`, viewID, actorID).Scan(&tableID); errors.Is(err, sql.ErrNoRows) {
+		return domain.View{}, domain.ErrNotFound
+	} else if err != nil {
+		return domain.View{}, fmt.Errorf("resolve View parent: %w", err)
+	}
+	if err := lockActiveTable(ctx, tx, actorID, tableID); err != nil {
+		return domain.View{}, err
+	}
 	item, err := scanView(tx.QueryRowContext(ctx, accessibleViewSQL+" FOR UPDATE OF v", viewID, actorID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.View{}, domain.ErrNotFound

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: LoomTable Server API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     LoomTable Server 的初版 REST API 合同。
     Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
@@ -819,9 +819,13 @@ paths:
       operationId: listViews
       parameters:
         - $ref: '#/components/parameters/Lifecycle'
+        - name: includeOrder
+          in: query
+          schema: { type: boolean, default: false }
+          description: Explicit opt-in to the complete active Order and its revision from the same read snapshot as items.
       responses:
         '200':
-          description: Complete, unpaginated View list in a Table, ordered by createdAt ASC then id ASC. P0 enforces a hard limit of 100 Views per Table.
+          description: Complete, unpaginated View list. Active items follow Server View Order; deleted/all items retain createdAt ASC then id ASC. The optional order always describes all active Views from the same snapshot. At most 100 total Views per Table.
           content:
             application/json:
               schema:
@@ -832,6 +836,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/View'
+                  order:
+                    $ref: '#/components/schemas/ViewOrder'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -870,6 +876,53 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/IdempotencyKeyReused'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/views/order:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    put:
+      tags: [Views]
+      operationId: reorderViews
+      description: Requires viewOrderCAS, readiness and migrationRequired=false. Replaces the complete active permutation with strict Order CAS. Unchanged requires matching CAS and does not bump revisions. Original Actor/key/body replay precedes CAS; guarded expired operations return terminal 410.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ViewOrderRequest' }
+      responses:
+        '200':
+          description: Stored applied or unchanged Order result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ViewOrderResult' }
+        '409':
+          description: Order CAS conflict with current Order in details, or Idempotency-Key reused
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '410':
+          description: Operation committed but its full receipt expired; reconcile without automatically executing again
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '415':
@@ -1938,7 +1991,7 @@ components:
           type: string
         capabilities:
           type: array
-          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds.
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds. A server implementing Table-owned View Order CAS declares `viewOrderCAS` under the same readiness conditions.
           items:
             type: string
         changeRetention:
@@ -3668,6 +3721,50 @@ components:
           type: integer
           minimum: 1
 
+    ViewOrder:
+      type: object
+      additionalProperties: false
+      required: [tableId, revision, viewIds]
+      properties:
+        tableId: { $ref: '#/components/schemas/TableId' }
+        revision: { type: integer, minimum: 1 }
+        viewIds:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ViewId' }
+      description: Complete active permutation with a Table-owned revision independent of View config/default and ordinary Table revision.
+
+    ViewOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedOrderRevision, viewIds]
+      properties:
+        expectedOrderRevision: { type: integer, minimum: 1 }
+        viewIds:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ViewId' }
+
+    ViewOrderResult:
+      type: object
+      additionalProperties: false
+      required: [clientMutationId, status, order]
+      properties:
+        clientMutationId: { $ref: '#/components/schemas/MutationId' }
+        status: { type: string, enum: [applied, unchanged] }
+        order: { $ref: '#/components/schemas/ViewOrder' }
+
+    ViewOrderConflictDetails:
+      type: object
+      additionalProperties: false
+      required: [tableId, expectedOrderRevision, currentOrder]
+      properties:
+        tableId: { $ref: '#/components/schemas/TableId' }
+        expectedOrderRevision: { type: integer, minimum: 1 }
+        currentOrder: { $ref: '#/components/schemas/ViewOrder' }
+
     MutationResult:
       type: object
       additionalProperties: false
@@ -3874,6 +3971,7 @@ components:
             - $ref: '#/components/schemas/ViewConfigurationRequiredDetails'
             - $ref: '#/components/schemas/PayloadTooLargeDetails'
             - $ref: '#/components/schemas/MutationReceiptExpiredDetails'
+            - $ref: '#/components/schemas/ViewOrderConflictDetails'
 
     MutationReceiptExpiredDetails:
       type: object
