@@ -323,7 +323,7 @@ func TestTableAuditTransactions(t *testing.T) {
 	})
 	t.Run("View Default and Order are distinct with exact replay", func(t *testing.T) {
 		table := newTable(t)
-		view, err := cat.CreateView(ctx, actor, newMutationID(t), table.Table.ID, catalog.ViewInput{Name: "Second", Type: "grid", Config: domain.GridViewConfig{}})
+		view, err := cat.CreateView(ctx, actor, newMutationID(t), table.Table.ID, catalog.ViewInput{Name: "Second", Type: "grid", Config: table.InitialView.Config})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -431,6 +431,45 @@ func TestTableAuditTransactions(t *testing.T) {
 			t.Fatal("unknown/presence facts invented")
 		}
 	})
+	t.Run("10000 Record events paginated before projection limit", func(t *testing.T) {
+		table := newTable(t)
+		started := time.Now()
+		for batch := 0; batch < 20; batch++ {
+			commands := make([]record.Command, 500)
+			for i := range commands {
+				commands[i] = record.Command{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{table.PrimaryField.ID: "Synthetic"}}
+			}
+			if _, err := records.Mutate(ctx, actor, table.Table.ID, newMutationID(t), commands); err != nil {
+				t.Fatal(err)
+			}
+		}
+		writeElapsed := time.Since(started)
+		started = time.Now()
+		request := record.AuditRequest{AuditFilter: record.AuditFilter{Category: "record"}, Limit: 100}
+		seen := map[string]bool{}
+		pages := 0
+		for {
+			p := audit(t, table.Table.ID, request)
+			pages++
+			if p.Count != 10000 {
+				t.Fatalf("count=%d", p.Count)
+			}
+			for _, e := range p.Items {
+				if seen[e.ID] {
+					t.Fatal("duplicate large-query event")
+				}
+				seen[e.ID] = true
+			}
+			if !p.HasMore {
+				break
+			}
+			request.Cursor = p.NextCursor
+		}
+		if len(seen) != 10000 || pages != 100 {
+			t.Fatalf("events/pages=%d/%d", len(seen), pages)
+		}
+		t.Logf("synthetic audit 10000 events: writer=%s read100pages=%s (cloud QA, not production latency)", writeElapsed, time.Since(started))
+	})
 	t.Run("retention invalidates cursor and reports actual remaining coverage", func(t *testing.T) {
 		table := newTable(t)
 		p := audit(t, table.Table.ID, record.AuditRequest{Limit: 1})
@@ -482,7 +521,7 @@ func TestTableAuditMigrationLegacyImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Owned disposable database only: recreate the actual pre-010 source state.
-	_, err = db.ExecContext(ctx, `DROP TRIGGER capture_audit ON records; DROP TRIGGER capture_audit ON fields; DROP TRIGGER capture_audit ON views; DROP TRIGGER capture_audit ON tables; DROP TRIGGER capture_ancestor_audit ON bases; DROP TRIGGER capture_ancestor_audit ON workspaces; DROP TRIGGER associate_audit_change ON changes; DROP TABLE audit_events,audit_coverage,audit_retention_watermarks; ALTER TABLE idempotency_keys DROP COLUMN operation_id; DELETE FROM schema_migrations WHERE version='010_table_audit'`)
+	_, err = db.ExecContext(ctx, `DROP TRIGGER capture_audit ON records; DROP TRIGGER capture_audit ON fields; DROP TRIGGER capture_audit ON views; DROP TRIGGER capture_audit ON tables; DROP TRIGGER capture_ancestor_audit ON bases; DROP TRIGGER capture_ancestor_audit ON workspaces; DROP TRIGGER associate_audit_change ON changes; DROP TABLE audit_events,audit_coverage,audit_retention_watermarks,audit_instrumentation_gaps; ALTER TABLE idempotency_keys DROP COLUMN operation_id; DELETE FROM schema_migrations WHERE version='010_table_audit'`)
 	if err != nil {
 		t.Fatal(err)
 	}

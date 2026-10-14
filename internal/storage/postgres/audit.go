@@ -27,7 +27,7 @@ func (r *Repository) ReadAudit(ctx context.Context, actorID, tableID string, fil
 		return record.StoredAuditPage{}, domain.ErrNotFound
 	}
 	result := record.StoredAuditPage{AuditPage: record.AuditPage{Items: []record.AuditEvent{}}}
-	if err := tx.QueryRowContext(ctx, `SELECT captured_since,uninstrumented_writer FROM audit_coverage WHERE singleton`).Scan(&result.Availability.CapturedSince, &result.Availability.UninstrumentedWriter); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT captured_since,EXISTS(SELECT 1 FROM audit_instrumentation_gaps WHERE table_id=$1) FROM audit_coverage WHERE singleton`, tableID).Scan(&result.Availability.CapturedSince, &result.Availability.UninstrumentedWriter); err != nil {
 		return result, err
 	}
 	var earliest sql.NullTime

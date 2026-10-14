@@ -1,8 +1,9 @@
 -- Retained audit facts are additive; existing Change kinds/DTOs are untouched.
 CREATE TABLE IF NOT EXISTS audit_coverage (
- singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton), captured_since timestamptz NOT NULL DEFAULT clock_timestamp(), uninstrumented_writer boolean NOT NULL DEFAULT false
+ singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton), captured_since timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 INSERT INTO audit_coverage(singleton) VALUES(true) ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS audit_instrumentation_gaps(table_id text PRIMARY KEY REFERENCES tables(id), first_observed_at timestamptz NOT NULL DEFAULT clock_timestamp());
 CREATE TABLE IF NOT EXISTS audit_events (
  sequence bigserial PRIMARY KEY, id text NOT NULL UNIQUE, operation_id text, change_ids text[] NOT NULL DEFAULT '{}',
  table_id text NOT NULL REFERENCES tables(id), object_id text NOT NULL, record_id text, field_id text, view_id text,
@@ -45,10 +46,12 @@ BEGIN
  END IF;
  cell_value:=vals->fid;
  present:=CASE WHEN NOT COALESCE(vals ? fid,false) THEN 'missing' WHEN cell_value='null'::jsonb THEN 'null' ELSE 'value' END;
+ IF COALESCE(definition->>'type','') IN ('select','multiSelect') THEN
  SELECT COALESCE(jsonb_agg(opt ORDER BY opt->>'id'),'[]'::jsonb) INTO options
  FROM jsonb_array_elements(CASE WHEN jsonb_typeof(definition->'config'->'options')='array' THEN definition->'config'->'options' ELSE '[]'::jsonb END || CASE WHEN jsonb_typeof(definition->'config'->'deletedOptions')='array' THEN definition->'config'->'deletedOptions' ELSE '[]'::jsonb END) opt
  WHERE cell_value=to_jsonb(opt->>'id') OR (jsonb_typeof(cell_value)='array' AND cell_value ? (opt->>'id'));
  SELECT COALESCE(jsonb_agg(selected),'[]'::jsonb) INTO missing_options FROM (SELECT cell_value #>> '{}' selected WHERE jsonb_typeof(cell_value)='string' UNION ALL SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(cell_value)='array' THEN cell_value ELSE '[]'::jsonb END)) chosen WHERE definition->>'type' IN ('select','multiSelect') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(options) opt WHERE opt->>'id'=chosen.selected);
+ ELSE options:='[]'::jsonb; missing_options:='[]'::jsonb; END IF;
  RETURN jsonb_build_object('presence',present,'value',cell_value,'missingOptionIds',missing_options,'metadataRecorded',definition IS NOT NULL AND jsonb_array_length(missing_options)=0,
   'field',CASE WHEN definition IS NULL THEN null ELSE jsonb_build_object('id',fid,'name',definition->'name','type',definition->'type','deletedAt',definition->'deleted_at') END,'options',options);
 END $$;
@@ -61,7 +64,7 @@ BEGIN
  ELSIF TG_OP='INSERT' THEN a:=to_jsonb(NEW); ELSE b:=to_jsonb(OLD); END IF;
  entity:=COALESCE(a,b); tid:=CASE WHEN TG_TABLE_NAME='tables' THEN entity->>'id' ELSE entity->>'table_id' END;
  actor:=nullif(current_setting('loomtable.audit_actor',true),''); op:=loomtable_audit_operation();
- IF actor IS NULL THEN UPDATE audit_coverage SET uninstrumented_writer=true WHERE singleton AND NOT uninstrumented_writer; END IF;
+ IF actor IS NULL THEN INSERT INTO audit_instrumentation_gaps(table_id) VALUES(tid) ON CONFLICT DO NOTHING; END IF;
  kind:=CASE TG_TABLE_NAME WHEN 'records' THEN 'record' WHEN 'fields' THEN 'field' WHEN 'views' THEN 'view' ELSE 'table' END||
  CASE WHEN TG_OP='INSERT' THEN 'Created' WHEN TG_OP='DELETE' OR (b->>'deleted_at' IS NULL AND a->>'deleted_at' IS NOT NULL) THEN 'Deleted' WHEN b->>'deleted_at' IS NOT NULL AND a->>'deleted_at' IS NULL THEN 'Restored' ELSE 'Updated' END;
  IF TG_TABLE_NAME='records' THEN
@@ -72,6 +75,9 @@ BEGIN
     cells:=cells||jsonb_build_array(jsonb_build_object('fieldId',fid,'before',loomtable_audit_cell(b->'values',fid,tid,false),'after',loomtable_audit_cell(a->'values',fid,tid,true)));
    END IF;
   END LOOP;
+  IF actor IS NULL THEN
+   SELECT COALESCE(jsonb_agg(cell || jsonb_build_object('before',cell->'before'||jsonb_build_object('metadataRecorded',false,'field',null,'options','[]'::jsonb),'after',cell->'after'||jsonb_build_object('metadataRecorded',false,'field',null,'options','[]'::jsonb))),'[]'::jsonb) INTO cells FROM jsonb_array_elements(cells) cell;
+  END IF;
   b:=b-'query_values'-'search_text'; a:=a-'query_values'-'search_text';
  ELSIF TG_TABLE_NAME='fields' THEN fieldid:=entity->>'id'; IF TG_OP='UPDATE' AND b->'type' IS DISTINCT FROM a->'type' THEN kind:='fieldConverted'; END IF;
  ELSIF TG_TABLE_NAME='views' THEN vid:=entity->>'id';
@@ -92,8 +98,9 @@ DECLARE tid text; actor text;
 BEGIN
  IF OLD.name=NEW.name AND OLD.deleted_at IS NOT DISTINCT FROM NEW.deleted_at THEN RETURN NEW; END IF;
  actor:=nullif(current_setting('loomtable.audit_actor',true),'');
- IF actor IS NULL THEN UPDATE audit_coverage SET uninstrumented_writer=true WHERE singleton AND NOT uninstrumented_writer; END IF;
+
  FOR tid IN SELECT t.id FROM tables t JOIN bases b ON b.id=t.base_id WHERE (TG_TABLE_NAME='bases' AND b.id=NEW.id) OR (TG_TABLE_NAME='workspaces' AND b.workspace_id=NEW.id) ORDER BY t.id FOR UPDATE OF t LOOP
+  IF actor IS NULL THEN INSERT INTO audit_instrumentation_gaps(table_id) VALUES(tid) ON CONFLICT DO NOTHING; END IF;
   INSERT INTO audit_events(id,operation_id,table_id,object_id,actor_id,category,kind,payload_version,payload)
   VALUES('aud_'||replace(gen_random_uuid()::text,'-',''),loomtable_audit_operation(),tid,NEW.id,actor,'metadata',CASE TG_TABLE_NAME WHEN 'bases' THEN 'baseUpdated' ELSE 'workspaceUpdated' END,1,jsonb_build_object('before',to_jsonb(OLD),'after',to_jsonb(NEW),'fields','[]'::jsonb,'metadataRecorded',true));
  END LOOP;
