@@ -1,5 +1,7 @@
 # LoomTable Server — Agent 工作规范
 
+Codex、DSH、Devin 及其他 Agent 开始 Server 任务时必须先读 [docs/agent-ops/README.md](docs/agent-ops/README.md)，再按任务读取云端或 API Gate SOP。
+
 工作前阅读 `CONTRIBUTING.md`、`CONTEXT.md`、`docs/wave1.5/README.md`、目标 Gate 合同/交付记录与 `docs/api/openapi.yaml`。核实真实 Git HEAD、当前部署、Migration、capability、权限与测试证据；不得以“源码已合并”冒充“生产已部署”。
 
 ## Server 云端运行和测试（强制）
