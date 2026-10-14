@@ -6,7 +6,7 @@
 
 - Base main：`f43ecb1a7a70c6fbf109f094ceb1e22a16a7425b`（G3 merge）。
 - 合同初始提交：`743bc9b3ba147e00f95fe3a533d45516757a4855`；最终语义以本 PR 合同为准。
-- 最终 Server 源码/测试：`0b00651cde5aa9fecf9c55c638b3b63dfc2401cc`。
+- 最终 Server 源码/OpenAPI/测试：`08c3093f745e5fd68cdfb7d2611187c4b54bf0c2`；生产Go和009仍与0b006相同。
 - 最终完整隔离 Race / restart / legacy QA基线同为`0b00651cde5aa9fecf9c55c638b3b63dfc2401cc`，完整runner marker为G4_FINAL_QA_PASS，17组G4核心场景。
 - OpenAPI `0.6.0 → 0.7.0`，Capability `querySelection`，新增 migration `009_selection_scopes`。
 - 分支 `feature/g4-query-selection`，[主要PR #15](https://github.com/Mahjong404/LoomTable-Server/pull/15)；实际 PR/CI/正常独立 Review/merge 状态以 GitHub 为准，不能从此文档的源码 SHA 推断已合并或部署。
@@ -60,7 +60,7 @@ scoped Cursor与Scope独立：排序/显示/普通值变化可导致CURSOR_EXPIR
 
 初版审查与QA失败日志保留。最终0b006完整runner一次贯通，包含全量Race/vet、17-table恢复、实际restart、旧G3/G6 HTTP，marker G4_FINAL_QA_PASS；最终证据不再依赖旧helper的历史echo或拼接失败阶段。
 
-正常独立Devin Review在初版cbc2c39413f1abd829c49408dfc3b73388eaee3a提出3个有效问题：[null覆盖](https://github.com/Mahjong404/LoomTable-Server/pull/15#discussion_r4269918734)、[已删除View的错误优先级](https://github.com/Mahjong404/LoomTable-Server/pull/15#discussion_r4269918935)、[readiness绕过](https://github.com/Mahjong404/LoomTable-Server/pull/15#discussion_r4269919049)。0b006修复：nullable仅影响新增Scope与scoped Query；metadata同RR先验证Scope/原View，page事务仍重查；复用readyz gate。Unit先重现失败再通过，PG/HTTP完整Schema核验null清View Filter、scoped deletedView410/普通query404、显式pending与真实缺009503，而普通Query仍200。初始Strict unit还补了stubCatalog，确保实际经过Table route，不把缺依赖503当输入回归PASS。修复后独立复核/最终CI以PR最新HEAD为准。
+正常独立Devin Review在初版cbc2c39413f1abd829c49408dfc3b73388eaee3a提出3个有效问题：[null覆盖](https://github.com/Mahjong404/LoomTable-Server/pull/15#discussion_r4269918734)、[已删除View的错误优先级](https://github.com/Mahjong404/LoomTable-Server/pull/15#discussion_r4269918935)、[readiness绕过](https://github.com/Mahjong404/LoomTable-Server/pull/15#discussion_r4269919049)。0b006修复：nullable仅影响新增Scope与scoped Query；metadata同RR先验证Scope/原View，page事务仍重查；复用readyz gate。Unit先重现失败再通过，PG/HTTP完整Schema核验null清View Filter、scoped deletedView410/普通query404、显式pending与真实缺009503，而普通Query仍200。初始Strict unit还补了stubCatalog，确保实际经过Table route，不把缺依赖503当输入回归PASS。Reviewer分别回复3条Resolved；随后[请求Schema遗漏](https://github.com/Mahjong404/LoomTable-Server/pull/15#discussion_r4270157447)在08c3093修复：QueryRequest条件Schema只在带selectionScopeToken时允许filter:null。新增6组合请求Schema单测先失败再通过，真实HTTP同时校验完整请求/响应。独立tmpfs定向Race+vet实际5.921s PASS，marker G4_REQUEST_SCHEMA_QA_PASS。后端代码未改，不重复运行时/恢复；最终独立复核/CI以PR最新HEAD为准。
 
 本地private证据不提交（只记录SHA256）：0b006源码归档c59cb16de0729f12f1c6e11b0aec8853c70cc749fb49d38c821baab34286ce69；最终完整log10750f831f8d787868f60fbf92e8b8280eb5f0feadb89cf6607f7488e13897f1；restore digestbb92e0e72c92d9af3f3d9f688c5f6ecdfeaf00cf78d800deeb10a251940423ee。不记录Token、真实业务数据、备份内容或私人部署路径。
 
