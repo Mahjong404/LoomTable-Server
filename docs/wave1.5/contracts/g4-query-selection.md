@@ -78,7 +78,7 @@ TTL 固定5分钟，从取得Table与祖先可见性锁后、成员稳定时的D
 
 预算：每 Scope 最多100,000成员；每 Actor8、每 Table4、全实例64个有效 Scope；另限制含失效身份在内的未过期请求行：Actor64、实例256。总持久成员最多1,000,000。失效成员可在下次创建时清理，但请求身份保留到原TTL，防止 Response Lost 的旧请求自动分配新的成员集。不是 Table Record 总量限制，超预算使全选 unavailable，普通浏览仍可用。Exclusions最多5,000，probe最多500，page现有1–500；strict JSON仍受8MiB上限。canonical Selection Query 最多64KiB（仅存储scope的预算，不缩小普通Query）；case folding可能扩展码点，保存Trim/NFC后的pre-fold Search再验证，身份使用folded Search。请求有界 deadline，创建全量物化有独立超时；全局创建配额串行，不在普通 resolve 扫描总资源。过期清理级联删除本 scope 成员，采用有界批次，在新 Scope 创建和维护阶段清理；不删除业务 Records。
 
-路径或requestId的typed ID格式错误为400 BAD_REQUEST。422 VALIDATION_ERROR：request/query shape、成员typed IDs、重复/超过数组预算、非成员 Exclusion、token缺失；复用现有 ValidationIssue enum，不造非法 resource/action。成员/总量/Scope配额422 VALIDATION_ERROR，path区分 /scopeMembers、/scopeBudget、/totalScopeMembers，code=limit；不把Scope配额伪称为业务Record容量。暂时依赖/预算超时503 DEPENDENCY_UNAVAILABLE，不降为 loaded-page count。Schema Context/成员失效统一410；View无效 acquire保留既有404/422，resolve拒绝旧Scope。所有错误验证 envelope/requestId/details，而非只测状态码。
+路径或requestId的typed ID格式错误为400 BAD_REQUEST。422 VALIDATION_ERROR：request/query shape、成员typed IDs、重复/超过数组预算、非成员 Exclusion、token缺失；复用现有 ValidationIssue enum，不造非法 resource/action。成员/总量/Scope配额422 VALIDATION_ERROR，path区分 /scopeMembers、/scopeBudget、/totalScopeMembers，code=limit；不把Scope配额伪称为业务Record容量。两Scope端点与scoped Query复用readyz：pending迁移/显式migrationRequired为503 MIGRATION_REQUIRED，依赖故障为503 DEPENDENCY_UNAVAILABLE；普通未带scope的Query路径保持既有行为。暂时依赖/预算超时503 DEPENDENCY_UNAVAILABLE，不降为 loaded-page count。Schema Context/成员失效统一410；View无效 acquire保留既有404/422，resolve拒绝旧Scope。所有错误验证 envelope/requestId/details，而非只测状态码。
 
 ## Header 和 Client 状态
 
