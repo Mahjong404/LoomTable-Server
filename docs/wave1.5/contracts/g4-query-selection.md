@@ -22,7 +22,7 @@ Field/View 语义 writer 在同事务复查相关 Scope Context；Convert 同时
 
 验证和 scoped page 使用一个短期 REPEATABLE READ 事务，Scope 状态、权限、有效 Query Context、Exclusions、页与 Count 同 Snapshot。若并发写入在其 Snapshot 之后提交，本次读取可以成功且描述读取时的范围；下一次验证必定拒绝。任何需要最新完整成员资格的未来操作必须在其自己的事务重新验证，G4 不授予这种写操作。
 
-锁序：创建配额锁 → Actor → Table → Scope；既有 writer Actor（如适用）→Table→Field/Record/View→Scope。增量检测不反向锁 Table 或 Record。只读 resolve/page 不取 writer row locks。失效和业务变更一同提交/回滚，不改 Writer 的 CAS、Mutation Receipt、Replay 或 Queue 协议。
+锁序：创建配额锁 → Actor → ancestor shared locks → Table → Scope；既有 writer Actor（如适用）→Table→Field/Record/View→Scope。增量检测不反向锁 Table 或 Record。只读 resolve/page 不取 writer row locks。失效和业务变更一同提交/回滚，不改 Writer 的 CAS、Mutation Receipt、Replay 或 Queue 协议。
 
 ## 标准化与身份
 

@@ -105,6 +105,16 @@ func (r *Repository) AcquireSelection(ctx context.Context, actor, table, request
 	if err = lockActor(ctx, tx, actor); err != nil {
 		return record.SelectionResult{}, err
 	}
+	// Prevent an ancestor deletion from missing a concurrently inserted Scope.
+	// These shared locks precede Table; existing writers never lock them after Scope.
+	var visibleTable string
+	err = tx.QueryRowContext(ctx, `SELECT t.id FROM tables t JOIN bases b ON b.id=t.base_id JOIN workspaces w ON w.id=b.workspace_id WHERE t.id=$1 AND w.actor_id=$2 AND t.deleted_at IS NULL AND b.deleted_at IS NULL AND w.deleted_at IS NULL FOR SHARE OF b,w`, table, actor).Scan(&visibleTable)
+	if errors.Is(err, sql.ErrNoRows) {
+		return record.SelectionResult{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return record.SelectionResult{}, err
+	}
 	if err = lockActiveTable(ctx, tx, actor, table); err != nil {
 		return record.SelectionResult{}, err
 	}

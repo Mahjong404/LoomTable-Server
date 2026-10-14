@@ -95,12 +95,15 @@ func TestSelectionRuntimeRestart(t *testing.T) {
 		}
 		// Synthetic test proof, never an Access Token; stays only in the private DB.
 		raw, _ := json.Marshal(scope.Scope)
-		if _, err = db.ExecContext(ctx, `INSERT INTO server_secrets(name,secret) VALUES('g4_qa_restart_proof',$1)`, raw); err != nil {
+		if _, err = db.ExecContext(ctx, `CREATE TABLE g4_qa_restart_proof(scope jsonb NOT NULL)`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.ExecContext(ctx, `INSERT INTO g4_qa_restart_proof(scope) VALUES($1::jsonb)`, string(raw)); err != nil {
 			t.Fatal(err)
 		}
 	case "verify":
 		var raw []byte
-		if err = db.QueryRowContext(ctx, `SELECT secret FROM server_secrets WHERE name='g4_qa_restart_proof'`).Scan(&raw); err != nil {
+		if err = db.QueryRowContext(ctx, `SELECT scope FROM g4_qa_restart_proof`).Scan(&raw); err != nil {
 			t.Fatal(err)
 		}
 		var before record.SelectionScope
@@ -111,7 +114,7 @@ func TestSelectionRuntimeRestart(t *testing.T) {
 		if after.Scope.ID != before.ID || after.Scope.Token != before.Token || after.Scope.SemanticDataVersion != before.SemanticDataVersion || after.Scope.Count != 1 {
 			t.Fatal("actual process restart lost fixed membership/identity")
 		}
-		if _, err = db.ExecContext(ctx, `DELETE FROM server_secrets WHERE name='g4_qa_restart_proof'; DELETE FROM selection_scopes`); err != nil {
+		if _, err = db.ExecContext(ctx, `DROP TABLE g4_qa_restart_proof; DELETE FROM selection_scopes`); err != nil {
 			t.Fatal(err)
 		}
 	default:

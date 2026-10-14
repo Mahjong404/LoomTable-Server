@@ -572,6 +572,65 @@ func TestWholeQuerySelection(t *testing.T) {
 		}
 	})
 
+	t.Run("ancestor revoke serializes with new scope and restore never revives it", func(t *testing.T) {
+		parent, err := cat.CreateBase(ctx, actor, newMutationID(t), ws.ID, "G4 ancestor race")
+		if err != nil {
+			t.Fatal(err)
+		}
+		tab, err := cat.CreateTable(ctx, actor, newMutationID(t), parent.ID, "Ancestor", nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		create(t, tab, "Alpha")
+		blocker, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer blocker.Rollback()
+		if _, err = blocker.ExecContext(ctx, `SELECT id FROM bases WHERE id=$1 FOR UPDATE`, parent.ID); err != nil {
+			t.Fatal(err)
+		}
+		type scopeOutcome struct {
+			scope record.SelectionResult
+			err   error
+		}
+		acquired := make(chan scopeOutcome, 1)
+		deleted := make(chan error, 1)
+		go func() {
+			s, err := records.AcquireSelection(ctx, actor, tab.Table.ID, requestID(), qAlpha)
+			acquired <- scopeOutcome{s, err}
+		}()
+		waitForChoiceLock(t, ctx, db, "%FOR SHARE OF b,w%")
+		go func() {
+			_, err := db.ExecContext(ctx, `UPDATE bases SET deleted_at=clock_timestamp(),revision=revision+1 WHERE id=$1`, parent.ID)
+			deleted <- err
+		}()
+		if err = blocker.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		scope := <-acquired
+		if err = <-deleted; err != nil {
+			t.Fatal(err)
+		}
+		if scope.err != nil && !errors.Is(scope.err, domain.ErrNotFound) {
+			t.Fatal("ancestor allocation outcome", scope.err)
+		}
+		if _, err = db.ExecContext(ctx, `UPDATE bases SET deleted_at=NULL,revision=revision+1 WHERE id=$1`, parent.ID); err != nil {
+			t.Fatal(err)
+		}
+		if scope.err == nil {
+			_, err = resolve(scope.scope, qAlpha)
+			expired(t, err)
+		}
+		fresh := acquire(t, tab.Table.ID, qAlpha)
+		if fresh.Scope.Count != 1 {
+			t.Fatal("explicit reselect after restored access")
+		}
+		if _, err = db.ExecContext(ctx, `DELETE FROM selection_scopes WHERE table_id=$1`, tab.Table.ID); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("Convert racing with Record update invalidates only semantic scopes", func(t *testing.T) {
 		tab := table(t)
 		field, err := cat.CreateField(ctx, actor, newMutationID(t), tab.Table.ID, catalog.FieldInput{Name: "Numeric text", Type: "text", Config: domain.EmptyFieldConfig{}})
@@ -614,6 +673,38 @@ func TestWholeQuerySelection(t *testing.T) {
 		if _, err = resolve(all, record.SelectionQuery{}); err != nil {
 			t.Fatal("Convert with same complete ID membership invalidated unfiltered scope", err)
 		}
+	})
+
+	t.Run("Choice palette display writes preserve members Atomic Choice assignment invalidates", func(t *testing.T) {
+		tab := table(t)
+		field, err := cat.CreateField(ctx, actor, newMutationID(t), tab.Table.ID, catalog.FieldInput{Name: "Choice", Type: "select", Config: catalog.SelectFieldConfigInput{Options: []catalog.SelectOptionInput{{Name: "One", Color: "gray"}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		option := field.Config.(domain.SelectFieldConfig).Options[0]
+		made, err := records.Mutate(ctx, actor, tab.Table.ID, newMutationID(t), []record.Command{{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{tab.PrimaryField.ID: "Alpha", field.ID: option.ID}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := made.Results[0].Record
+		value, _ := json.Marshal(option.ID)
+		query := record.SelectionQuery{FilterPresent: true, Filter: &domain.FilterNode{Kind: "rule", FieldID: field.ID, Operator: "is", Value: value}}
+		scope := acquire(t, tab.Table.ID, query)
+		for _, color := range []string{"lime", "indigo", "brown"} {
+			field, err = cat.UpdateField(ctx, actor, field.ID, catalog.FieldUpdate{ExpectedRevision: field.Revision, Type: "select", Config: catalog.SelectFieldConfigInput{Options: []catalog.SelectOptionInput{{ID: &option.ID, Name: "Renamed", Color: color}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = resolve(scope, query); err != nil {
+				t.Fatal("Choice color/label treated as membership change", err)
+			}
+		}
+		_, err = records.Mutate(ctx, actor, tab.Table.ID, newMutationID(t), []record.Command{{Kind: "updateRecord", RecordID: a.ID, ExpectedRevision: a.Revision, ChoicesPresent: true, Choices: []record.ChoiceAssignment{{FieldID: field.ID, ExpectedFieldRevision: field.Revision, Options: []record.ChoiceOption{{Name: "Two", Color: "brown"}}}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = resolve(scope, query)
+		expired(t, err)
 	})
 
 	t.Run("inherited filter invalidation explicit override and display preservation", func(t *testing.T) {
