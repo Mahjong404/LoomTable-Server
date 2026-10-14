@@ -551,9 +551,19 @@ func TestTableAuditMigrationLegacyImport(t *testing.T) {
 	if err := compileOpenAPIResponseSchema(t, "#/components/schemas/AuditPage").Validate(doc); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := record.New(repo).Mutate(ctx, boot.ActorID, table.Table.ID, newMutationID(t), []record.Command{{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{table.PrimaryField.ID: "Modern"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	modern, err := record.New(repo).Audit(ctx, boot.ActorID, table.Table.ID, record.AuditRequest{})
+	if err != nil || modern.Count != 2 {
+		t.Fatalf("retry duplicated captured modern Change: count=%d %v", modern.Count, err)
+	}
 	// Pre-010 receipt replays without inventing a new identity or Audit event.
 	var key string
-	if err := db.QueryRowContext(ctx, `SELECT client_mutation_id FROM idempotency_keys WHERE response ? 'results' LIMIT 1`).Scan(&key); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT client_mutation_id FROM idempotency_keys WHERE operation_id IS NULL AND response ? 'results' LIMIT 1`).Scan(&key); err != nil {
 		t.Fatal(err)
 	}
 	c, op := domain.WithAuditOperation(ctx)

@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
 CREATE INDEX IF NOT EXISTS audit_table_sequence ON audit_events(table_id,sequence DESC);
 CREATE INDEX IF NOT EXISTS audit_table_category_sequence ON audit_events(table_id,category,sequence DESC);
 CREATE INDEX IF NOT EXISTS audit_table_record_sequence ON audit_events(table_id,record_id,sequence DESC);
+CREATE INDEX IF NOT EXISTS audit_association ON audit_events(operation_id,object_id,table_id);
+CREATE INDEX IF NOT EXISTS audit_change_ids ON audit_events USING gin(change_ids);
 CREATE INDEX IF NOT EXISTS audit_operation_sequence ON audit_events(table_id,operation_id,sequence);
 CREATE INDEX IF NOT EXISTS audit_retention ON audit_events(occurred_at,sequence);
 CREATE INDEX IF NOT EXISTS audit_actor_mutation ON audit_events(actor_id,client_mutation_id,table_id);
@@ -24,7 +26,7 @@ ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS operation_id text;
 INSERT INTO audit_events(id,change_ids,table_id,object_id,record_id,actor_id,occurred_at,category,kind,payload_version,payload,legacy_change_id)
  SELECT 'aud_'||replace(gen_random_uuid()::text,'-',''),ARRAY[id],table_id,COALESCE(record_id,object_id,table_id),record_id,actor_id,occurred_at,
  CASE WHEN kind IN ('recordCreated','recordUpdated','recordDeleted','recordRestored') THEN 'record' WHEN kind='recordMoved' THEN 'order' ELSE 'metadata' END,
- kind,0,jsonb_build_object('before',null,'after',null,'fields','[]'::jsonb,'metadataRecorded',false,'legacyFields',fields,'legacyPrimaryFieldText',primary_field_text),id FROM changes ORDER BY change_sequence
+ kind,0,jsonb_build_object('before',null,'after',null,'fields','[]'::jsonb,'metadataRecorded',false,'legacyFields',fields,'legacyPrimaryFieldText',primary_field_text),id FROM changes c WHERE NOT EXISTS(SELECT 1 FROM audit_events e WHERE e.change_ids @> ARRAY[c.id]) ORDER BY change_sequence
  ON CONFLICT(legacy_change_id) DO NOTHING;
 CREATE OR REPLACE FUNCTION loomtable_audit_operation() RETURNS text LANGUAGE plpgsql AS $$
 DECLARE result text;
