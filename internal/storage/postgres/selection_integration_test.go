@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -752,11 +753,10 @@ func TestWholeQuerySelection(t *testing.T) {
 		if !errors.As(err, &budget) {
 			t.Fatal("Scope allocation budget", err)
 		}
-		if _, err = db.ExecContext(ctx, `UPDATE selection_scopes SET expires_at=created_at+interval '1 second',created_at=created_at-interval '10 minutes' WHERE table_id=$1`, tab.Table.ID); err != nil {
+		if _, err = db.ExecContext(ctx, `UPDATE selection_scopes SET expires_at=clock_timestamp()-interval '1 second',created_at=clock_timestamp()-interval '10 minutes' WHERE table_id=$1`, tab.Table.ID); err != nil {
 			t.Fatal(err)
 		}
-		future := record.NewWithClock(repo, func() time.Time { return time.Now().Add(20 * time.Minute) })
-		if _, err = future.AcquireSelection(ctx, actor, tab.Table.ID, requestID(), qAlpha); err != nil {
+		if _, err = records.AcquireSelection(ctx, actor, tab.Table.ID, requestID(), qAlpha); err != nil {
 			t.Fatal("expired cleanup", err)
 		}
 		if err = postgres.ApplyMigrations(ctx, db, filepath.Join("..", "..", "..", "migrations")); err != nil {
@@ -821,6 +821,35 @@ func TestWholeQuerySelection(t *testing.T) {
 		var persisted, recordsCount int
 		if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM selection_scopes WHERE table_id=$1),(SELECT count(*) FROM records WHERE table_id=$1)`, tab.Table.ID).Scan(&persisted, &recordsCount); err != nil || persisted != 0 || recordsCount != 100001 {
 			t.Fatal("allocation failure left partial scope or changed business records", err)
+		}
+	})
+
+	t.Run("500 code point Search remains valid after expanding case folding", func(t *testing.T) {
+		tab := table(t)
+		text := strings.Repeat("ß", 500)
+		a := create(t, tab, text)
+		query := record.SelectionQuery{Search: "  " + text + "  "}
+		key := requestID()
+		scope, err := records.AcquireSelection(ctx, actor, tab.Table.ID, key, query)
+		if err != nil || scope.Scope.Count != 1 {
+			t.Fatal("valid expanding Search", err)
+		}
+		if _, err = resolve(scope, query); err != nil {
+			t.Fatal("stored canonical Search violated original input limit", err)
+		}
+		again, err := records.AcquireSelection(ctx, actor, tab.Table.ID, key, record.SelectionQuery{Search: strings.Repeat("ẞ", 500)})
+		if err != nil || again.Scope.ID != scope.Scope.ID {
+			t.Fatal("canonical request replay", err)
+		}
+		update(t, a, tab.PrimaryField.ID, text+" changed")
+		if _, err = resolve(scope, query); err != nil {
+			t.Fatal("expanding Search falsely invalidated after same membership update", err)
+		}
+		tooLarge := record.SelectionQuery{FilterPresent: true, Filter: &domain.FilterNode{Kind: "rule", FieldID: tab.PrimaryField.ID, Operator: "contains", Value: json.RawMessage(`"` + strings.Repeat("a", 65537) + `"`)}}
+		_, err = records.AcquireSelection(ctx, actor, tab.Table.ID, requestID(), tooLarge)
+		var limit *domain.ValidationError
+		if !errors.As(err, &limit) || limit.Issues[0].Path != "/query" {
+			t.Fatal("stored query budget", err)
 		}
 	})
 }

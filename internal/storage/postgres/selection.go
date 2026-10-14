@@ -90,7 +90,6 @@ func selectionResult(ctx context.Context, tx *sql.Tx, state selectionState, excl
 }
 
 func (r *Repository) AcquireSelection(ctx context.Context, actor, table, requestID string, query record.SelectionQuery, now time.Time) (record.SelectionResult, error) {
-	now = now.UTC().Truncate(time.Microsecond)
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -118,6 +117,12 @@ func (r *Repository) AcquireSelection(ctx context.Context, actor, table, request
 	if err = lockActiveTable(ctx, tx, actor, table); err != nil {
 		return record.SelectionResult{}, err
 	}
+	// Table membership is now stable. Start TTL at this actual creation boundary,
+	// rather than before connection/lock waits; PostgreSQL preserves microseconds.
+	if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+		return record.SelectionResult{}, err
+	}
+	now = now.UTC()
 	previous, lookupErr := scanSelection(tx.QueryRowContext(ctx, `SELECT `+selectionColumns+` FROM selection_scopes WHERE actor_id=$1 AND request_id=$2`, actor, requestID))
 	if lookupErr == nil && (previous.Invalid || !now.Before(previous.Scope.ExpiresAt)) {
 		return record.SelectionResult{}, selectionExpired()
@@ -129,17 +134,21 @@ func (r *Repository) AcquireSelection(ctx context.Context, actor, table, request
 	if err != nil {
 		return record.SelectionResult{}, err
 	}
-	query.Search = plan.Search
-	query.Filter = plan.Filter
-	// Retain whether the Filter was inherited; presentation defaults never enter it.
-	if !query.FilterPresent {
-		query.Filter = nil
-	}
+	query = record.CanonicalSelectionQuery(query, plan)
 	raw, err := json.Marshal(query)
 	if err != nil {
 		return record.SelectionResult{}, err
 	}
-	hash := sha256.Sum256(append([]byte(table+"\n"), raw...))
+	if len(raw) > 65536 {
+		return record.SelectionResult{}, selectionBudget("/query", 65536)
+	}
+	hashQuery := query
+	hashQuery.Search = plan.Search
+	canonicalRequest, err := json.Marshal(hashQuery)
+	if err != nil {
+		return record.SelectionResult{}, err
+	}
+	hash := sha256.Sum256(append([]byte(table+"\n"), canonicalRequest...))
 	if lookupErr == nil {
 		if hex.EncodeToString(previous.RequestHash) != hex.EncodeToString(hash[:]) {
 			return record.SelectionResult{}, &domain.IdempotencyKeyReusedError{}
@@ -229,7 +238,7 @@ func validateSelectionInTx(ctx context.Context, tx *sql.Tx, actor, table string,
 	if err := locklessActiveTable(ctx, tx, actor, table); err != nil {
 		return selectionState{}, err
 	}
-	state, err := scanSelection(tx.QueryRowContext(ctx, `SELECT `+selectionColumns+` FROM selection_scopes WHERE id=$1 AND actor_id=$2 AND table_id=$3`, page.Token.ScopeID, actor, table))
+	state, err := scanSelection(tx.QueryRowContext(ctx, `SELECT `+selectionColumns+` FROM selection_scopes WHERE id=$1 AND actor_id=$2 AND table_id=$3 AND expires_at>clock_timestamp()`, page.Token.ScopeID, actor, table))
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, selectionExpired()
 	}

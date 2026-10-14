@@ -76,7 +76,7 @@ TTL 固定5分钟，从创建计，不因 resolve/replay/page 滑动续期。Ser
 
 每次 Authenticate 当前 Access Token，按 Actor→Workspace→Base→Table 的 active ownership 验证，源 View（若使用）也验证。无认证/撤销 Token401，资源不可访问404，不泄露其他 Actor 的 Scope 信息；签名无效/用途错误/跨 Actor/Table400 INVALID_CURSOR。权限不是创建时永久授权。权限恢复也不得自动恢复已清除的 Client 全选。
 
-预算：每 Scope 最多100,000成员；每 Actor8、每 Table4、全实例64个有效 Scope；另限制含失效身份在内的未过期请求行：Actor64、实例256。总持久成员最多1,000,000。失效成员可在下次创建时清理，但请求身份保留到原TTL，防止 Response Lost 的旧请求自动分配新的成员集。不是 Table Record 总量限制，超预算使全选 unavailable，普通浏览仍可用。Exclusions最多5,000，probe最多500，page现有1–500；strict JSON仍受8MiB上限。请求有界 deadline，创建全量物化有独立超时；全局创建配额串行，不在普通 resolve 扫描总资源。过期清理级联删除本 scope 成员，采用有界批次，在新 Scope 创建和维护阶段清理；不删除业务 Records。
+预算：每 Scope 最多100,000成员；每 Actor8、每 Table4、全实例64个有效 Scope；另限制含失效身份在内的未过期请求行：Actor64、实例256。总持久成员最多1,000,000。失效成员可在下次创建时清理，但请求身份保留到原TTL，防止 Response Lost 的旧请求自动分配新的成员集。不是 Table Record 总量限制，超预算使全选 unavailable，普通浏览仍可用。Exclusions最多5,000，probe最多500，page现有1–500；strict JSON仍受8MiB上限。canonical Selection Query 最多64KiB（仅存储scope的预算，不缩小普通Query）；case folding可能扩展码点，保存Trim/NFC后的pre-fold Search再验证，身份使用folded Search。请求有界 deadline，创建全量物化有独立超时；全局创建配额串行，不在普通 resolve 扫描总资源。过期清理级联删除本 scope 成员，采用有界批次，在新 Scope 创建和维护阶段清理；不删除业务 Records。
 
 422 VALIDATION_ERROR：request/query shape、typed IDs、重复/超过数组预算、非成员 Exclusion、token缺失；复用现有 ValidationIssue enum，不造非法 resource/action。成员/总量/Scope配额422 VALIDATION_ERROR，path区分 /scopeMembers、/scopeBudget、/totalScopeMembers，code=limit；不把Scope配额伪称为业务Record容量。暂时依赖/预算超时503 DEPENDENCY_UNAVAILABLE，不降为 loaded-page count。Schema Context/成员失效统一410；View无效 acquire保留既有404/422，resolve拒绝旧Scope。所有错误验证 envelope/requestId/details，而非只测状态码。
 
@@ -84,7 +84,7 @@ TTL 固定5分钟，从创建计，不因 resolve/replay/page 滑动续期。Ser
 
 有效 count>0 且 E=[] 时 Checked。部分取消选择或普通显式局部选择为 Unchecked，不能推导 Mixed/Indeterminate；没有获批准的第三态。count=0 时 Unchecked+Disabled。Scope未获得、expired/revoked/unavailable/offline 时 Disabled并说明原因，不以 loaded IDs 代替全Query。
 
-单行选中 = 已验证 inScope 且 ID 不在 E。Header Unchecked 不清除其他仍已选行；用户明确再次全选可清 E，用户取消全选清该选择模型。Current Cell/局部 rectangle/Ctrl+A 独立，不因本协议重定义。任何 Scope Acquisition/Resolve/page 的迟到 success/error 都必须带 Client Query generation、Table/Actor/Scope identity 比较；query变化先清 scope，不让旧响应重新选中。Sort/Display 不增加 membership generation，但页面请求 generation 仍需更新。
+单行选中 = 已验证 inScope 且 ID 不在 E。Header Unchecked 不清除其他仍已选行；用户明确再次全选可清 E，用户取消全选清该选择模型。Current Cell/局部 rectangle/Ctrl+A 独立，不因本协议重定义。可缓存并复用当前query的仍有效Scope，改变E不重新创建Scope；清除UI全选不等于自动续期/获取新的范围。任何 Scope Acquisition/Resolve/page 的迟到 success/error 都必须带 Client Query generation、Table/Actor/Scope identity 比较；query变化先清 scope，不让旧响应重新选中。Sort/Display 不增加 membership generation，但页面请求 generation 仍需更新。
 
 ## Migration、兼容、发布与回滚
 

@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Mahjong404/LoomTable-Server/internal/domain"
 	"github.com/Mahjong404/LoomTable-Server/internal/id"
+	"golang.org/x/text/unicode/norm"
 )
 
 const SelectionTTL = 5 * time.Minute
@@ -60,6 +63,17 @@ type SelectionPage struct {
 type SelectionStore interface {
 	AcquireSelection(context.Context, string, string, string, SelectionQuery, time.Time) (SelectionResult, error)
 	ResolveSelection(context.Context, string, string, SelectionPage, []string) (SelectionResult, error)
+}
+
+// Preserve a bounded pre-fold input for revalidation: case folding can expand
+// a valid 500-code-point Search beyond the pre-fold Query input limit.
+func CanonicalSelectionQuery(query SelectionQuery, plan QueryPlan) SelectionQuery {
+	query.Search = norm.NFC.String(strings.TrimFunc(query.Search, unicode.IsSpace))
+	query.Filter = plan.Filter
+	if !query.FilterPresent {
+		query.Filter = nil
+	}
+	return query
 }
 
 // SelectionPlan shares Query normalization, while excluding presentation defaults.
