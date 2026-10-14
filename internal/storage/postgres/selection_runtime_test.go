@@ -37,7 +37,7 @@ func TestSelectionRuntimeRestart(t *testing.T) {
 		t.Fatal("restart only uses restored disposable DB", err)
 	}
 	repo := postgres.NewRepository(db)
-	token, err := auth.NewAdmin(repo).Create(ctx, "G4 restart synthetic")
+	token, err := auth.NewAdmin(repo).Create(ctx, "G4 restart "+os.Getenv("LOOMTABLE_TEST_SELECTION_PHASE")+" synthetic")
 	if err != nil {
 		t.Fatal(err)
 	}

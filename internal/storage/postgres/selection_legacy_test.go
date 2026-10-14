@@ -38,7 +38,7 @@ func TestSelectionLegacyBinaryCompatibility(t *testing.T) {
 		t.Fatal("downgrade requires restored disposable DB with cleared scopes", err)
 	}
 	repo := postgres.NewRepository(db)
-	token, err := auth.NewAdmin(repo).Create(ctx, "G4 legacy synthetic")
+	token, err := auth.NewAdmin(repo).Create(ctx, "G4 legacy synthetic "+newMutationID(t))
 	if err != nil {
 		t.Fatal(err)
 	}
