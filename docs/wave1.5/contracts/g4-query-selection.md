@@ -44,7 +44,7 @@ Scope Token 为按用途 `row-selection` 隔离的 HMAC-SHA256 envelope，签名
 {"requestId":"req_<typed ID>","query":{"viewId":"view_<typed ID>","filter":null,"search":"alpha"}}
 ```
 
-requestId 必需，query 必需（可为空对象）；strict schema。Actor+requestId 是本短期只读分配的重试身份，与 mut_ Receipt/Identity Guard 分离。相同 canonical 输入重试返回原 Scope，但仍检查当前权限/失效/期限；不同输入复用身份 409 IDEMPOTENCY_KEY_REUSED。Response 丢失可原身份重试，不重复存储 S。原身份在失效后仍保留到固定TTL，重试410；不是永久Mutation Guard。Client不得在首次请求发出5分钟之后继续重试旧requestId，须明确重新全选使用新身份。TTL 清理后相同 requestId 可能再次分配，消费者不得把已过期的身份当持续选择。
+requestId 必需，query 必需（可为空对象）；strict schema。Actor+requestId 是本短期只读分配的重试身份，与 mut_ Receipt/Identity Guard 分离。相同 canonical 输入重试返回原 Scope，但仍检查当前权限/失效/期限；有效身份被不同canonical输入复用时409 IDEMPOTENCY_KEY_REUSED；原Scope已失效/到期时410优先，不解析成新的成员范围。Response 丢失可原身份重试，不重复存储 S。原身份在失效后仍保留到固定TTL，重试410；不是永久Mutation Guard。Client不得在首次请求发出5分钟之后继续重试旧requestId，须明确重新全选使用新身份。TTL 清理后相同 requestId 可能再次分配，消费者不得把已过期的身份当持续选择。
 
 `POST /v1/tables/{tableId}/records/selection-scope/resolve`
 
@@ -72,13 +72,13 @@ query 必需，对当前有效上下文重新解析并比对；不接受客户�
 
 ## TTL、权限、预算和错误
 
-TTL 固定5分钟，从创建计，不因 resolve/replay/page 滑动续期。Server 时间为准。到期/永久失效/已清理 Scope 返回410 QUERY_SNAPSHOT_EXPIRED；不返回可继续用的旧 Count/成员页。Client 定时到期先清除全选；offline/验证失败禁用依赖完整成员资格的操作；不能从本地缓存恢复有效证明。
+TTL 固定5分钟，从取得Table与祖先可见性锁后、成员稳定时的DB clock_timestamp计，不因 resolve/replay/page 滑动续期。Server 时间为准。到期/永久失效/已清理 Scope 返回410 QUERY_SNAPSHOT_EXPIRED；不返回可继续用的旧 Count/成员页。Client 定时到期先清除全选；offline/验证失败禁用依赖完整成员资格的操作；不能从本地缓存恢复有效证明。
 
 每次 Authenticate 当前 Access Token，按 Actor→Workspace→Base→Table 的 active ownership 验证，源 View（若使用）也验证。无认证/撤销 Token401，资源不可访问404，不泄露其他 Actor 的 Scope 信息；签名无效/用途错误/跨 Actor/Table400 INVALID_CURSOR。权限不是创建时永久授权。权限恢复也不得自动恢复已清除的 Client 全选。
 
 预算：每 Scope 最多100,000成员；每 Actor8、每 Table4、全实例64个有效 Scope；另限制含失效身份在内的未过期请求行：Actor64、实例256。总持久成员最多1,000,000。失效成员可在下次创建时清理，但请求身份保留到原TTL，防止 Response Lost 的旧请求自动分配新的成员集。不是 Table Record 总量限制，超预算使全选 unavailable，普通浏览仍可用。Exclusions最多5,000，probe最多500，page现有1–500；strict JSON仍受8MiB上限。canonical Selection Query 最多64KiB（仅存储scope的预算，不缩小普通Query）；case folding可能扩展码点，保存Trim/NFC后的pre-fold Search再验证，身份使用folded Search。请求有界 deadline，创建全量物化有独立超时；全局创建配额串行，不在普通 resolve 扫描总资源。过期清理级联删除本 scope 成员，采用有界批次，在新 Scope 创建和维护阶段清理；不删除业务 Records。
 
-422 VALIDATION_ERROR：request/query shape、typed IDs、重复/超过数组预算、非成员 Exclusion、token缺失；复用现有 ValidationIssue enum，不造非法 resource/action。成员/总量/Scope配额422 VALIDATION_ERROR，path区分 /scopeMembers、/scopeBudget、/totalScopeMembers，code=limit；不把Scope配额伪称为业务Record容量。暂时依赖/预算超时503 DEPENDENCY_UNAVAILABLE，不降为 loaded-page count。Schema Context/成员失效统一410；View无效 acquire保留既有404/422，resolve拒绝旧Scope。所有错误验证 envelope/requestId/details，而非只测状态码。
+路径或requestId的typed ID格式错误为400 BAD_REQUEST。422 VALIDATION_ERROR：request/query shape、成员typed IDs、重复/超过数组预算、非成员 Exclusion、token缺失；复用现有 ValidationIssue enum，不造非法 resource/action。成员/总量/Scope配额422 VALIDATION_ERROR，path区分 /scopeMembers、/scopeBudget、/totalScopeMembers，code=limit；不把Scope配额伪称为业务Record容量。暂时依赖/预算超时503 DEPENDENCY_UNAVAILABLE，不降为 loaded-page count。Schema Context/成员失效统一410；View无效 acquire保留既有404/422，resolve拒绝旧Scope。所有错误验证 envelope/requestId/details，而非只测状态码。
 
 ## Header 和 Client 状态
 
