@@ -500,7 +500,7 @@ func TestTableAuditTransactions(t *testing.T) {
 		if err := compileOpenAPIResponseSchema(t, "#/components/schemas/AuditPage").Validate(doc); err != nil {
 			t.Fatal(err)
 		}
-		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", "010_table_audit.sql"))
+		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", "011_audit_attachment_redaction.sql"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -615,7 +615,7 @@ func TestTableAuditMigrationLegacyImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Owned disposable database only: recreate the actual pre-010 source state.
-	_, err = db.ExecContext(ctx, `DROP TRIGGER capture_audit ON records; DROP TRIGGER capture_audit ON fields; DROP TRIGGER capture_audit ON views; DROP TRIGGER capture_audit ON tables; DROP TRIGGER capture_ancestor_audit ON bases; DROP TRIGGER capture_ancestor_audit ON workspaces; DROP TRIGGER associate_audit_change ON changes; DROP TABLE audit_events,audit_coverage,audit_retention_watermarks,audit_instrumentation_gaps; ALTER TABLE idempotency_keys DROP COLUMN operation_id; DELETE FROM schema_migrations WHERE version='010_table_audit'`)
+	_, err = db.ExecContext(ctx, `DROP TRIGGER capture_audit ON records; DROP TRIGGER capture_audit ON fields; DROP TRIGGER capture_audit ON views; DROP TRIGGER capture_audit ON tables; DROP TRIGGER capture_ancestor_audit ON bases; DROP TRIGGER capture_ancestor_audit ON workspaces; DROP TRIGGER associate_audit_change ON changes; DROP TABLE audit_events,audit_coverage,audit_retention_watermarks,audit_instrumentation_gaps; ALTER TABLE idempotency_keys DROP COLUMN operation_id; DELETE FROM schema_migrations WHERE version IN ('010_table_audit','011_audit_attachment_redaction')`)
 	if err != nil {
 		t.Fatal(err)
 	}

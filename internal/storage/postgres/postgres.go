@@ -46,7 +46,7 @@ func ReadyChecker(db *sql.DB) func(context.Context) error {
 			return appstatus.ErrMigrationRequired
 		}
 
-		for _, version := range []string{"001_initial", "002_attachments", "007_mutation_identity_guards", "008_view_order", "009_selection_scopes", "010_table_audit"} {
+		for _, version := range []string{"001_initial", "002_attachments", "007_mutation_identity_guards", "008_view_order", "009_selection_scopes", "010_table_audit", "011_audit_attachment_redaction"} {
 			var applied bool
 			if err := db.QueryRowContext(ctx, `
 				SELECT EXISTS (
