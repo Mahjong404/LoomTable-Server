@@ -23,6 +23,7 @@ const (
 	OptionPrefix     = "opt_"
 	MutationPrefix   = "mut_"
 	RequestPrefix    = "req_"
+	SelectionPrefix  = "sel_"
 )
 
 func Valid(prefix, value string) bool {

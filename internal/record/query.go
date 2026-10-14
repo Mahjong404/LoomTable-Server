@@ -32,13 +32,15 @@ type QueryStore interface {
 }
 
 type queryCursorPayload struct {
-	ActorID     string        `json:"actorId"`
-	TableID     string        `json:"tableId"`
-	Fingerprint string        `json:"fingerprint"`
-	SchemaHash  string        `json:"schemaHash"`
-	Position    QueryPosition `json:"position"`
-	IssuedAt    int64         `json:"issuedAt"`
-	ExpiresAt   int64         `json:"expiresAt"`
+	SelectionPageSequence int64         `json:"selectionPageSequence,omitempty"`
+	SelectionScopeID      string        `json:"selectionScopeId,omitempty"`
+	ActorID               string        `json:"actorId"`
+	TableID               string        `json:"tableId"`
+	Fingerprint           string        `json:"fingerprint"`
+	SchemaHash            string        `json:"schemaHash"`
+	Position              QueryPosition `json:"position"`
+	IssuedAt              int64         `json:"issuedAt"`
+	ExpiresAt             int64         `json:"expiresAt"`
 }
 
 func ValidateFilter(filter *domain.FilterNode, fields map[string]FieldDefinition) error {
@@ -46,6 +48,11 @@ func ValidateFilter(filter *domain.FilterNode, fields map[string]FieldDefinition
 }
 
 func (s *Service) Query(ctx context.Context, actorID, tableID string, request QueryRequest) (QueryResult, error) {
+	if request.SelectionScopeToken != "" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
 	if !id.Valid(id.TablePrefix, tableID) {
 		return QueryResult{}, &domain.BadRequestError{Message: "/tableId has an invalid typed ID"}
 	}
@@ -59,7 +66,35 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 	if !ok {
 		return QueryResult{}, domain.ErrDependencyMissing
 	}
-	metadata, err := queryStore.ResolveQuery(ctx, actorID, tableID, request.ViewID)
+	scopeID := ""
+	var selected *SelectionPage
+	if request.SelectionScopeToken != "" {
+		if request.Lifecycle != "" && request.Lifecycle != "active" {
+			return QueryResult{}, domain.NewValidationError(domain.ValidationIssue{Path: "/lifecycle", Code: "format", Message: "Selection requires active Records"})
+		}
+		if err := ValidateSelectionIDs(request.SelectionExcludedIDs, nil); err != nil {
+			return QueryResult{}, err
+		}
+		token, err := s.selectionToken(ctx, actorID, tableID, request.SelectionScopeToken)
+		if err != nil {
+			return QueryResult{}, err
+		}
+		scopeID = token.ScopeID
+		selected = &SelectionPage{Token: token, Query: SelectionQuery{request.ViewID, request.Filter, request.FilterPresent, request.Search}, ExcludedIDs: request.SelectionExcludedIDs, Now: s.now().UTC()}
+	} else if len(request.SelectionExcludedIDs) > 0 {
+		return QueryResult{}, domain.NewValidationError(requiredQueryIssue("/selectionScopeToken", "selectionScopeToken is required for exclusions"))
+	}
+	var metadata QueryMetadata
+	var err error
+	if selected != nil {
+		store, ok := s.store.(SelectionQueryStore)
+		if !ok {
+			return QueryResult{}, domain.ErrDependencyMissing
+		}
+		metadata, err = store.ResolveSelectionQuery(ctx, actorID, tableID, *selected)
+	} else {
+		metadata, err = queryStore.ResolveQuery(ctx, actorID, tableID, request.ViewID)
+	}
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -67,7 +102,7 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 	if err != nil {
 		return QueryResult{}, err
 	}
-
+	plan.Selection = selected
 	signer, err := s.cursorSigner(ctx)
 	if err != nil {
 		return QueryResult{}, err
@@ -78,17 +113,23 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 		if err := signer.Decode("query", request.Cursor, &payload); err != nil {
 			return QueryResult{}, &domain.InvalidCursorError{}
 		}
-		if payload.ActorID != actorID || payload.TableID != tableID || payload.Fingerprint != plan.Fingerprint {
+		if payload.ActorID != actorID || payload.TableID != tableID || payload.Fingerprint != plan.Fingerprint || payload.SelectionScopeID != scopeID {
 			return QueryResult{}, &domain.InvalidCursorError{}
 		}
 		if s.now().UTC().Unix() >= payload.ExpiresAt || payload.SchemaHash != plan.SchemaHash {
 			return QueryResult{}, &domain.CursorExpiredError{}
 		}
 		position = &payload.Position
+		if plan.Selection != nil {
+			plan.Selection.ExpectedPageSequence = &payload.SelectionPageSequence
+		}
 	}
 
 	stored, err := queryStore.QueryRecords(ctx, actorID, tableID, plan, position, request.Cursor == "")
 	if err != nil {
+		if plan.Selection != nil && ctx.Err() != nil {
+			return QueryResult{}, domain.ErrDependencyMissing
+		}
 		return QueryResult{}, err
 	}
 	changeCursor, err := signer.Encode("change", changeCursorPayload{ActorID: actorID, TableID: tableID, Sequence: stored.ChangeSequence})
@@ -96,8 +137,17 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 		return QueryResult{}, fmt.Errorf("encode change cursor: %w", err)
 	}
 	result := QueryResult{
-		Items: stored.Items, HasMore: stored.HasMore, ChangeCursor: changeCursor,
+		Items: stored.Items, HasMore: stored.HasMore, ChangeCursor: changeCursor, Selection: stored.Selection,
 		TotalCount: stored.TotalCount, UnfilteredTotal: stored.UnfilteredTotal,
+	}
+	if result.Selection != nil {
+		if err := s.decorateSelection(ctx, actorID, result.Selection); err != nil {
+			return QueryResult{}, err
+		}
+	}
+	selectionPageSequence := int64(0)
+	if plan.Selection != nil {
+		selectionPageSequence = stored.ChangeSequence
 	}
 	if stored.HasMore {
 		if stored.NextPosition == nil {
@@ -105,7 +155,7 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 		}
 		now := s.now().UTC()
 		result.NextCursor, err = signer.Encode("query", queryCursorPayload{
-			ActorID: actorID, TableID: tableID, Fingerprint: plan.Fingerprint, SchemaHash: plan.SchemaHash,
+			ActorID: actorID, TableID: tableID, Fingerprint: plan.Fingerprint, SchemaHash: plan.SchemaHash, SelectionScopeID: scopeID, SelectionPageSequence: selectionPageSequence,
 			Position: *stored.NextPosition, IssuedAt: now.Unix(), ExpiresAt: now.Add(queryCursorTTL).Unix(),
 		})
 		if err != nil {
@@ -197,7 +247,7 @@ func buildQueryPlan(request QueryRequest, metadata QueryMetadata) (QueryPlan, er
 	if err != nil {
 		return QueryPlan{}, err
 	}
-	plan.SchemaHash, err = querySchemaHash(metadata, plan)
+	plan.SchemaHash, err = QuerySchemaHash(metadata, plan)
 	if err != nil {
 		return QueryPlan{}, err
 	}
@@ -495,6 +545,11 @@ func queryFingerprint(viewID string, plan QueryPlan) (string, error) {
 	}
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+// QuerySchemaHash exposes the existing page schema check to transactional readers.
+func QuerySchemaHash(metadata QueryMetadata, plan QueryPlan) (string, error) {
+	return querySchemaHash(metadata, plan)
 }
 
 func querySchemaHash(metadata QueryMetadata, plan QueryPlan) (string, error) {

@@ -194,6 +194,14 @@ _Avoid_: ancestor visibility, permission scope
 A short-lived, bound query context whose membership must remain stable while its continuation token is used.
 _Avoid_: saved View, live page
 
+**RowSelection Scope**:
+The fixed set of Records actually matched by a Table query when whole-query selection begins; membership changes invalidate that selection rather than silently adding or removing selected Records.
+_Avoid_: loaded rows, live query condition, Cell rectangle
+
+**Selection Exclusion**:
+A Record in a RowSelection Scope that the client has explicitly left unselected.
+_Avoid_: Filter rule, deleted Record
+
 **Record Query Cursor**:
 A short-lived continuation position for a regular Record Query whose equivalent parameters and ordering remain bound, but whose membership is allowed to reflect concurrent Changes.
 _Avoid_: Query Snapshot, page number

@@ -191,13 +191,20 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.requireReady(w, r) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) requireReady(w http.ResponseWriter, r *http.Request) bool {
 	if s.config.MigrationRequired {
 		writeAPIError(w, r, http.StatusServiceUnavailable, "MIGRATION_REQUIRED", "an explicit migration is required")
-		return
+		return false
 	}
 	if s.ready == nil {
 		writeAPIError(w, r, http.StatusServiceUnavailable, "DEPENDENCY_UNAVAILABLE", "required dependencies are not configured")
-		return
+		return false
 	}
 	if err := s.ready(r.Context()); err != nil {
 		code := "DEPENDENCY_UNAVAILABLE"
@@ -207,9 +214,9 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 			message = "an explicit migration is required"
 		}
 		writeAPIError(w, r, http.StatusServiceUnavailable, code, message)
-		return
+		return false
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	return true
 }
 
 func (s *Server) meta(w http.ResponseWriter, r *http.Request) {

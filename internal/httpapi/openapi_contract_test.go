@@ -60,6 +60,8 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 		{"summarizeMap", http.MethodPost, "/v1/views/view_00000000000000000000000000/map/summary", "", 200},
 		{"queryMapClusterRecords", http.MethodPost, "/v1/views/view_00000000000000000000000000/map/cluster-records/query", `{"clusterToken":"token"}`, 200},
 		{"getRecord", http.MethodGet, "/v1/records/rec_00000000000000000000000000", "", 200},
+		{"acquireSelectionScope", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/selection-scope", `{"requestId":"req_00000000000000000000000000","query":{}}`, 200},
+		{"resolveSelectionScope", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/selection-scope/resolve", `{"scopeToken":"token","query":{}}`, 200},
 		{"queryRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/query", `{}`, 200},
 		{"queryFieldValues", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/fields/fld_00000000000000000000000000/values/query", `{}`, 200},
 		{"aggregateRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/aggregate", `{"fieldIds":["fld_00000000000000000000000000"],"fns":["count"]}`, 200},
@@ -173,7 +175,7 @@ func TestAtomicChoiceOpenAPIAdditiveContract(t *testing.T) {
 			t.Fatalf("%s scope changed", name)
 		}
 	}
-	for _, part := range []string{"version: 0.6.0", "`atomicChoice`", "ChoiceFieldResult:", "fieldConflicts:", "MUTATION_RECEIPT_EXPIRED", "MutationReceiptExpiredDetails:", "x-loomtable-normalized-max-length: 100"} {
+	for _, part := range []string{"version: 0.7.0", "`atomicChoice`", "ChoiceFieldResult:", "fieldConflicts:", "MUTATION_RECEIPT_EXPIRED", "MutationReceiptExpiredDetails:", "x-loomtable-normalized-max-length: 100"} {
 		if !strings.Contains(string(spec), part) {
 			t.Fatalf("G2 contract missing %s", part)
 		}

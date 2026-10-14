@@ -196,6 +196,13 @@ func (r *Repository) ConvertField(ctx context.Context, actorID, fieldID string, 
 	if err := insertMetadataChange(ctx, tx, actorID, "schemaChanged", updated.TableID, updated.ID, updated.Revision); err != nil {
 		return domain.Field{}, err
 	}
+	changedIDs := make([]string, 0, len(pending))
+	for _, item := range pending {
+		changedIDs = append(changedIDs, item.id)
+	}
+	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, changedIDs); err != nil {
+		return domain.Field{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return domain.Field{}, fmt.Errorf("commit convert field: %w", err)
 	}

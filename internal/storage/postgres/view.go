@@ -77,6 +77,9 @@ func (r *Repository) CreateView(ctx context.Context, actorID, idempotencyKey str
 	if err := insertMetadataChange(ctx, tx, actorID, "viewChanged", created.TableID, created.ID, created.Revision); err != nil {
 		return domain.View{}, err
 	}
+	if err := invalidateSelections(ctx, tx, actorID, created.TableID, nil); err != nil {
+		return domain.View{}, err
+	}
 	if err := saveIdempotent(ctx, tx, actorID, idempotencyKey, fingerprint, created); err != nil {
 		return domain.View{}, err
 	}
@@ -132,6 +135,9 @@ func (r *Repository) UpdateView(ctx context.Context, actorID, viewID string, exp
 	if err := insertMetadataChange(ctx, tx, actorID, "viewChanged", updated.TableID, updated.ID, updated.Revision); err != nil {
 		return domain.View{}, err
 	}
+	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, nil); err != nil {
+		return domain.View{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return domain.View{}, fmt.Errorf("commit update view: %w", err)
 	}
@@ -171,6 +177,9 @@ func (r *Repository) DeleteView(ctx context.Context, actorID, viewID string, exp
 	if err := insertMetadataChange(ctx, tx, actorID, "viewChanged", deleted.TableID, deleted.ID, deleted.Revision); err != nil {
 		return err
 	}
+	if err := invalidateSelections(ctx, tx, actorID, deleted.TableID, nil); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit delete view: %w", err)
 	}
@@ -208,6 +217,9 @@ func (r *Repository) RestoreView(ctx context.Context, actorID, viewID string, ex
 		return domain.View{}, fmt.Errorf("restore view: %w", err)
 	}
 	if err := insertMetadataChange(ctx, tx, actorID, "viewChanged", restored.TableID, restored.ID, restored.Revision); err != nil {
+		return domain.View{}, err
+	}
+	if err := invalidateSelections(ctx, tx, actorID, restored.TableID, nil); err != nil {
 		return domain.View{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -286,6 +298,9 @@ func (r *Repository) SetDefaultView(ctx context.Context, actorID, viewID string,
 		return domain.View{}, fmt.Errorf("set default view: %w", err)
 	}
 	if err := insertMetadataChange(ctx, tx, actorID, "viewChanged", updated.TableID, updated.ID, updated.Revision); err != nil {
+		return domain.View{}, err
+	}
+	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, nil); err != nil {
 		return domain.View{}, err
 	}
 	if err := tx.Commit(); err != nil {

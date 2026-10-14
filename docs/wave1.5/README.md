@@ -24,6 +24,8 @@ DatePicker、当前 Choice ID、Query Panels、Display、Grid 几何、Date消�
 
 已交付 G1/G6 的固定 SHA、CI、备份/恢复、部署及 Plugin 接入条件见 [G1 交付](deliveries/g1-choice-palette.md) / [G6 交付](deliveries/g6-aggregate-search.md)；G6 精确语义见 [Aggregate Search 合同](contracts/g6-aggregate-search.md)。G2 最终错误合同修复、完整独立实现审查和隔离验证已完成，见 [G2 交付](deliveries/g2-atomic-choice.md) / [Atomic Choice 合同](contracts/g2-atomic-choice.md)；实际合并/CI以[PR #13](https://github.com/Mahjong404/LoomTable-Server/pull/13)为准，生产未部署007或atomicChoice。G3合同与实现、隔离QA已形成交付，见[Order合同](contracts/g3-view-order.md)/[G3证据](deliveries/g3-view-order.md)；本次G3工程Subagent=0，正常PR Review完成后集成，不自动启动G4/G5，也不执行生产007/008。
 
+G4固定实际成员快照的用户决定、增量事务检测与隔离证据见[Scope合同](contracts/g4-query-selection.md)/[G4交付](deliveries/g4-query-selection.md)。OpenAPI源码0.7.0/querySelection，production仍0.4.0；007/008/009不在本轮发布，Plugin consumer未实施。合并、正常独立Review/CI以本Gate PR为准，不自动启动G5。
+
 ## 六条合同 Gate 的 Server 任务边界
 
 这些产品目标已获本轮 Server 工程授权；具体 Schema 仍需逐 Gate 合同审查，当前实现事实以源码和固定交付 SHA 为准。所有 Gate 共用上述 API-first、兼容/安全验证和交付清单。

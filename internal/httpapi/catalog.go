@@ -303,6 +303,17 @@ func (s *Server) table(w http.ResponseWriter, r *http.Request) {
 		s.views(w, r, tableID)
 		return
 	}
+	for _, suffix := range []string{"/records/selection-scope/resolve", "/records/selection-scope"} {
+		if strings.HasSuffix(trimmed, suffix) {
+			tableID := strings.TrimSuffix(trimmed, suffix)
+			if tableID == "" || strings.Contains(tableID, "/") {
+				writeAPIError(w, r, 404, "NOT_FOUND", "resource not found")
+				return
+			}
+			s.selectionScope(w, r, tableID, strings.HasSuffix(suffix, "/resolve"))
+			return
+		}
+	}
 	if strings.HasSuffix(trimmed, "/records/mutate") {
 		tableID := strings.TrimSuffix(trimmed, "/records/mutate")
 		if tableID == "" || strings.Contains(tableID, "/") {
