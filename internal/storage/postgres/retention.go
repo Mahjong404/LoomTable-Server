@@ -45,6 +45,10 @@ func (r *Repository) CleanupRetention(
 
 	stats := maintenance.CleanupStats{}
 	if changeAge > 0 {
+		stats.AuditDeleted, err = cleanupAudit(ctx, connection, changeAge, maxBatches, batchSize)
+		if err != nil {
+			return maintenance.CleanupStats{}, err
+		}
 		stats.ChangesDeleted, err = cleanupChanges(ctx, connection, changeAge, maxBatches, batchSize)
 		if err != nil {
 			return maintenance.CleanupStats{}, err
@@ -57,6 +61,36 @@ func (r *Repository) CleanupRetention(
 		}
 	}
 	return stats, nil
+}
+
+func cleanupAudit(ctx context.Context, connection *sql.Conn, age time.Duration, maxBatches, batchSize int) (int64, error) {
+	var total int64
+	for batch := 0; batch < maxBatches; batch++ {
+		var deleted int64
+		err := connection.QueryRowContext(ctx, `
+		 WITH doomed AS (
+		  SELECT sequence FROM audit_events
+		  WHERE occurred_at < clock_timestamp()-make_interval(secs => $1)
+		  ORDER BY occurred_at, sequence LIMIT $2
+		 ), deleted AS (
+		  DELETE FROM audit_events target USING doomed WHERE target.sequence=doomed.sequence
+		  RETURNING target.table_id,target.sequence,target.occurred_at
+		 ), watermarks AS (
+		  INSERT INTO audit_retention_watermarks(table_id,expired_through,expired_through_time)
+		  SELECT table_id,MAX(sequence),MAX(occurred_at) FROM deleted GROUP BY table_id
+		  ON CONFLICT(table_id) DO UPDATE SET expired_through=GREATEST(audit_retention_watermarks.expired_through,EXCLUDED.expired_through), generation=audit_retention_watermarks.generation+1, expired_through_time=GREATEST(audit_retention_watermarks.expired_through_time,EXCLUDED.expired_through_time)
+		  RETURNING table_id
+		 ) SELECT COUNT(*) FROM deleted
+		`, int64(age/time.Second), batchSize).Scan(&deleted)
+		if err != nil {
+			return total, fmt.Errorf("cleanup audit: %w", err)
+		}
+		total += deleted
+		if deleted < int64(batchSize) {
+			break
+		}
+	}
+	return total, nil
 }
 
 func cleanupChanges(ctx context.Context, connection *sql.Conn, age time.Duration, maxBatches, batchSize int) (int64, error) {

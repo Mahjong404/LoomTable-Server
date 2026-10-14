@@ -69,6 +69,7 @@ func TestOpenAPIOperationsHaveReachableHTTPRoutes(t *testing.T) {
 		{"duplicateRecord", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/rec_00000000000000000000000000/duplicate", "", 200},
 		{"mutateRecords", http.MethodPost, "/v1/tables/tbl_00000000000000000000000000/records/mutate", `{"clientMutationId":"mut_00000000000000000000000000","commands":[{"kind":"createRecord","values":{}}]}`, 200},
 		{"pullChanges", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/changes", "", 200},
+		{"pullTableAudit", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/audit", "", 200},
 		{"pullHistory", http.MethodGet, "/v1/tables/tbl_00000000000000000000000000/history", "", 200},
 		{"initializeAttachment", http.MethodPost, "/v1/attachments/init", `{}`, 501},
 		{"getAttachment", http.MethodGet, "/v1/attachments/att_00000000000000000000000000", "", 501},
@@ -175,7 +176,7 @@ func TestAtomicChoiceOpenAPIAdditiveContract(t *testing.T) {
 			t.Fatalf("%s scope changed", name)
 		}
 	}
-	for _, part := range []string{"version: 0.7.0", "`atomicChoice`", "ChoiceFieldResult:", "fieldConflicts:", "MUTATION_RECEIPT_EXPIRED", "MutationReceiptExpiredDetails:", "x-loomtable-normalized-max-length: 100"} {
+	for _, part := range []string{"version: 0.8.0", "`atomicChoice`", "ChoiceFieldResult:", "fieldConflicts:", "MUTATION_RECEIPT_EXPIRED", "MutationReceiptExpiredDetails:", "x-loomtable-normalized-max-length: 100"} {
 		if !strings.Contains(string(spec), part) {
 			t.Fatalf("G2 contract missing %s", part)
 		}

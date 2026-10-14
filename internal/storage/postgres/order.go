@@ -27,6 +27,9 @@ func (r *Repository) MoveRecord(
 		return loomrecord.StoredRecordOrderResult{}, fmt.Errorf("begin record move: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return loomrecord.StoredRecordOrderResult{}, err
+	}
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return loomrecord.StoredRecordOrderResult{}, err
 	}
@@ -78,6 +81,9 @@ func (r *Repository) DuplicateRecord(
 		return loomrecord.StoredRecordOrderResult{}, fmt.Errorf("begin record duplicate: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return loomrecord.StoredRecordOrderResult{}, err
+	}
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return loomrecord.StoredRecordOrderResult{}, err
 	}
@@ -217,7 +223,7 @@ func finishRecordOrderChange(ctx context.Context, tx *sql.Tx, tableID string, it
 	`, tableID).Scan(&changeSequence); err != nil {
 		return loomrecord.StoredRecordOrderResult{}, fmt.Errorf("read table change tail: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return loomrecord.StoredRecordOrderResult{}, fmt.Errorf("commit record order change: %w", err)
 	}
 	return loomrecord.StoredRecordOrderResult{Record: item, ChangeSequence: changeSequence}, nil

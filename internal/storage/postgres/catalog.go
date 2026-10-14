@@ -72,6 +72,9 @@ func (r *Repository) CreateWorkspace(ctx context.Context, actorID, idempotencyKe
 		return domain.Workspace{}, fmt.Errorf("begin create workspace: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Workspace{}, err
+	}
 
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return domain.Workspace{}, err
@@ -79,7 +82,7 @@ func (r *Repository) CreateWorkspace(ctx context.Context, actorID, idempotencyKe
 	if response, found, err := replayIdempotent[domain.Workspace](ctx, tx, actorID, idempotencyKey, fingerprint); err != nil {
 		return domain.Workspace{}, err
 	} else if found {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.Workspace{}, fmt.Errorf("commit workspace replay: %w", err)
 		}
 		return response, nil
@@ -104,7 +107,7 @@ func (r *Repository) CreateWorkspace(ctx context.Context, actorID, idempotencyKe
 	if err := saveIdempotent(ctx, tx, actorID, idempotencyKey, fingerprint, created); err != nil {
 		return domain.Workspace{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Workspace{}, fmt.Errorf("commit create workspace: %w", err)
 	}
 	return created, nil
@@ -119,6 +122,9 @@ func (r *Repository) UpdateWorkspace(ctx context.Context, actorID, workspaceID s
 		return domain.Workspace{}, fmt.Errorf("begin update workspace: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Workspace{}, err
+	}
 
 	current, err := scanWorkspace(tx.QueryRowContext(ctx, `
 		SELECT id, name, revision, created_at, updated_at
@@ -136,7 +142,7 @@ func (r *Repository) UpdateWorkspace(ctx context.Context, actorID, workspaceID s
 		return domain.Workspace{}, &domain.RevisionConflictError{Resource: "workspace", ID: workspaceID, ExpectedRevision: expectedRevision, CurrentRevision: current.Revision}
 	}
 	if current.Name == name {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.Workspace{}, fmt.Errorf("commit workspace no-op: %w", err)
 		}
 		return current, nil
@@ -151,7 +157,7 @@ func (r *Repository) UpdateWorkspace(ctx context.Context, actorID, workspaceID s
 	if err != nil {
 		return domain.Workspace{}, fmt.Errorf("update workspace: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Workspace{}, fmt.Errorf("commit update workspace: %w", err)
 	}
 	return updated, nil
@@ -228,6 +234,9 @@ func (r *Repository) CreateBase(ctx context.Context, actorID, idempotencyKey str
 		return domain.Base{}, fmt.Errorf("begin create base: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Base{}, err
+	}
 
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return domain.Base{}, err
@@ -235,7 +244,7 @@ func (r *Repository) CreateBase(ctx context.Context, actorID, idempotencyKey str
 	if response, found, err := replayIdempotent[domain.Base](ctx, tx, actorID, idempotencyKey, fingerprint); err != nil {
 		return domain.Base{}, err
 	} else if found {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.Base{}, fmt.Errorf("commit base replay: %w", err)
 		}
 		return response, nil
@@ -271,7 +280,7 @@ func (r *Repository) CreateBase(ctx context.Context, actorID, idempotencyKey str
 	if err := saveIdempotent(ctx, tx, actorID, idempotencyKey, fingerprint, created); err != nil {
 		return domain.Base{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Base{}, fmt.Errorf("commit create base: %w", err)
 	}
 	return created, nil
@@ -286,6 +295,9 @@ func (r *Repository) UpdateBase(ctx context.Context, actorID, baseID string, exp
 		return domain.Base{}, fmt.Errorf("begin update base: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Base{}, err
+	}
 
 	current, err := scanBase(tx.QueryRowContext(ctx, `
 		SELECT b.id, b.workspace_id, b.name, b.revision, b.created_at, b.updated_at
@@ -305,7 +317,7 @@ func (r *Repository) UpdateBase(ctx context.Context, actorID, baseID string, exp
 		return domain.Base{}, &domain.RevisionConflictError{Resource: "base", ID: baseID, ExpectedRevision: expectedRevision, CurrentRevision: current.Revision}
 	}
 	if current.Name == name {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.Base{}, fmt.Errorf("commit base no-op: %w", err)
 		}
 		return current, nil
@@ -320,7 +332,7 @@ func (r *Repository) UpdateBase(ctx context.Context, actorID, baseID string, exp
 	if err != nil {
 		return domain.Base{}, fmt.Errorf("update base: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Base{}, fmt.Errorf("commit update base: %w", err)
 	}
 	return updated, nil
@@ -354,11 +366,12 @@ func replayIdempotent[T any](ctx context.Context, tx *sql.Tx, actorID, key strin
 	var zero T
 	var storedHash []byte
 	var response []byte
+	var operationID sql.NullString
 	err := tx.QueryRowContext(ctx, `
-		SELECT request_hash, response
+		SELECT request_hash, response, operation_id
 		FROM idempotency_keys
 		WHERE actor_id = $1 AND client_mutation_id = $2
-	`, actorID, key).Scan(&storedHash, &response)
+	`, actorID, key).Scan(&storedHash, &response, &operationID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = tx.QueryRowContext(ctx, `SELECT request_hash FROM mutation_identity_guards WHERE actor_id = $1 AND client_mutation_id = $2`, actorID, key).Scan(&storedHash)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -382,6 +395,7 @@ func replayIdempotent[T any](ctx context.Context, tx *sql.Tx, actorID, key strin
 	if err := json.Unmarshal(response, &result); err != nil {
 		return zero, false, fmt.Errorf("decode idempotency result: %w", err)
 	}
+	domain.SetAuditOperation(ctx, operationID.String, true)
 	return result, true, nil
 }
 
@@ -391,10 +405,13 @@ func saveIdempotent(ctx context.Context, tx *sql.Tx, actorID, key string, finger
 		return fmt.Errorf("encode idempotency result: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO idempotency_keys (actor_id, client_mutation_id, request_hash, response)
-		VALUES ($1, $2, $3, $4::jsonb)
+		INSERT INTO idempotency_keys (actor_id, client_mutation_id, request_hash, response, operation_id)
+		VALUES ($1, $2, $3, $4::jsonb, NULLIF(current_setting('loomtable.audit_operation',true),''))
 	`, actorID, key, fingerprint[:], string(encoded)); err != nil {
 		return fmt.Errorf("save idempotency result: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE audit_events SET client_mutation_id=$1 WHERE operation_id=NULLIF(current_setting('loomtable.audit_operation',true),'') AND actor_id=$2`, key, actorID); err != nil {
+		return err
 	}
 	return nil
 }

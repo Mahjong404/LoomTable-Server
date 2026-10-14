@@ -237,3 +237,19 @@ _Avoid_: shared Personal
 **Vault**:
 The Obsidian file space used by the Plugin, including its notes and local files.
 _Avoid_: local database
+
+**Audit Operation**:
+One acknowledged business operation whose committed effects share an exact identity. It may affect several Records, Fields or Views; an unchanged operation has no Audit Events.
+_Avoid_: timestamp group, change title
+
+**Audit Event**:
+One retained fact about a committed effect, with its own identity and its exact Audit Operation association when recorded. Event-time metadata describes names and types when the effect occurred; missing historical information remains unknown.
+_Avoid_: current metadata reconstruction, inverse operation
+
+**Record Projection**:
+The subset of Table Audit consisting of Record data and lifecycle facts. Metadata and order facts remain in Table Audit without masquerading as Record data.
+_Avoid_: loaded history page filter, Record rollback
+
+**Audit Availability**:
+The actual range and completeness of readable retained Audit facts. A retention policy or readable event alone does not promise complete historical recovery.
+_Avoid_: thirty-day rollback guarantee

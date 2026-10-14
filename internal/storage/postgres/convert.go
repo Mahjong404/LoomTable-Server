@@ -64,6 +64,9 @@ func (r *Repository) ConvertField(ctx context.Context, actorID, fieldID string, 
 		return domain.Field{}, fmt.Errorf("begin convert field: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Field{}, err
+	}
 	current, primary, err := lockAccessibleField(ctx, tx, actorID, fieldID)
 	if err != nil {
 		return domain.Field{}, err
@@ -140,6 +143,13 @@ func (r *Repository) ConvertField(ctx context.Context, actorID, fieldID string, 
 	definition.Type = plan.TargetType
 	definition.Config = json.RawMessage(newConfig)
 	fields[fieldID] = definition
+	conversionMetadata, err := json.Marshal(map[string]any{"id": current.ID, "name": current.Name, "type": plan.TargetType, "config": json.RawMessage(newConfig), "deleted_at": current.DeletedAt})
+	if err != nil {
+		return domain.Field{}, err
+	}
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('loomtable.audit_conversion',$1,true)", string(conversionMetadata)); err != nil {
+		return domain.Field{}, err
+	}
 	for _, item := range pending {
 		if item.present && plan.ResolveValue != nil {
 			item.converted, item.present = plan.ResolveValue(item.converted)
@@ -203,7 +213,7 @@ func (r *Repository) ConvertField(ctx context.Context, actorID, fieldID string, 
 	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, changedIDs); err != nil {
 		return domain.Field{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Field{}, fmt.Errorf("commit convert field: %w", err)
 	}
 	return updated, nil

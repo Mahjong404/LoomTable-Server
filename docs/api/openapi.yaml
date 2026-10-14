@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: LoomTable Server API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     LoomTable Server 的初版 REST API 合同。
     Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
@@ -1594,6 +1594,54 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /v1/tables/{tableId}/audit:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Changes]
+      operationId: pullTableAudit
+      description: Requires tableAudit and readiness. Versioned retained Table facts, exact operation association and event-time metadata. category=record filters data/lifecycle before count and pagination; moves are order. Cursor binds filters, high sequence, retention watermark and Actor for thirty minutes. No rollback or bulk permission.
+      parameters:
+        - { name: category, in: query, schema: { type: string, enum: [all, record], default: all } }
+        - name: recordId
+          in: query
+          schema: { $ref: '#/components/schemas/RecordId' }
+        - name: fieldId
+          in: query
+          schema: { $ref: '#/components/schemas/FieldId' }
+        - name: viewId
+          in: query
+          schema: { $ref: '#/components/schemas/ViewId' }
+        - name: actorId
+          in: query
+          schema: { $ref: '#/components/schemas/ActorId' }
+        - name: clientMutationId
+          in: query
+          schema: { $ref: '#/components/schemas/MutationId' }
+        - { name: operationId, in: query, schema: { type: string, pattern: '^op_([0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{32})$' } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: until, in: query, schema: { type: string, format: date-time } }
+        - { name: cursor, in: query, schema: { type: string, minLength: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200':
+          description: Snapshot page and actual readable availability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditPage' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /v1/tables/{tableId}/history:
     parameters:
       - $ref: '#/components/parameters/TableId'
@@ -2073,7 +2121,7 @@ components:
           type: string
         capabilities:
           type: array
-          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds. A server implementing fixed whole-query selection declares `querySelection` under readiness and migrationRequired=false. A server implementing Table-owned View Order CAS declares `viewOrderCAS` under the same readiness conditions.
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds. A server implementing versioned Table Audit declares `tableAudit` under readiness and migrationRequired=false. Committed instrumented writer responses add X-LoomTable-Operation-Id without changing legacy JSON; receipts replay the original identity. A server implementing fixed whole-query selection declares `querySelection` under readiness and migrationRequired=false. A server implementing Table-owned View Order CAS declares `viewOrderCAS` under the same readiness conditions.
           items:
             type: string
         changeRetention:
@@ -4091,6 +4139,119 @@ components:
           type: string
           description: Display text of the Record's primary Field at the time of the change. Present on Record-scoped changes when the primary value is non-empty.
 
+    AuditPage:
+      type: object
+      additionalProperties: false
+      required: [items, count, hasMore, availability]
+      properties:
+        items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/AuditEvent' } }
+        count: { type: integer, minimum: 0 }
+        hasMore: { type: boolean }
+        nextCursor: { type: string, minLength: 1 }
+        availability: { $ref: '#/components/schemas/AuditAvailability' }
+    AuditAvailability:
+      type: object
+      additionalProperties: false
+      required: [capturedSince, earliestReadableAt, expiredThrough, expiredThroughTime, legacyExpiredThrough, hasLegacyEvents, uninstrumentedWriter, fullTableRollbackAvailable]
+      properties:
+        capturedSince: { type: string, format: date-time }
+        earliestReadableAt: { type: [string, 'null'], format: date-time }
+        expiredThrough: { type: integer, minimum: 0 }
+        expiredThroughTime: { type: [string, 'null'], format: date-time }
+        legacyExpiredThrough: { type: integer, minimum: 0 }
+        hasLegacyEvents: { type: boolean }
+        uninstrumentedWriter: { type: boolean }
+        fullTableRollbackAvailable: { type: boolean, const: false }
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required: [eventId, operationId, changeIds, tableId, objectId, actorId, occurredAt, category, kind, payloadVersion, payload]
+      properties:
+        eventId: { type: string, pattern: '^aud_[0-9a-f]{32}$' }
+        operationId: { type: [string, 'null'], pattern: '^op_([0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{32})$' }
+        changeIds: { type: array, uniqueItems: true, items: { $ref: '#/components/schemas/ChangeId' } }
+        tableId: { $ref: '#/components/schemas/TableId' }
+        objectId: { type: string }
+        recordId: { $ref: '#/components/schemas/RecordId' }
+        fieldId: { $ref: '#/components/schemas/FieldId' }
+        viewId: { $ref: '#/components/schemas/ViewId' }
+        actorId: { anyOf: [{ $ref: '#/components/schemas/ActorId' }, { type: 'null' }] }
+        clientMutationId: { $ref: '#/components/schemas/MutationId' }
+        occurredAt: { type: string, format: date-time }
+        category: { type: string, enum: [record, metadata, order] }
+        kind: { type: string, enum: [recordCreated, recordUpdated, recordDeleted, recordRestored, recordMoved, fieldCreated, fieldUpdated, fieldDeleted, fieldRestored, fieldConverted, viewCreated, viewUpdated, viewDeleted, viewRestored, viewOrderChanged, tableCreated, tableUpdated, tableDeleted, tableRestored, baseUpdated, workspaceUpdated, schemaChanged, viewChanged] }
+        payloadVersion: { type: integer, enum: [0, 1] }
+        payload: { type: object }
+      allOf:
+        - if: { properties: { payloadVersion: { const: 1 } } }
+          then: { properties: { payload: { $ref: '#/components/schemas/AuditPayload' } } }
+          else: { properties: { operationId: { type: 'null' }, payload: { $ref: '#/components/schemas/LegacyAuditPayload' } } }
+    AuditPayload:
+      type: object
+      additionalProperties: false
+      required: [before, after, fields, metadataRecorded, redactedProperties]
+      properties:
+        before: { $ref: '#/components/schemas/AuditEntity' }
+        after: { $ref: '#/components/schemas/AuditEntity' }
+        redactedProperties: { type: array, uniqueItems: true, items: { type: string, enum: [storageKey, vaultPath] } }
+        metadataRecorded: { type: boolean, const: true }
+        fields:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [fieldId, before, after]
+            properties:
+              fieldId: { $ref: '#/components/schemas/FieldId' }
+              before: { $ref: '#/components/schemas/AuditCell' }
+              after: { $ref: '#/components/schemas/AuditCell' }
+    AuditEntity:
+      description: Event-time stored entity snapshot. SQL column names are versioned payload keys; derived query_values and search_text are excluded. It is not an inverse operation.
+      type: [object, 'null']
+      required: [id]
+      properties:
+        id: { type: string }
+    AuditCell:
+      type: object
+      additionalProperties: false
+      required: [presence, value, metadataRecorded, field, options, missingOptionIds]
+      properties:
+        presence: { type: string, enum: [missing, 'null', value] }
+        value: {}
+        metadataRecorded: { type: boolean }
+        missingOptionIds: { type: array, items: { type: string } }
+        field:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [id, name, type, deletedAt]
+          properties:
+            id: { $ref: '#/components/schemas/FieldId' }
+            name: { type: string }
+            type: { type: string }
+            deletedAt: { type: [string, 'null'], format: date-time }
+        options:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, color]
+            properties:
+              id: { $ref: '#/components/schemas/OptionId' }
+              name: { type: string }
+              color: { type: string }
+              deletedAt: { type: string, format: date-time }
+    LegacyAuditPayload:
+      type: object
+      additionalProperties: false
+      required: [before, after, fields, metadataRecorded, legacyFields, legacyPrimaryFieldText, redactedProperties]
+      properties:
+        before: { type: 'null' }
+        after: { type: 'null' }
+        fields: { type: array, maxItems: 0 }
+        redactedProperties: { type: array, uniqueItems: true, items: { type: string, enum: [storageKey, vaultPath] } }
+        metadataRecorded: { type: boolean, const: false }
+        legacyFields: { type: [array, 'null'], items: { $ref: '#/components/schemas/FieldChange' } }
+        legacyPrimaryFieldText: { type: [string, 'null'] }
     HistoryPage:
       type: object
       required: [items, hasMore, changeCursor]

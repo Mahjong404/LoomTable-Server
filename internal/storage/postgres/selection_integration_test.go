@@ -793,7 +793,7 @@ func TestWholeQuerySelection(t *testing.T) {
 			}
 		}
 		var after, versions int
-		if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM mutation_identity_guards),(SELECT count(*) FROM schema_migrations)`).Scan(&after, &versions); err != nil || after != before || versions != 9 {
+		if err = db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM mutation_identity_guards),(SELECT count(*) FROM schema_migrations)`).Scan(&after, &versions); err != nil || after != before || versions != 11 {
 			t.Fatal("migration changed guard/version", err)
 		}
 		got, err := records.Get(ctx, actor, a.ID)

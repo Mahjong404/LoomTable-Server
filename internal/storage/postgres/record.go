@@ -53,6 +53,9 @@ func (r *Repository) MutateRecords(
 		return loomrecord.StoredMutationResult{}, fmt.Errorf("begin record mutation: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return loomrecord.StoredMutationResult{}, err
+	}
 
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return loomrecord.StoredMutationResult{}, err
@@ -60,7 +63,7 @@ func (r *Repository) MutateRecords(
 	if replay, found, err := replayIdempotent[loomrecord.StoredMutationResult](ctx, tx, actorID, clientMutationID, fingerprint); err != nil {
 		return loomrecord.StoredMutationResult{}, err
 	} else if found {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return loomrecord.StoredMutationResult{}, fmt.Errorf("commit mutation replay: %w", err)
 		}
 		return replay, nil
@@ -139,7 +142,7 @@ func (r *Repository) MutateRecords(
 	if err := saveIdempotent(ctx, tx, actorID, clientMutationID, fingerprint, stored); err != nil {
 		return loomrecord.StoredMutationResult{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return loomrecord.StoredMutationResult{}, fmt.Errorf("commit record mutation: %w", err)
 	}
 	return stored, nil
