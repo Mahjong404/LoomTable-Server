@@ -87,7 +87,7 @@ func (r *Repository) ReadAudit(ctx context.Context, actorID, tableID string, fil
 		return result, err
 	}
 	pageWhere := where + " AND sequence<" + builder.add(position.Before)
-	rows, err := tx.QueryContext(ctx, `SELECT sequence,id,operation_id,array_to_json(change_ids),table_id,object_id,record_id,field_id,view_id,actor_id,client_mutation_id,occurred_at,category,kind,payload_version,payload FROM audit_events WHERE `+pageWhere+" ORDER BY sequence DESC LIMIT "+builder.add(limit+1), builder.args...)
+	rows, err := tx.QueryContext(ctx, `SELECT sequence,id,operation_id,array_to_json(change_ids),table_id,object_id,record_id,field_id,view_id,actor_id,client_mutation_id,occurred_at,category,kind,payload_version,loomtable_audit_safe_payload(payload) FROM audit_events WHERE `+pageWhere+" ORDER BY sequence DESC LIMIT "+builder.add(limit+1), builder.args...)
 	if err != nil {
 		return result, err
 	}

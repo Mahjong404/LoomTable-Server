@@ -22,11 +22,37 @@ CREATE INDEX IF NOT EXISTS audit_retention ON audit_events(occurred_at,sequence)
 CREATE INDEX IF NOT EXISTS audit_actor_mutation ON audit_events(actor_id,client_mutation_id,table_id);
 CREATE TABLE IF NOT EXISTS audit_retention_watermarks(table_id text PRIMARY KEY REFERENCES tables(id),expired_through bigint NOT NULL, generation bigint NOT NULL DEFAULT 1, expired_through_time timestamptz NOT NULL);
 ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS operation_id text;
+-- Audit omits attachment storage coordinates; legacy Record/Attachment DTOs stay unchanged.
+CREATE OR REPLACE FUNCTION loomtable_audit_safe_value(input_json jsonb) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE result jsonb;
+BEGIN
+ IF NOT COALESCE(jsonb_path_exists(input_json,'$.**.storageKey') OR jsonb_path_exists(input_json,'$.**.vaultPath'),false) THEN RETURN input_json; END IF;
+ CASE jsonb_typeof(input_json)
+ WHEN 'object' THEN
+  SELECT COALESCE(jsonb_object_agg(member.key,loomtable_audit_safe_value(member.val)),'{}'::jsonb) INTO result FROM jsonb_each(input_json) AS member(key,val) WHERE member.key NOT IN ('storageKey','vaultPath');
+ WHEN 'array' THEN
+  SELECT COALESCE(jsonb_agg(loomtable_audit_safe_value(entry.item) ORDER BY entry.ord),'[]'::jsonb) INTO result FROM jsonb_array_elements(input_json) WITH ORDINALITY AS entry(item,ord);
+ ELSE result:=input_json;
+ END CASE;
+ RETURN result;
+END $$;
+CREATE OR REPLACE FUNCTION loomtable_audit_safe_payload(input_json jsonb) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE omitted jsonb;
+BEGIN
+ SELECT COALESCE(jsonb_agg(property ORDER BY property),'[]'::jsonb) INTO omitted FROM (
+  SELECT DISTINCT property FROM (
+   SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(input_json->'redactedProperties')='array' THEN input_json->'redactedProperties' ELSE '[]'::jsonb END) property
+   UNION ALL SELECT 'storageKey' WHERE jsonb_path_exists(input_json,'$.**.storageKey')
+   UNION ALL SELECT 'vaultPath' WHERE jsonb_path_exists(input_json,'$.**.vaultPath')
+  ) properties WHERE property IN ('storageKey','vaultPath')
+ ) names;
+ RETURN loomtable_audit_safe_value(input_json)||jsonb_build_object('redactedProperties',omitted);
+END $$;
 -- Import only actual retained facts; never reconstruct event-time metadata or grouping.
 INSERT INTO audit_events(id,change_ids,table_id,object_id,record_id,actor_id,occurred_at,category,kind,payload_version,payload,legacy_change_id)
  SELECT 'aud_'||replace(gen_random_uuid()::text,'-',''),ARRAY[id],table_id,COALESCE(record_id,object_id,table_id),record_id,actor_id,occurred_at,
  CASE WHEN kind IN ('recordCreated','recordUpdated','recordDeleted','recordRestored') THEN 'record' WHEN kind='recordMoved' THEN 'order' ELSE 'metadata' END,
- kind,0,jsonb_build_object('before',null,'after',null,'fields','[]'::jsonb,'metadataRecorded',false,'legacyFields',fields,'legacyPrimaryFieldText',primary_field_text),id FROM changes c WHERE NOT EXISTS(SELECT 1 FROM audit_events e WHERE e.change_ids @> ARRAY[c.id]) ORDER BY change_sequence
+ kind,0,loomtable_audit_safe_payload(jsonb_build_object('before',null,'after',null,'fields','[]'::jsonb,'metadataRecorded',false,'legacyFields',fields,'legacyPrimaryFieldText',primary_field_text)),id FROM changes c WHERE NOT EXISTS(SELECT 1 FROM audit_events e WHERE e.change_ids @> ARRAY[c.id]) ORDER BY change_sequence
  ON CONFLICT(legacy_change_id) DO NOTHING;
 CREATE OR REPLACE FUNCTION loomtable_audit_operation() RETURNS text LANGUAGE plpgsql AS $$
 DECLARE result text;
@@ -86,7 +112,7 @@ BEGIN
  ELSIF TG_OP='UPDATE' AND (b-'view_order'-'view_order_revision')=(a-'view_order'-'view_order_revision') THEN kind:='viewOrderChanged'; category:='order'; END IF;
  INSERT INTO audit_events(id,operation_id,table_id,object_id,record_id,field_id,view_id,actor_id,category,kind,payload_version,payload)
  VALUES('aud_'||replace(gen_random_uuid()::text,'-',''),op,tid,entity->>'id',rid,fieldid,vid,actor,category,kind,1,
- jsonb_build_object('before',b,'after',a,'fields',cells,'metadataRecorded',true));
+ loomtable_audit_safe_payload(jsonb_build_object('before',b,'after',a,'fields',cells,'metadataRecorded',true)));
  RETURN COALESCE(NEW,OLD);
 END $$;
 CREATE OR REPLACE FUNCTION loomtable_associate_audit_change() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -104,7 +130,7 @@ BEGIN
  FOR tid IN SELECT t.id FROM tables t JOIN bases b ON b.id=t.base_id WHERE (TG_TABLE_NAME='bases' AND b.id=NEW.id) OR (TG_TABLE_NAME='workspaces' AND b.workspace_id=NEW.id) ORDER BY t.id FOR UPDATE OF t LOOP
   IF actor IS NULL THEN INSERT INTO audit_instrumentation_gaps(table_id) VALUES(tid) ON CONFLICT DO NOTHING; END IF;
   INSERT INTO audit_events(id,operation_id,table_id,object_id,actor_id,category,kind,payload_version,payload)
-  VALUES('aud_'||replace(gen_random_uuid()::text,'-',''),loomtable_audit_operation(),tid,NEW.id,actor,'metadata',CASE TG_TABLE_NAME WHEN 'bases' THEN 'baseUpdated' ELSE 'workspaceUpdated' END,1,jsonb_build_object('before',to_jsonb(OLD),'after',to_jsonb(NEW),'fields','[]'::jsonb,'metadataRecorded',true));
+  VALUES('aud_'||replace(gen_random_uuid()::text,'-',''),loomtable_audit_operation(),tid,NEW.id,actor,'metadata',CASE TG_TABLE_NAME WHEN 'bases' THEN 'baseUpdated' ELSE 'workspaceUpdated' END,1,loomtable_audit_safe_payload(jsonb_build_object('before',to_jsonb(OLD),'after',to_jsonb(NEW),'fields','[]'::jsonb,'metadataRecorded',true)));
  END LOOP;
  RETURN NEW;
 END $$;
@@ -122,3 +148,6 @@ DROP TRIGGER IF EXISTS capture_ancestor_audit ON bases;
 CREATE TRIGGER capture_ancestor_audit AFTER UPDATE ON bases FOR EACH ROW EXECUTE FUNCTION loomtable_capture_ancestor_audit();
 DROP TRIGGER IF EXISTS capture_ancestor_audit ON workspaces;
 CREATE TRIGGER capture_ancestor_audit AFTER UPDATE ON workspaces FOR EACH ROW EXECUTE FUNCTION loomtable_capture_ancestor_audit();
+
+-- Raw SQL retry also scrubs any pre-fix retained Audit rows without new identities/events.
+UPDATE audit_events SET payload=loomtable_audit_safe_payload(payload) WHERE NOT payload ? 'redactedProperties' OR jsonb_path_exists(payload,'$.**.storageKey') OR jsonb_path_exists(payload,'$.**.vaultPath');

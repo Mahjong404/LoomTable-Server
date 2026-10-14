@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	attachment "github.com/Mahjong404/LoomTable-Server/internal/attachment"
 	"github.com/Mahjong404/LoomTable-Server/internal/auth"
 	"github.com/Mahjong404/LoomTable-Server/internal/catalog"
 	"github.com/Mahjong404/LoomTable-Server/internal/config"
@@ -431,6 +432,85 @@ func TestTableAuditTransactions(t *testing.T) {
 			t.Fatal("unknown/presence facts invented")
 		}
 	})
+	t.Run("attachment coordinates redacted without changing legacy DTO", func(t *testing.T) {
+		table := newTable(t)
+		field, err := cat.CreateField(ctx, actor, newMutationID(t), table.Table.ID, catalog.FieldInput{Name: "Files", Type: "attachment", Config: domain.AttachmentFieldConfig{MaxCount: 2}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		attachments := attachment.New(repo, attachment.NewFileStore(t.TempDir()), attachment.DefaultMaxBytes)
+		vault, err := attachments.Initialize(ctx, actor, newMutationID(t), attachment.InitRequest{Source: "vault", Filename: "synthetic.txt", VaultPath: "Synthetic-Private/synthetic.txt"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		managed, err := attachments.Initialize(ctx, actor, newMutationID(t), attachment.InitRequest{Source: "managed", Filename: "managed.txt", MimeType: "text/plain", Size: int64Pointer(5)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		managed, err = attachments.Upload(ctx, actor, managed.ID, "text/plain", bytes.NewReader([]byte("hello")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		refs := []any{map[string]any{"id": vault.ID, "source": "vault", "filename": vault.Filename, "vaultPath": vault.VaultPath}, map[string]any{"id": managed.ID, "source": "managed", "filename": managed.Filename, "storageKey": managed.StorageKey}}
+		c, op := domain.WithAuditOperation(ctx)
+		created, err := records.Mutate(c, actor, table.Table.ID, newMutationID(t), []record.Command{{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{field.ID: refs}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		stored, err := records.Get(ctx, actor, created.Results[0].Record.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(stored.Values)
+		if !bytes.Contains(raw, []byte("vaultPath")) || !bytes.Contains(raw, []byte("storageKey")) {
+			t.Fatal("legacy Record value changed")
+		}
+		p := audit(t, table.Table.ID, record.AuditRequest{AuditFilter: record.AuditFilter{OperationID: op.ID}})
+		raw, _ = json.Marshal(p)
+		var doc any
+		json.Unmarshal(raw, &doc)
+		if err := compileOpenAPIResponseSchema(t, "#/components/schemas/AuditPage").Validate(doc); err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(raw, []byte(vault.VaultPath)) || bytes.Contains(raw, []byte(managed.StorageKey)) {
+			t.Fatal("Audit leaked attachment coordinate")
+		}
+		data := payload(t, p.Items[0])
+		if len(data["redactedProperties"].([]any)) != 2 {
+			t.Fatal("redaction not explicit")
+		}
+		cell := data["fields"].([]any)[0].(map[string]any)["after"].(map[string]any)
+		safeRefs := cell["value"].([]any)
+		if safeRefs[0].(map[string]any)["id"] != vault.ID || safeRefs[1].(map[string]any)["id"] != managed.ID {
+			t.Fatal("attachment identity lost")
+		}
+		var clean bool
+		if err := db.QueryRowContext(ctx, `SELECT NOT (jsonb_path_exists(payload,'$.**.storageKey') OR jsonb_path_exists(payload,'$.**.vaultPath')) FROM audit_events WHERE id=$1`, p.Items[0].ID).Scan(&clean); err != nil || !clean {
+			t.Fatal("stored Audit contains coordinate", err)
+		}
+		// Simulate a restored pre-fix Audit row. Read defense and raw migration retry must scrub it.
+		if _, err := db.ExecContext(ctx, `UPDATE audit_events SET payload=jsonb_set(payload,'{after,values}', $1::jsonb) WHERE id=$2`, string(rawValuesForAuditTest(t, stored.Values)), p.Items[0].ID); err != nil {
+			t.Fatal(err)
+		}
+		response := httpCall(t, "GET", "/v1/tables/"+table.Table.ID+"/audit?operationId="+op.ID, nil)
+		if response.Code != 200 || bytes.Contains(response.Body.Bytes(), []byte(vault.VaultPath)) || bytes.Contains(response.Body.Bytes(), []byte(managed.StorageKey)) {
+			t.Fatal("restored row leaks through HTTP")
+		}
+		json.Unmarshal(response.Body.Bytes(), &doc)
+		if err := compileOpenAPIResponseSchema(t, "#/components/schemas/AuditPage").Validate(doc); err != nil {
+			t.Fatal(err)
+		}
+		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "migrations", "010_table_audit.sql"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, string(migration)); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT NOT (jsonb_path_exists(payload,'$.**.storageKey') OR jsonb_path_exists(payload,'$.**.vaultPath')) FROM audit_events WHERE id=$1`, p.Items[0].ID).Scan(&clean); err != nil || !clean {
+			t.Fatal("retry did not scrub restored coordinate", err)
+		}
+	})
 	t.Run("10000 Record events paginated before projection limit", func(t *testing.T) {
 		table := newTable(t)
 		started := time.Now()
@@ -495,6 +575,15 @@ func TestTableAuditTransactions(t *testing.T) {
 	})
 }
 
+func rawValuesForAuditTest(t *testing.T, values map[string]any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
 func TestTableAuditMigrationLegacyImport(t *testing.T) {
 	ctx := context.Background()
 	db := integrationDatabase(t, ctx)
@@ -518,6 +607,11 @@ func TestTableAuditMigrationLegacyImport(t *testing.T) {
 	}
 	_, err = record.New(repo).Mutate(ctx, boot.ActorID, table.Table.ID, newMutationID(t), []record.Command{{Kind: "createRecord", ValuesPresent: true, Values: map[string]any{table.PrimaryField.ID: "Legacy"}}})
 	if err != nil {
+		t.Fatal(err)
+	}
+	legacyAttachmentID, _ := id.New(id.AttachmentPrefix)
+	legacyDiff, _ := json.Marshal([]any{map[string]any{"fieldId": table.PrimaryField.ID, "after": []any{map[string]any{"id": legacyAttachmentID, "source": "vault", "filename": "synthetic.txt", "vaultPath": "Synthetic-Legacy/synthetic.txt"}}}})
+	if _, err := db.ExecContext(ctx, `UPDATE changes SET fields=$1::jsonb WHERE table_id=$2`, string(legacyDiff), table.Table.ID); err != nil {
 		t.Fatal(err)
 	}
 	// Owned disposable database only: recreate the actual pre-010 source state.
@@ -544,6 +638,9 @@ func TestTableAuditMigrationLegacyImport(t *testing.T) {
 	}
 	if p.Count != 1 || !p.Availability.HasLegacyEvents || p.Items[0].OperationID != nil || p.Items[0].PayloadVersion != 0 {
 		t.Fatalf("legacy facts=%#v", p)
+	}
+	if bytes.Contains(p.Items[0].Payload, []byte("Synthetic-Legacy/synthetic.txt")) {
+		t.Fatal("legacy import leaked coordinate")
 	}
 	var doc any
 	bytes, _ := json.Marshal(p)

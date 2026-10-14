@@ -4189,10 +4189,11 @@ components:
     AuditPayload:
       type: object
       additionalProperties: false
-      required: [before, after, fields, metadataRecorded]
+      required: [before, after, fields, metadataRecorded, redactedProperties]
       properties:
         before: { $ref: '#/components/schemas/AuditEntity' }
         after: { $ref: '#/components/schemas/AuditEntity' }
+        redactedProperties: { type: array, uniqueItems: true, items: { type: string, enum: [storageKey, vaultPath] } }
         metadataRecorded: { type: boolean, const: true }
         fields:
           type: array
@@ -4242,11 +4243,12 @@ components:
     LegacyAuditPayload:
       type: object
       additionalProperties: false
-      required: [before, after, fields, metadataRecorded, legacyFields, legacyPrimaryFieldText]
+      required: [before, after, fields, metadataRecorded, legacyFields, legacyPrimaryFieldText, redactedProperties]
       properties:
         before: { type: 'null' }
         after: { type: 'null' }
         fields: { type: array, maxItems: 0 }
+        redactedProperties: { type: array, uniqueItems: true, items: { type: string, enum: [storageKey, vaultPath] } }
         metadataRecorded: { type: boolean, const: false }
         legacyFields: { type: [array, 'null'], items: { $ref: '#/components/schemas/FieldChange' } }
         legacyPrimaryFieldText: { type: [string, 'null'] }
