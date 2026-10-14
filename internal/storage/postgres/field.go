@@ -76,13 +76,16 @@ func (r *Repository) CreateField(ctx context.Context, actorID, idempotencyKey st
 		return domain.Field{}, fmt.Errorf("begin create field: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Field{}, err
+	}
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return domain.Field{}, err
 	}
 	if response, found, err := replayIdempotent[domain.Field](ctx, tx, actorID, idempotencyKey, fingerprint); err != nil {
 		return domain.Field{}, err
 	} else if found {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.Field{}, fmt.Errorf("commit field replay: %w", err)
 		}
 		return response, nil
@@ -126,7 +129,7 @@ func (r *Repository) CreateField(ctx context.Context, actorID, idempotencyKey st
 	if err := saveIdempotent(ctx, tx, actorID, idempotencyKey, fingerprint, created); err != nil {
 		return domain.Field{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Field{}, fmt.Errorf("commit create field: %w", err)
 	}
 	return created, nil
@@ -141,6 +144,9 @@ func (r *Repository) UpdateField(ctx context.Context, actorID, fieldID string, e
 		return domain.Field{}, fmt.Errorf("begin update field: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Field{}, err
+	}
 	current, _, err := lockAccessibleField(ctx, tx, actorID, fieldID)
 	if err != nil {
 		return domain.Field{}, err
@@ -155,7 +161,7 @@ func (r *Repository) UpdateField(ctx context.Context, actorID, fieldID string, e
 		return domain.Field{}, domain.NewValidationError(domain.ValidationIssue{Path: "/type", Code: "format", Message: "Field type is immutable in P0"})
 	}
 	if current.Name == target.Name && current.Description == target.Description && reflect.DeepEqual(current.Config, target.Config) {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.Field{}, fmt.Errorf("commit field no-op: %w", err)
 		}
 		return current, nil
@@ -181,7 +187,7 @@ func (r *Repository) UpdateField(ctx context.Context, actorID, fieldID string, e
 	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, nil); err != nil {
 		return domain.Field{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Field{}, fmt.Errorf("commit update field: %w", err)
 	}
 	return updated, nil
@@ -196,6 +202,9 @@ func (r *Repository) DeleteField(ctx context.Context, actorID, fieldID string, e
 		return fmt.Errorf("begin delete field: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return err
+	}
 	current, primary, err := lockAccessibleField(ctx, tx, actorID, fieldID)
 	if err != nil {
 		return err
@@ -226,7 +235,7 @@ func (r *Repository) DeleteField(ctx context.Context, actorID, fieldID string, e
 	if err := invalidateSelections(ctx, tx, actorID, deleted.TableID, nil); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return fmt.Errorf("commit delete field: %w", err)
 	}
 	return nil
@@ -241,6 +250,9 @@ func (r *Repository) RestoreField(ctx context.Context, actorID, fieldID string, 
 		return domain.Field{}, fmt.Errorf("begin restore field: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Field{}, err
+	}
 	current, _, err := lockAccessibleField(ctx, tx, actorID, fieldID)
 	if err != nil {
 		return domain.Field{}, err
@@ -268,7 +280,7 @@ func (r *Repository) RestoreField(ctx context.Context, actorID, fieldID string, 
 	if err := invalidateSelections(ctx, tx, actorID, restored.TableID, nil); err != nil {
 		return domain.Field{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Field{}, fmt.Errorf("commit restore field: %w", err)
 	}
 	return restored, nil

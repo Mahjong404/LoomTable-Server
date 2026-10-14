@@ -276,7 +276,8 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 				}
 				return
 			}
-			next(w, r.WithContext(context.WithValue(r.Context(), actorIDKey{}, actorID)))
+			auditContext, operation := domain.WithAuditOperation(context.WithValue(r.Context(), actorIDKey{}, actorID))
+			next(&auditResponseWriter{ResponseWriter: w, operation: operation}, r.WithContext(auditContext))
 			return
 		}
 		if _, ok := auth.BearerToken(header); !ok {

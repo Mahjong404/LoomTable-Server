@@ -40,13 +40,16 @@ func (r *Repository) CreateView(ctx context.Context, actorID, idempotencyKey str
 		return domain.View{}, fmt.Errorf("begin create view: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.View{}, err
+	}
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return domain.View{}, err
 	}
 	if response, found, err := replayIdempotent[domain.View](ctx, tx, actorID, idempotencyKey, fingerprint); err != nil {
 		return domain.View{}, err
 	} else if found {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.View{}, fmt.Errorf("commit view replay: %w", err)
 		}
 		return response, nil
@@ -83,7 +86,7 @@ func (r *Repository) CreateView(ctx context.Context, actorID, idempotencyKey str
 	if err := saveIdempotent(ctx, tx, actorID, idempotencyKey, fingerprint, created); err != nil {
 		return domain.View{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.View{}, fmt.Errorf("commit create view: %w", err)
 	}
 	return created, nil
@@ -98,6 +101,9 @@ func (r *Repository) UpdateView(ctx context.Context, actorID, viewID string, exp
 		return domain.View{}, fmt.Errorf("begin update view: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.View{}, err
+	}
 	current, err := lockAccessibleView(ctx, tx, actorID, viewID)
 	if err != nil {
 		return domain.View{}, err
@@ -112,7 +118,7 @@ func (r *Repository) UpdateView(ctx context.Context, actorID, viewID string, exp
 		return domain.View{}, domain.NewValidationError(domain.ValidationIssue{Path: "/type", Code: "format", Message: "View type is immutable in P0"})
 	}
 	if current.Name == target.Name && reflect.DeepEqual(current.Config, target.Config) {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.View{}, fmt.Errorf("commit view no-op: %w", err)
 		}
 		return current, nil
@@ -138,7 +144,7 @@ func (r *Repository) UpdateView(ctx context.Context, actorID, viewID string, exp
 	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, nil); err != nil {
 		return domain.View{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.View{}, fmt.Errorf("commit update view: %w", err)
 	}
 	return updated, nil
@@ -153,6 +159,9 @@ func (r *Repository) DeleteView(ctx context.Context, actorID, viewID string, exp
 		return fmt.Errorf("begin delete view: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return err
+	}
 	current, err := lockAccessibleView(ctx, tx, actorID, viewID)
 	if err != nil {
 		return err
@@ -180,7 +189,7 @@ func (r *Repository) DeleteView(ctx context.Context, actorID, viewID string, exp
 	if err := invalidateSelections(ctx, tx, actorID, deleted.TableID, nil); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return fmt.Errorf("commit delete view: %w", err)
 	}
 	return nil
@@ -195,6 +204,9 @@ func (r *Repository) RestoreView(ctx context.Context, actorID, viewID string, ex
 		return domain.View{}, fmt.Errorf("begin restore view: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.View{}, err
+	}
 	current, err := lockAccessibleView(ctx, tx, actorID, viewID)
 	if err != nil {
 		return domain.View{}, err
@@ -222,7 +234,7 @@ func (r *Repository) RestoreView(ctx context.Context, actorID, viewID string, ex
 	if err := invalidateSelections(ctx, tx, actorID, restored.TableID, nil); err != nil {
 		return domain.View{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.View{}, fmt.Errorf("commit restore view: %w", err)
 	}
 	return restored, nil
@@ -237,6 +249,9 @@ func (r *Repository) SetDefaultView(ctx context.Context, actorID, viewID string,
 		return domain.View{}, fmt.Errorf("begin set default view: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.View{}, err
+	}
 	current, err := lockAccessibleView(ctx, tx, actorID, viewID)
 	if err != nil {
 		return domain.View{}, err
@@ -248,7 +263,7 @@ func (r *Repository) SetDefaultView(ctx context.Context, actorID, viewID string,
 		return domain.View{}, &domain.InvalidStateTransitionError{Resource: "view", ID: viewID, Action: "update", Current: "deleted"}
 	}
 	if current.IsDefault {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.View{}, fmt.Errorf("commit set default view no-op: %w", err)
 		}
 		return current, nil
@@ -303,7 +318,7 @@ func (r *Repository) SetDefaultView(ctx context.Context, actorID, viewID string,
 	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, nil); err != nil {
 		return domain.View{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.View{}, fmt.Errorf("commit set default view: %w", err)
 	}
 	return updated, nil

@@ -14,6 +14,7 @@ const (
 )
 
 type CleanupStats struct {
+	AuditDeleted       int64
 	ChangesDeleted     int64
 	IdempotencyDeleted int64
 }
@@ -79,7 +80,7 @@ func (r *Runner) runAndLog(ctx context.Context) {
 		r.logger("retention cleanup failed after %s: %v", time.Since(started), err)
 		return
 	}
-	r.logger("retention cleanup completed in %s: changes=%d idempotency=%d", time.Since(started), stats.ChangesDeleted, stats.IdempotencyDeleted)
+	r.logger("retention cleanup completed in %s: changes=%d audit=%d idempotency=%d", time.Since(started), stats.ChangesDeleted, stats.AuditDeleted, stats.IdempotencyDeleted)
 }
 
 func parseRetention(value string) (time.Duration, error) {

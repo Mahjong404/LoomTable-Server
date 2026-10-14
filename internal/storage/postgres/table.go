@@ -92,6 +92,9 @@ func (r *Repository) CreateTable(ctx context.Context, actorID, idempotencyKey st
 		return domain.CreateTableResult{}, fmt.Errorf("begin create table: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.CreateTableResult{}, err
+	}
 
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return domain.CreateTableResult{}, err
@@ -99,7 +102,7 @@ func (r *Repository) CreateTable(ctx context.Context, actorID, idempotencyKey st
 	if response, found, err := replayIdempotent[domain.CreateTableResult](ctx, tx, actorID, idempotencyKey, fingerprint); err != nil {
 		return domain.CreateTableResult{}, err
 	} else if found {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.CreateTableResult{}, fmt.Errorf("commit table replay: %w", err)
 		}
 		return response, nil
@@ -173,7 +176,7 @@ func (r *Repository) CreateTable(ctx context.Context, actorID, idempotencyKey st
 	if err := saveIdempotent(ctx, tx, actorID, idempotencyKey, fingerprint, created); err != nil {
 		return domain.CreateTableResult{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.CreateTableResult{}, fmt.Errorf("commit create table: %w", err)
 	}
 	return created, nil
@@ -188,6 +191,9 @@ func (r *Repository) UpdateTable(ctx context.Context, actorID, tableID string, e
 		return domain.Table{}, fmt.Errorf("begin update table: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Table{}, err
+	}
 
 	current, err := lockAccessibleTable(ctx, tx, actorID, tableID)
 	if err != nil {
@@ -200,7 +206,7 @@ func (r *Repository) UpdateTable(ctx context.Context, actorID, tableID string, e
 		return domain.Table{}, &domain.InvalidStateTransitionError{Resource: "table", ID: tableID, Action: "update", Current: "deleted"}
 	}
 	if current.Name == name {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.Table{}, fmt.Errorf("commit table no-op: %w", err)
 		}
 		return current, nil
@@ -218,7 +224,7 @@ func (r *Repository) UpdateTable(ctx context.Context, actorID, tableID string, e
 	if err := insertTableChange(ctx, tx, actorID, updated, "schemaChanged"); err != nil {
 		return domain.Table{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Table{}, fmt.Errorf("commit update table: %w", err)
 	}
 	return updated, nil
@@ -233,6 +239,9 @@ func (r *Repository) DeleteTable(ctx context.Context, actorID, tableID string, e
 		return fmt.Errorf("begin delete table: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return err
+	}
 
 	current, err := lockAccessibleTable(ctx, tx, actorID, tableID)
 	if err != nil {
@@ -257,7 +266,7 @@ func (r *Repository) DeleteTable(ctx context.Context, actorID, tableID string, e
 	if err := insertTableChange(ctx, tx, actorID, deleted, "schemaChanged"); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return fmt.Errorf("commit delete table: %w", err)
 	}
 	return nil
@@ -272,6 +281,9 @@ func (r *Repository) RestoreTable(ctx context.Context, actorID, tableID string, 
 		return domain.Table{}, fmt.Errorf("begin restore table: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.Table{}, err
+	}
 
 	current, err := lockAccessibleTable(ctx, tx, actorID, tableID)
 	if err != nil {
@@ -296,7 +308,7 @@ func (r *Repository) RestoreTable(ctx context.Context, actorID, tableID string, 
 	if err := insertTableChange(ctx, tx, actorID, restored, "schemaChanged"); err != nil {
 		return domain.Table{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.Table{}, fmt.Errorf("commit restore table: %w", err)
 	}
 	return restored, nil

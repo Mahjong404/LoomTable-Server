@@ -1,0 +1,56 @@
+# G5 — Unified Table Audit and Record Projection
+
+Status: contract frozen under the authorized G5 product boundary; source implementation and QA pending. No production release authorized.
+
+## Facts and scope
+
+Audit is a retained, read-only account of committed Table effects, not a rollback journal or a guarantee that any historical state is recoverable. Existing Changes and their JSON remain unchanged. A new versioned Audit API covers authorized Table, Field, View, Record and order writers, including creation of the initial Field/View, ordinary lifecycle, conversion and Atomic Choice. Actor-scoped Attachment/authentication administration has no intrinsic Table association and is not projected into arbitrary Tables; changes to Record attachment IDs are captured. Workspace/Base renames are projected into their existing descendant Tables, with exact ancestor ID.
+
+## Identity and transaction
+
+One database writer transaction receives one opaque operationId. Each persisted effect receives an independent eventId and monotonically allocated sequence; sequence orders committed effects within a Table because its writers already serialize on the Table. Sequence gaps are legal. One operation can produce multiple events across Fields/Records/Views; never infer this relationship from time, titles or command indices. Existing Change IDs are attached by the same transaction and exact target object; effects lacking a legacy Change explicitly return an empty changeIds array. G2 option/config effects and Record assignment share one operation; conversion value rewrites share the Field conversion operation, without inventing Record CAS revision increments. View lifecycle can produce both View and order effects. Default/config/name updates do not masquerade as reorder.
+
+Capture is performed by PostgreSQL row triggers inside the business transaction. A trigger failure aborts the whole writer, including business rows, Changes, receipts, guards and G4 invalidation. Row capture acquires no additional Field/View/Record locks. Ancestor rename projection takes descendant Table locks in ascending ID order after the existing ancestor lock, so Table sequence pagination cannot publish later sequence values ahead of an uncommitted ancestor effect. Writer lock order remains Actor (where existing), Table, Field/View/Record. Metadata reads are nonlocking under existing Table writer serialization. Audit never runs a Record writer or a selection invalidation itself.
+
+Every updated row is compared on business content, excluding revision/updatedAt and derived query/search projections. No-op/replay produce no events. New Server responses expose additive X-LoomTable-Operation-Id HTTP header only after successful commit; legacy bodies remain byte-shape compatible. Receipt-bearing operations store this ID in an additive receipt column, replay the same ID before CAS, and mark their Audit events with the exact actor-scoped clientMutationId. Unknown outcome uses existing retry rules and the same immutable ID/body. G2/G3 permanent guards retain their original 410/409 semantics; G5 neither extends legacy receipt lifetime nor permits retrying a non-idempotent writer after response loss. Pre-G5 receipts have no operation identity and must not acquire a fabricated one on replay.
+
+## Payload v1 and event-time values
+
+An event includes operationId (nullable for legacy), eventId, changeIds, actorId (nullable when not recorded), occurredAt, kind, category, tableId, objectId, optional recordId/fieldId/viewId, payloadVersion, before/after entity snapshots, fields and metadataRecorded. Snapshots describe stored facts, not an inverse instruction. Absent entity (create/delete-hard) is null; stored soft deletion is a timestamp in the entity snapshot.
+
+Each Record field entry has fieldId and before/after typed cells. A cell has presence=missing|null|value, raw JSON value, and event-time Field metadata (ID/name/type/deletedAt) plus precisely referenced active/deleted Option identities, names, colors and deletedAt. Empty string/array/false/zero are value, not missing/null. An unresolved historical Field/Option is explicitly metadataRecorded=false; never consult current metadata when reading history. A conversion uses the old Field type/config for before cells and the planned new definition for after cells, even though the existing converter updates Record values before the Field row. Field configuration snapshots preserve option create/remove/restore/name/color facts. Historical Changes are imported with payloadVersion=0, original diff/primary text, metadataRecorded=false and null operationId; no guessed grouping or invented labels/colors.
+
+## Read protocol
+
+GET /v1/tables/{tableId}/audit is additive. category=all (default) or record; the latter includes Record data/lifecycle and converted data, excludes moves and all metadata/order effects. Optional recordId, fieldId, viewId, actorId, operationId, clientMutationId, since, until filters intersect. clientMutationId is always restricted to the requesting Actor. Fields/categories/filter predicates run before count, cursor and limit. Limit 1..500, default 100. Invalid IDs/filter/cursor return existing 400 structured errors; unauthenticated 401, inaccessible or deleted ancestor Table 404. Deleted Records/Fields/Views can still be filtered under an active accessible Table. Audit grants no write permission.
+
+First page anchors a high sequence. Signed 30-minute cursor binds Actor, Table, canonical filters, high sequence, before position, and retention generation. Subsequent pages exclude newer events and retain the same count at the same high sequence; response items, count and availability are read in one Repeatable Read snapshot. Any cleanup changing the bound retention generation expires the cursor with 410 CURSOR_EXPIRED. A fresh page returns remaining events and explicit incomplete availability, not invented expired content. Each page contains hasMore and optional nextCursor; no grouping truncation claim is made: an operation may span pages and exact operationId reunites it. Filter changes require a fresh cursor.
+
+## Retention and availability
+
+Audit uses configured Change retention, with bounded cleanup and its own durable watermark. Receipt deletion does not delete Audit; Audit deletion does not delete permanent identity guards. Availability reports capturedSince (010 installation), earliest readable event time or null, expiredThrough plus actual expired event-time bound, legacyExpiredThrough (separate legacy Change sequence domain), legacy event presence and uninstrumented writer presence, plus fullTableRollbackAvailable=false. Retention disabled means no automatic expiry, not complete past coverage. Thirty days is a policy; it does not prove thirty days exist. Legacy import cannot recover already expired Changes or missing payloads. UI must show unknown/unrecorded metadata and disable complete historical rollback. Current Actor/Table permission is checked on every request, including continuation; a cursor is not authentication.
+
+## Migration 010 and downgrade
+
+010 follows 007/008/009 in SOURCE, while production has none of them yet. It adds Audit rows/indexes/availability, transaction-local capture functions/triggers and a nullable receipt operation ID. It imports retained Changes once using exact source ID uniqueness, leaves legacy APIs/kinds untouched, and never rewrites business values. Forward apply/repeated application/backup restore must be verified only in owned cloud tmpfs PostgreSQL. Existing old binaries can write with additive schema: trigger-only operation grouping remains exact, but missing actor instrumentation is marked uninstrumented rather than falsely complete. Such mixed writers are not an approved production rollout. Keep 007 guards and 008/009 state; do not drop persistent identity to downgrade. Stop writers and preserve a complete backup before release; old binary downgrade must retain 010 data/triggers and mark instrumentation coverage incomplete. Source migration must not be bundled with unapproved production 007/008/009 deployment.
+
+## Writer coverage matrix (source audit)
+
+| Writer | Existing Change / gaps | G5 capture | Identity / no-op / locks |
+|---|---|---|---|
+| Record create/update/delete/restore | per command recordCreated/Updated/Deleted/Restored; update diff only; no event-time Field/Option | lifecycle/entity and changed typed cells | one outer transaction; CAS/receipt unchanged; unchanged emits none |
+| Record duplicate/move | recordCreated/recordMoved; duplicate lacks create field diff | duplicate data/lifecycle; move order category with positions | existing receipt/transaction and lock order retained |
+| Field create/update/delete/restore | schemaChanged, object/revision only | full before/after schema/config/options | existing Table-before-Field; no-op none |
+| Field convert | schemaChanged only; Record values change without Record revision/Change | conversion Field and changed Record data with old/new types | one converter transaction; no fabricated Record revision |
+| G2 Choice | multiple schemaChanged + Record Changes | exact Field option deltas and Record cells | one operation across all events; replay no duplicate |
+| View create/update/delete/restore | viewChanged, no old/new config | View snapshots and lifecycle-induced order | trigger append/remove once; unchanged none |
+| Set Default | multiple viewChanged in one transaction | each affected View flag snapshot | one operation; no reorder |
+| G3 reorder | schemaChanged on Table/order revision | order before/after; order category | CAS/guard/receipt unchanged; no-op none |
+| Table create/update/delete/restore | create lacks Change; others schemaChanged | initial Table/Field/View/order and lifecycle/name | exact one transaction; active Table permissions gate reads |
+| Workspace/Base create/update | no Table Change | ancestor rename per existing descendant Table; create has no descendant effect | no false Record projection |
+| Attachment/auth lifecycle | actor-scoped, no intrinsic Table | excluded; attachment value IDs via Record events | no private storage coordinates in Audit |
+| G4 Scope / cleanup; G6 reads | no business Change | excluded | no membership or query semantic change |
+
+## Acceptance / consumer
+
+Cloud tests must prove mixed event projection before pagination/count, event-time rename/color/conversion, multicommand and Atomic Choice grouping/replay/no-op, G3 order/default distinction, G4 member-preserving writes, rollback on Audit failure, concurrent CAS, permission/retention/legacy metadata, migration retry/restore and old reader compatibility. Pure logic/static checks may run locally; HTTP/database/containers run only on cloud. Capability tableAudit and OpenAPI 0.8.0 are SOURCE facts only until separately deployed and Meta/readiness verified. Plugin must pin an approved full SHA, generate new API/strict versioned decoder, retain legacy Change decoder and mutation body, read exact operation header, fetch Record category projection, handle 410 and honest availability. No production or Plugin availability claim is authorized by merge.

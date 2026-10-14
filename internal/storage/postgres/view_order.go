@@ -100,13 +100,16 @@ func (r *Repository) ReorderViews(ctx context.Context, actorID, key, tableID str
 		return domain.ViewOrderResult{}, fmt.Errorf("begin View Order: %w", err)
 	}
 	defer tx.Rollback()
+	if err := beginAudit(ctx, tx, actorID); err != nil {
+		return domain.ViewOrderResult{}, err
+	}
 	if err := lockActor(ctx, tx, actorID); err != nil {
 		return domain.ViewOrderResult{}, err
 	}
 	if result, found, err := replayIdempotent[domain.ViewOrderResult](ctx, tx, actorID, key, hash); err != nil {
 		return domain.ViewOrderResult{}, err
 	} else if found {
-		if err := tx.Commit(); err != nil {
+		if err := commitAudit(ctx, tx); err != nil {
 			return domain.ViewOrderResult{}, err
 		}
 		return result, nil
@@ -156,7 +159,7 @@ func (r *Repository) ReorderViews(ctx context.Context, actorID, key, tableID str
 	if err := saveIdempotent(ctx, tx, actorID, key, hash, result); err != nil {
 		return domain.ViewOrderResult{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commitAudit(ctx, tx); err != nil {
 		return domain.ViewOrderResult{}, fmt.Errorf("commit View Order: %w", err)
 	}
 	return result, nil
