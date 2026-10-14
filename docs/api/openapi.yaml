@@ -3482,6 +3482,12 @@ components:
       type: object
       additionalProperties: false
       description: When viewId is supplied, the View configuration is the base query. Explicit filter, sort, projection, and pagination values temporarily override it for this request and are not persisted. The JSON body is limited to 8 MiB. Any unavailable query-semantic Field reference returns 422; stale presentation-only references are ignored.
+      allOf:
+        - if:
+            required: [selectionScopeToken]
+          else:
+            properties:
+              filter: { $ref: '#/components/schemas/FilterNode' }
       properties:
         selectionScopeToken: { type: string, minLength: 1, maxLength: 4096 }
         selectionExcludedIds:
@@ -3513,7 +3519,10 @@ components:
           uniqueItems: true
           items: { $ref: '#/components/schemas/FieldId' }
         filter:
-          $ref: '#/components/schemas/FilterNode'
+          description: An explicit null clears the saved View Filter only when selectionScopeToken is supplied. Unscoped queries retain the existing non-null FilterNode requirement.
+          oneOf:
+            - $ref: '#/components/schemas/FilterNode'
+            - type: 'null'
         sort:
           type: array
           maxItems: 10

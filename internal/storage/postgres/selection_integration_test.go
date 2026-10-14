@@ -871,6 +871,19 @@ func TestWholeQuerySelection(t *testing.T) {
 		call := func(server *httpapi.Server, suffix string, body any, status int, code string) map[string]any {
 			t.Helper()
 			raw, _ := json.Marshal(body)
+			if status == 200 {
+				var input any
+				json.Unmarshal(raw, &input)
+				requestSchema := "#/components/schemas/SelectionScopeRequest"
+				if suffix == "query" {
+					requestSchema = "#/components/schemas/QueryRequest"
+				} else if suffix == "selection-scope/resolve" {
+					requestSchema = "#/components/schemas/SelectionResolveRequest"
+				}
+				if err := compileOpenAPIResponseSchema(t, requestSchema).Validate(input); err != nil {
+					t.Fatal("full request schema", err)
+				}
+			}
 			req := httptest.NewRequest("POST", "/v1/tables/"+tab.Table.ID+"/records/"+suffix, bytes.NewReader(raw))
 			req.Header.Set("Authorization", "Bearer "+boot.Token.Secret)
 			req.Header.Set("Content-Type", "application/json")
