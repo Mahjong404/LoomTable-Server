@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: LoomTable Server API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     LoomTable Server 的初版 REST API 合同。
     Server 是 Workspace、Base、Table、Field、View、Record 和 Managed Attachment 元数据的事实来源。
@@ -1240,13 +1240,95 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /v1/tables/{tableId}/records/selection-scope:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Records]
+      operationId: acquireSelectionScope
+      description: Requires querySelection and migrationRequired=false. Fixed actual Record-ID snapshot, five-minute TTL. Membership transitions permanently invalidate it; values retaining membership and presentation changes do not. This read scope grants no bulk mutation permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectionScopeRequest'
+      responses:
+        '200':
+          description: Validated whole-query selection scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelectionResult'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '410':
+          $ref: '#/components/responses/QuerySnapshotExpired'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /v1/tables/{tableId}/records/selection-scope/resolve:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Records]
+      operationId: resolveSelectionScope
+      description: Requires querySelection and migrationRequired=false. Fixed actual Record-ID snapshot, five-minute TTL. Membership transitions permanently invalidate it; values retaining membership and presentation changes do not. This read scope grants no bulk mutation permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectionResolveRequest'
+      responses:
+        '200':
+          description: Validated whole-query selection scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelectionResult'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '410':
+          $ref: '#/components/responses/QuerySnapshotExpired'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /v1/tables/{tableId}/records/query:
     parameters:
       - $ref: '#/components/parameters/TableId'
     post:
       tags: [Records]
       operationId: queryRecords
-      description: Uses a stateless keyset cursor with a 30-minute TTL. A regular Record query is not a Query Snapshot; concurrent writes may affect subsequent pages, so clients compare changeCursor and restart when consistency matters.
+      description: Uses a stateless keyset cursor with a 30-minute TTL. A regular Record query is not a Query Snapshot; concurrent writes may affect subsequent pages, so clients compare changeCursor and restart when consistency matters. Optional selectionScopeToken requires querySelection, validates a fixed membership snapshot and returns selection. Scoped cursors separately bind Scope ID and Table Change tail; CURSOR_EXPIRED restarts pages while keeping a still-valid Scope, whereas QUERY_SNAPSHOT_EXPIRED clears it.
       requestBody:
         required: true
         content:
@@ -1991,7 +2073,7 @@ components:
           type: string
         capabilities:
           type: array
-          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds. A server implementing Table-owned View Order CAS declares `viewOrderCAS` under the same readiness conditions.
+          description: Enabled server capabilities. P1 may include attachments when the Attachment module and its file volume are available. A server that accepts the extended 12-color SelectOptionColor writer declares `choicePalette12`. A server that supports Record Query Search in AggregateRequest declares `aggregateSearch`. A server that implements transactional Choice resolution and Record assignment declares `atomicChoice`; use it only when migrationRequired is false and readiness succeeds. A server implementing fixed whole-query selection declares `querySelection` under readiness and migrationRequired=false. A server implementing Table-owned View Order CAS declares `viewOrderCAS` under the same readiness conditions.
           items:
             type: string
         changeRetention:
@@ -3313,11 +3395,100 @@ components:
           maximum: 500
           default: 100
 
+    SelectionQuery:
+      type: object
+      additionalProperties: false
+      description: Active Filter plus Search membership; View only contributes a default Filter. Presentation does not participate.
+      properties:
+        viewId: { $ref: '#/components/schemas/ViewId' }
+        filter:
+          oneOf:
+            - $ref: '#/components/schemas/FilterNode'
+            - type: 'null'
+        search: { type: string }
+
+    SelectionScopeRequest:
+      type: object
+      additionalProperties: false
+      required: [requestId, query]
+      properties:
+        requestId:
+          type: string
+          pattern: '^req_[0-9A-HJKMNP-TV-Z]{26}$'
+          description: Actor-scoped ephemeral allocation replay identity, outside MutationQueue.
+        query: { $ref: '#/components/schemas/SelectionQuery' }
+
+    SelectionResolveRequest:
+      type: object
+      additionalProperties: false
+      required: [scopeToken, query]
+      properties:
+        scopeToken: { type: string, minLength: 1, maxLength: 4096 }
+        query: { $ref: '#/components/schemas/SelectionQuery' }
+        excludedIds:
+          type: array
+          maxItems: 5000
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/RecordId' }
+        recordIds:
+          type: array
+          maxItems: 500
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/RecordId' }
+
+    SelectionScope:
+      type: object
+      additionalProperties: false
+      required: [id, token, tableId, membershipFingerprint, semanticDataVersion, count, createdAt, expiresAt]
+      properties:
+        id: { type: string, pattern: '^sel_[0-9A-HJKMNP-TV-Z]{26}$' }
+        token: { type: string, minLength: 1, maxLength: 4096 }
+        tableId: { $ref: '#/components/schemas/TableId' }
+        membershipFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        semanticDataVersion:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Immutable ID-set and schema-context digest, not a general Data Version.
+        count: { type: integer, minimum: 0, maximum: 100000 }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+
+    SelectionResult:
+      type: object
+      additionalProperties: false
+      required: [scope, excludedIds, excludedCount, selectedCount, membership]
+      properties:
+        scope: { $ref: '#/components/schemas/SelectionScope' }
+        excludedIds:
+          type: array
+          maxItems: 5000
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/RecordId' }
+        excludedCount: { type: integer, minimum: 0, maximum: 5000 }
+        selectedCount: { type: integer, minimum: 0, maximum: 100000 }
+        membership:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [recordId, inScope, selected]
+            properties:
+              recordId: { $ref: '#/components/schemas/RecordId' }
+              inScope: { type: boolean }
+              selected: { type: boolean }
+
     QueryRequest:
       type: object
       additionalProperties: false
       description: When viewId is supplied, the View configuration is the base query. Explicit filter, sort, projection, and pagination values temporarily override it for this request and are not persisted. The JSON body is limited to 8 MiB. Any unavailable query-semantic Field reference returns 422; stale presentation-only references are ignored.
       properties:
+        selectionScopeToken: { type: string, minLength: 1, maxLength: 4096 }
+        selectionExcludedIds:
+          type: array
+          maxItems: 5000
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/RecordId' }
         viewId: { $ref: '#/components/schemas/ViewId' }
         lifecycle:
           $ref: '#/components/schemas/LifecycleScope'
@@ -3429,6 +3600,7 @@ components:
             not:
               required: [nextCursor]
       properties:
+        selection: { $ref: '#/components/schemas/SelectionResult' }
         items:
           type: array
           items:

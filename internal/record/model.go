@@ -82,19 +82,21 @@ type FieldDefinition struct {
 }
 
 type QueryRequest struct {
-	ViewID            string
-	ViewIDPresent     bool
-	Lifecycle         string
-	Cursor            string
-	Limit             int
-	Projection        []string
-	ProjectionPresent bool
-	Filter            *domain.FilterNode
-	FilterPresent     bool
-	Sort              []domain.SortSpec
-	SortPresent       bool
-	Search            string
-	SearchPresent     bool
+	SelectionScopeToken  string
+	SelectionExcludedIDs []string
+	ViewID               string
+	ViewIDPresent        bool
+	Lifecycle            string
+	Cursor               string
+	Limit                int
+	Projection           []string
+	ProjectionPresent    bool
+	Filter               *domain.FilterNode
+	FilterPresent        bool
+	Sort                 []domain.SortSpec
+	SortPresent          bool
+	Search               string
+	SearchPresent        bool
 }
 
 type QueryMetadata struct {
@@ -105,6 +107,7 @@ type QueryMetadata struct {
 }
 
 type QueryPlan struct {
+	Selection   *SelectionPage
 	Lifecycle   string
 	Limit       int
 	Projection  []string
@@ -123,6 +126,7 @@ type QueryPosition struct {
 }
 
 type StoredQueryPage struct {
+	Selection       *SelectionResult
 	Items           []Record
 	HasMore         bool
 	NextPosition    *QueryPosition
@@ -132,12 +136,13 @@ type StoredQueryPage struct {
 }
 
 type QueryResult struct {
-	Items           []Record `json:"items"`
-	NextCursor      string   `json:"nextCursor,omitempty"`
-	HasMore         bool     `json:"hasMore"`
-	ChangeCursor    string   `json:"changeCursor"`
-	TotalCount      *int64   `json:"totalCount,omitempty"`
-	UnfilteredTotal *int64   `json:"unfilteredTotal,omitempty"`
+	Selection       *SelectionResult `json:"selection,omitempty"`
+	Items           []Record         `json:"items"`
+	NextCursor      string           `json:"nextCursor,omitempty"`
+	HasMore         bool             `json:"hasMore"`
+	ChangeCursor    string           `json:"changeCursor"`
+	TotalCount      *int64           `json:"totalCount,omitempty"`
+	UnfilteredTotal *int64           `json:"unfilteredTotal,omitempty"`
 }
 
 type DistinctValuesRequest struct {

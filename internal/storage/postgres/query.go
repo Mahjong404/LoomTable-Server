@@ -16,8 +16,17 @@ func (r *Repository) ResolveQuery(ctx context.Context, actorID, tableID, viewID 
 	if r == nil || r.db == nil {
 		return loomrecord.QueryMetadata{}, domain.ErrDependencyMissing
 	}
+	return resolveQueryMetadata(ctx, r.db, actorID, tableID, viewID)
+}
+
+type queryReader interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func resolveQueryMetadata(ctx context.Context, db queryReader, actorID, tableID, viewID string) (loomrecord.QueryMetadata, error) {
 	var metadata loomrecord.QueryMetadata
-	err := r.db.QueryRowContext(ctx, `
+	err := db.QueryRowContext(ctx, `
 		SELECT t.id, t.primary_field_id
 		FROM tables t
 		JOIN bases b ON b.id = t.base_id
@@ -31,7 +40,7 @@ func (r *Repository) ResolveQuery(ctx context.Context, actorID, tableID, viewID 
 	if err != nil {
 		return loomrecord.QueryMetadata{}, fmt.Errorf("resolve query Table: %w", err)
 	}
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := db.QueryContext(ctx, `
 		SELECT id, type, config, deleted_at, is_primary, revision, position_index
 		FROM fields
 		WHERE table_id = $1
@@ -54,7 +63,7 @@ func (r *Repository) ResolveQuery(ctx context.Context, actorID, tableID, viewID 
 		return loomrecord.QueryMetadata{}, fmt.Errorf("resolve query Fields: %w", err)
 	}
 	if viewID != "" {
-		view, err := scanView(r.db.QueryRowContext(ctx, accessibleViewSQL+" AND v.table_id = $3 AND v.deleted_at IS NULL", viewID, actorID, tableID))
+		view, err := scanView(db.QueryRowContext(ctx, accessibleViewSQL+" AND v.table_id = $3 AND v.deleted_at IS NULL", viewID, actorID, tableID))
 		if errors.Is(err, sql.ErrNoRows) {
 			return loomrecord.QueryMetadata{}, domain.ErrNotFound
 		}
@@ -86,10 +95,32 @@ func (r *Repository) QueryRecords(
 		return loomrecord.StoredQueryPage{}, err
 	}
 
+	var selection *selectionState
+	if plan.Selection != nil {
+		state, err := validateSelectionInTx(ctx, tx, actorID, tableID, *plan.Selection)
+		if err != nil {
+			return loomrecord.StoredQueryPage{}, err
+		}
+		metadata, err := resolveQueryMetadata(ctx, tx, actorID, tableID, plan.Selection.Query.ViewID)
+		if err != nil {
+			return loomrecord.StoredQueryPage{}, err
+		}
+		schema, err := loomrecord.QuerySchemaHash(metadata, plan)
+		if err != nil {
+			return loomrecord.StoredQueryPage{}, err
+		}
+		if schema != plan.SchemaHash {
+			return loomrecord.StoredQueryPage{}, &domain.CursorExpiredError{}
+		}
+		selection = &state
+	}
 	builder := &querySQLBuilder{}
 	where, err := buildRecordWhere(builder, tableID, plan)
 	if err != nil {
 		return loomrecord.StoredQueryPage{}, err
+	}
+	if selection != nil {
+		where += " AND EXISTS(SELECT 1 FROM selection_scope_members m WHERE m.scope_id=" + builder.add(selection.Scope.ID) + " AND m.record_id=r.id)"
 	}
 	whereArgs := append([]any(nil), builder.args...)
 	terms, err := buildSortTerms(builder, plan)
@@ -178,6 +209,20 @@ func (r *Repository) QueryRecords(
 	}
 	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(change_sequence), 0) FROM changes WHERE table_id = $1", tableID).Scan(&result.ChangeSequence); err != nil {
 		return loomrecord.StoredQueryPage{}, fmt.Errorf("read query Change tail: %w", err)
+	}
+	if selection != nil {
+		if plan.Selection.ExpectedPageSequence != nil && *plan.Selection.ExpectedPageSequence != result.ChangeSequence {
+			return result, &domain.CursorExpiredError{}
+		}
+		ids := make([]string, 0, len(result.Items))
+		for _, item := range result.Items {
+			ids = append(ids, item.ID)
+		}
+		selected, err := selectionResult(ctx, tx, *selection, plan.Selection.ExcludedIDs, ids)
+		if err != nil {
+			return result, err
+		}
+		result.Selection = &selected
 	}
 	if err := tx.Commit(); err != nil {
 		return loomrecord.StoredQueryPage{}, fmt.Errorf("commit Record query: %w", err)

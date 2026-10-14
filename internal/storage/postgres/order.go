@@ -110,6 +110,9 @@ func (r *Repository) DuplicateRecord(
 	if err := insertRecordChange(ctx, tx, actorID, created, "recordCreated", nil, primaryFieldText(created.Values, fields)); err != nil {
 		return loomrecord.StoredRecordOrderResult{}, err
 	}
+	if err := invalidateSelections(ctx, tx, actorID, tableID, []string{created.ID}); err != nil {
+		return loomrecord.StoredRecordOrderResult{}, err
+	}
 	return finishRecordOrderChange(ctx, tx, tableID, created)
 }
 

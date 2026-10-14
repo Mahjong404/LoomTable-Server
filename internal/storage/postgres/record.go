@@ -108,6 +108,15 @@ func (r *Repository) MutateRecords(
 		results = append(results, result)
 	}
 
+	changedIDs := []string{}
+	for _, result := range results {
+		if result.Status == "applied" {
+			changedIDs = append(changedIDs, result.Record.ID)
+		}
+	}
+	if err := invalidateSelections(ctx, tx, actorID, tableID, changedIDs); err != nil {
+		return loomrecord.StoredMutationResult{}, err
+	}
 	var changeSequence int64
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COALESCE(MAX(change_sequence), 0)

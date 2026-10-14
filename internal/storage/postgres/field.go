@@ -120,6 +120,9 @@ func (r *Repository) CreateField(ctx context.Context, actorID, idempotencyKey st
 	if err := insertMetadataChange(ctx, tx, actorID, "schemaChanged", created.TableID, created.ID, created.Revision); err != nil {
 		return domain.Field{}, err
 	}
+	if err := invalidateSelections(ctx, tx, actorID, created.TableID, nil); err != nil {
+		return domain.Field{}, err
+	}
 	if err := saveIdempotent(ctx, tx, actorID, idempotencyKey, fingerprint, created); err != nil {
 		return domain.Field{}, err
 	}
@@ -175,6 +178,9 @@ func (r *Repository) UpdateField(ctx context.Context, actorID, fieldID string, e
 	if err := insertMetadataChange(ctx, tx, actorID, "schemaChanged", updated.TableID, updated.ID, updated.Revision); err != nil {
 		return domain.Field{}, err
 	}
+	if err := invalidateSelections(ctx, tx, actorID, updated.TableID, nil); err != nil {
+		return domain.Field{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return domain.Field{}, fmt.Errorf("commit update field: %w", err)
 	}
@@ -217,6 +223,9 @@ func (r *Repository) DeleteField(ctx context.Context, actorID, fieldID string, e
 	if err := insertMetadataChange(ctx, tx, actorID, "schemaChanged", deleted.TableID, deleted.ID, deleted.Revision); err != nil {
 		return err
 	}
+	if err := invalidateSelections(ctx, tx, actorID, deleted.TableID, nil); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit delete field: %w", err)
 	}
@@ -254,6 +263,9 @@ func (r *Repository) RestoreField(ctx context.Context, actorID, fieldID string, 
 		return domain.Field{}, fmt.Errorf("restore field: %w", err)
 	}
 	if err := insertMetadataChange(ctx, tx, actorID, "schemaChanged", restored.TableID, restored.ID, restored.Revision); err != nil {
+		return domain.Field{}, err
+	}
+	if err := invalidateSelections(ctx, tx, actorID, restored.TableID, nil); err != nil {
 		return domain.Field{}, err
 	}
 	if err := tx.Commit(); err != nil {

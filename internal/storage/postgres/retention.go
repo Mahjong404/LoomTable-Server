@@ -20,6 +20,10 @@ func (r *Repository) CleanupRetention(
 	if r == nil || r.db == nil {
 		return maintenance.CleanupStats{}, domain.ErrDependencyMissing
 	}
+	// Short-lived scopes are independent of mutation/change retention settings.
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM selection_scopes WHERE id IN (SELECT id FROM selection_scopes WHERE expires_at<=clock_timestamp() ORDER BY expires_at LIMIT 8)`); err != nil {
+		return maintenance.CleanupStats{}, err
+	}
 	if changeAge == 0 && idempotencyAge == 0 {
 		return maintenance.CleanupStats{}, nil
 	}

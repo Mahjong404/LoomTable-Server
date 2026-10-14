@@ -18,14 +18,16 @@ type mutationRequest struct {
 }
 
 type recordQueryRequest struct {
-	ViewID     json.RawMessage `json:"viewId"`
-	Lifecycle  json.RawMessage `json:"lifecycle"`
-	Cursor     json.RawMessage `json:"cursor"`
-	Limit      json.RawMessage `json:"limit"`
-	Projection json.RawMessage `json:"projection"`
-	Filter     json.RawMessage `json:"filter"`
-	Sort       json.RawMessage `json:"sort"`
-	Search     json.RawMessage `json:"search"`
+	SelectionScopeToken  json.RawMessage `json:"selectionScopeToken"`
+	SelectionExcludedIDs json.RawMessage `json:"selectionExcludedIds"`
+	ViewID               json.RawMessage `json:"viewId"`
+	Lifecycle            json.RawMessage `json:"lifecycle"`
+	Cursor               json.RawMessage `json:"cursor"`
+	Limit                json.RawMessage `json:"limit"`
+	Projection           json.RawMessage `json:"projection"`
+	Filter               json.RawMessage `json:"filter"`
+	Sort                 json.RawMessage `json:"sort"`
+	Search               json.RawMessage `json:"search"`
 }
 
 type mapQueryRequest struct {
@@ -583,6 +585,15 @@ func decodeRecordQueryRequest(r *http.Request) (loomrecord.QueryRequest, error) 
 		return loomrecord.QueryRequest{}, err
 	}
 	request := loomrecord.QueryRequest{}
+	var err error
+	request.SelectionScopeToken, _, err = decodeOptionalJSONString(wire.SelectionScopeToken, "/selectionScopeToken")
+	if err != nil {
+		return request, err
+	}
+	request.SelectionExcludedIDs, err = decodeSelectionIDs(wire.SelectionExcludedIDs, "/selectionExcludedIds")
+	if err != nil {
+		return request, err
+	}
 	if value, present, err := decodeOptionalJSONString(wire.ViewID, "/viewId"); err != nil {
 		return loomrecord.QueryRequest{}, err
 	} else if present {

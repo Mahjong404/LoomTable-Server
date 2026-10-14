@@ -903,7 +903,7 @@ func TestAtomicChoiceMigrationForwardPreservesLegacyData(t *testing.T) {
 		t.Fatal("007 rewrote legacy Field")
 	}
 	var migrations int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&migrations); err != nil || migrations != 8 {
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&migrations); err != nil || migrations != 9 {
 		t.Fatalf("migration count=%d %v", migrations, err)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM mutation_identity_guards`).Scan(&guards); err != nil || guards != 0 {
