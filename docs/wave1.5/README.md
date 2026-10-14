@@ -66,3 +66,5 @@ DoD：批准合同与OpenAPI一致；真实实现/权限/事务/兼容测试完�
 > 在本Server仓库读取docs/wave1.5/README.md、CONTRIBUTING、领域/架构与当前OpenAPI。处理本次明确授权的Gx Gate，先产出并审查领域与OpenAPI合同，再在合同批准后实现Server及隔离测试。保持Future关闭，保留用户改动。交付合同/PR/完整Server commit、capability与兼容矩阵、真实测试和回滚信息，供Plugin之后固定pin接入。不修改Plugin/Figma；按既有用户授权完成审查、合并和安全发布，生产数据安全与必要裁决要求持续适用。
 
 正式handoff必须替换Gx、指定合同评审还是已批准实现、提供文档commit/审批与隔离环境信息。若仅授权文档整理，就停在文档，不执行Server切片。
+
+G5 统一 Table Audit、事件时 typed metadata 与分页前 Record 投影的合同、Writer 覆盖及云端隔离证据见 [G5 合同](contracts/g5-table-audit.md) / [G5 交付](deliveries/g5-table-audit.md)。源码 OpenAPI 0.8.0/tableAudit，生产仍 0.4.0；本轮不发布 007–010、不实现完整 Table Rollback、不修改 Plugin。实际 PR/CI/Review 与合并状态以 GitHub 为准。

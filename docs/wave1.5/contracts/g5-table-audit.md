@@ -1,6 +1,6 @@
 # G5 — Unified Table Audit and Record Projection
 
-Status: contract frozen under the authorized G5 product boundary; source implementation and QA pending. No production release authorized.
+Status: contract frozen under the authorized G5 product boundary; implemented and cloud-isolated QA verified at 9ca3eef4b60d542d8e0293b848867f451b315ff6; normal PR review/CI determine merge readiness. No production release authorized.
 
 ## Facts and scope
 
@@ -22,13 +22,13 @@ Each Record field entry has fieldId and before/after typed cells. A cell has pre
 
 ## Read protocol
 
-GET /v1/tables/{tableId}/audit is additive. category=all (default) or record; the latter includes Record data/lifecycle and converted data, excludes moves and all metadata/order effects. Optional recordId, fieldId, viewId, actorId, operationId, clientMutationId, since, until filters intersect. clientMutationId is always restricted to the requesting Actor. Fields/categories/filter predicates run before count, cursor and limit. Limit 1..500, default 100. Invalid IDs/filter/cursor return existing 400 structured errors; unauthenticated 401, inaccessible or deleted ancestor Table 404. Deleted Records/Fields/Views can still be filtered under an active accessible Table. Audit grants no write permission.
+GET /v1/tables/{tableId}/audit is additive. category=all (default) or record; the latter includes Record data/lifecycle and converted data, excludes moves and all metadata/order effects. Optional recordId, fieldId, viewId, actorId, operationId, clientMutationId, since, until filters intersect. clientMutationId is always restricted to the requesting Actor. Fields/categories/filter predicates run before count, cursor and limit. Count is the number of matching Audit Events at the anchored high sequence, not distinct Records or operations. Limit 1..500, default 100. Invalid IDs/filter/cursor return existing 400 structured errors; unauthenticated 401, inaccessible or deleted ancestor Table 404. Deleted Records/Fields/Views can still be filtered under an active accessible Table. Audit grants no write permission.
 
 First page anchors a high sequence. Signed 30-minute cursor binds Actor, Table, canonical filters, high sequence, before position, and retention generation. Subsequent pages exclude newer events and retain the same count at the same high sequence; response items, count and availability are read in one Repeatable Read snapshot. Any cleanup changing the bound retention generation expires the cursor with 410 CURSOR_EXPIRED. A fresh page returns remaining events and explicit incomplete availability, not invented expired content. Each page contains hasMore and optional nextCursor; no grouping truncation claim is made: an operation may span pages and exact operationId reunites it. Filter changes require a fresh cursor.
 
 ## Retention and availability
 
-Audit uses configured Change retention, with bounded cleanup and its own durable watermark. Receipt deletion does not delete Audit; Audit deletion does not delete permanent identity guards. Availability reports capturedSince (010 installation), earliest readable event time or null, expiredThrough plus actual expired event-time bound, legacyExpiredThrough (separate legacy Change sequence domain), legacy event presence and uninstrumented writer presence, plus fullTableRollbackAvailable=false. Retention disabled means no automatic expiry, not complete past coverage. Thirty days is a policy; it does not prove thirty days exist. Legacy import cannot recover already expired Changes or missing payloads. UI must show unknown/unrecorded metadata and disable complete historical rollback. Current Actor/Table permission is checked on every request, including continuation; a cursor is not authentication.
+Audit uses configured Change retention, with bounded cleanup and its own durable watermark. Receipt deletion does not delete Audit; Audit deletion does not delete permanent identity guards. Availability reports capturedSince (010 installation), earliest readable Table event time or null (unfiltered availability; count follows the requested projection), expiredThrough plus actual expired event-time bound, legacyExpiredThrough (separate legacy Change sequence domain), legacy event presence and uninstrumented writer presence, plus fullTableRollbackAvailable=false. Retention disabled means no automatic expiry, not complete past coverage. Thirty days is a policy; it does not prove thirty days exist. Legacy import cannot recover already expired Changes or missing payloads. UI must show unknown/unrecorded metadata and disable complete historical rollback. Current Actor/Table permission is checked on every request, including continuation; a cursor is not authentication.
 
 ## Migration 010 and downgrade
 
