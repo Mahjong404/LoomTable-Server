@@ -67,4 +67,4 @@ DoD：批准合同与OpenAPI一致；真实实现/权限/事务/兼容测试完�
 
 正式handoff必须替换Gx、指定合同评审还是已批准实现、提供文档commit/审批与隔离环境信息。若仅授权文档整理，就停在文档，不执行Server切片。
 
-G5 统一 Table Audit、事件时 typed metadata 与分页前 Record 投影的合同、Writer 覆盖及云端隔离证据见 [G5 合同](contracts/g5-table-audit.md) / [G5 交付](deliveries/g5-table-audit.md)。源码 OpenAPI 0.8.0/tableAudit，生产仍 0.4.0；本轮不发布 007–010、不实现完整 Table Rollback、不修改 Plugin。实际 PR/CI/Review 与合并状态以 GitHub 为准。
+G5 统一 Table Audit、事件时 typed metadata 与分页前 Record 投影的合同、Writer 覆盖及云端隔离证据见 [G5 合同](contracts/g5-table-audit.md) / [G5 交付](deliveries/g5-table-audit.md)。源码 OpenAPI 0.8.0/tableAudit，生产仍 0.4.0；本轮不发布 007–011、不实现完整 Table Rollback、不修改 Plugin。实际 PR/CI/Review 与合并状态以 GitHub 为准。

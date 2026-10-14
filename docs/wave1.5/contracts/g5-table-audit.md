@@ -1,6 +1,6 @@
 # G5 — Unified Table Audit and Record Projection
 
-Status: contract frozen under the authorized G5 product boundary; implemented and cloud-isolated QA verified at ab2d31e7eb18893ebbadfb2e912ee489902fe66b; normal PR review/CI determine merge readiness. No production release authorized.
+Status: contract frozen under the authorized G5 product boundary; implemented and cloud-isolated QA verified at 6f0abf1112652b4c1b0e7110b8cee0ede131815f; normal PR review/CI determine merge readiness. No production release authorized.
 
 ## Facts and scope
 
