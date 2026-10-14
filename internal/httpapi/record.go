@@ -124,6 +124,9 @@ func (s *Server) queryRecords(w http.ResponseWriter, r *http.Request, tableID st
 		writeDecodeError(w, r, err)
 		return
 	}
+	if request.SelectionScopeToken != "" && !s.requireReady(w, r) {
+		return
+	}
 	result, err := s.records.Query(r.Context(), actorIDFrom(r), tableID, request)
 	if err != nil {
 		writeDomainError(w, r, err)
@@ -631,12 +634,16 @@ func decodeRecordQueryRequest(r *http.Request) (loomrecord.QueryRequest, error) 
 		request.ProjectionPresent = true
 	}
 	if wire.Filter != nil {
-		filter, err := decodeFilterNode(wire.Filter, "/filter")
-		if err != nil {
-			return loomrecord.QueryRequest{}, err
+		if string(wire.Filter) == "null" && request.SelectionScopeToken != "" {
+			request.FilterPresent = true
+		} else {
+			filter, err := decodeFilterNode(wire.Filter, "/filter")
+			if err != nil {
+				return loomrecord.QueryRequest{}, err
+			}
+			request.Filter = filter
+			request.FilterPresent = true
 		}
-		request.Filter = filter
-		request.FilterPresent = true
 	}
 	if wire.Sort != nil {
 		if !strings.HasPrefix(strings.TrimSpace(string(wire.Sort)), "[") {

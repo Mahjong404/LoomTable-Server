@@ -287,6 +287,24 @@ func (r *Repository) ResolveSelection(ctx context.Context, actor, table string, 
 	return result, tx.Commit()
 }
 
+// Scope validation must precede metadata errors in the same snapshot. The page
+// transaction repeats authoritative validation/schema checks before reading rows.
+func (r *Repository) ResolveSelectionQuery(ctx context.Context, actor, table string, page record.SelectionPage) (record.QueryMetadata, error) {
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return record.QueryMetadata{}, err
+	}
+	defer tx.Rollback()
+	if _, err = validateSelectionInTx(ctx, tx, actor, table, page); err != nil {
+		return record.QueryMetadata{}, err
+	}
+	metadata, err := resolveQueryMetadata(ctx, tx, actor, table, page.Query.ViewID)
+	if err != nil {
+		return metadata, err
+	}
+	return metadata, tx.Commit()
+}
+
 // Caller holds Table, after business changes and before receipt/commit. Immutable
 // members + the existing predicate distinguish actual transitions from revisions.
 func invalidateSelections(ctx context.Context, tx *sql.Tx, actor, table string, changedIDs []string) error {

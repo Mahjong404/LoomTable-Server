@@ -66,18 +66,10 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 	if !ok {
 		return QueryResult{}, domain.ErrDependencyMissing
 	}
-	metadata, err := queryStore.ResolveQuery(ctx, actorID, tableID, request.ViewID)
-	if err != nil {
-		return QueryResult{}, err
-	}
-	plan, err := buildQueryPlan(request, metadata)
-	if err != nil {
-		return QueryResult{}, err
-	}
-
 	scopeID := ""
+	var selected *SelectionPage
 	if request.SelectionScopeToken != "" {
-		if plan.Lifecycle != "active" {
+		if request.Lifecycle != "" && request.Lifecycle != "active" {
 			return QueryResult{}, domain.NewValidationError(domain.ValidationIssue{Path: "/lifecycle", Code: "format", Message: "Selection requires active Records"})
 		}
 		if err := ValidateSelectionIDs(request.SelectionExcludedIDs, nil); err != nil {
@@ -88,10 +80,29 @@ func (s *Service) Query(ctx context.Context, actorID, tableID string, request Qu
 			return QueryResult{}, err
 		}
 		scopeID = token.ScopeID
-		plan.Selection = &SelectionPage{Token: token, Query: SelectionQuery{request.ViewID, request.Filter, request.FilterPresent, request.Search}, ExcludedIDs: request.SelectionExcludedIDs, Now: s.now().UTC()}
+		selected = &SelectionPage{Token: token, Query: SelectionQuery{request.ViewID, request.Filter, request.FilterPresent, request.Search}, ExcludedIDs: request.SelectionExcludedIDs, Now: s.now().UTC()}
 	} else if len(request.SelectionExcludedIDs) > 0 {
 		return QueryResult{}, domain.NewValidationError(requiredQueryIssue("/selectionScopeToken", "selectionScopeToken is required for exclusions"))
 	}
+	var metadata QueryMetadata
+	var err error
+	if selected != nil {
+		store, ok := s.store.(SelectionQueryStore)
+		if !ok {
+			return QueryResult{}, domain.ErrDependencyMissing
+		}
+		metadata, err = store.ResolveSelectionQuery(ctx, actorID, tableID, *selected)
+	} else {
+		metadata, err = queryStore.ResolveQuery(ctx, actorID, tableID, request.ViewID)
+	}
+	if err != nil {
+		return QueryResult{}, err
+	}
+	plan, err := buildQueryPlan(request, metadata)
+	if err != nil {
+		return QueryResult{}, err
+	}
+	plan.Selection = selected
 	signer, err := s.cursorSigner(ctx)
 	if err != nil {
 		return QueryResult{}, err

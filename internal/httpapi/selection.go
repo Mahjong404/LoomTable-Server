@@ -37,8 +37,10 @@ func decodeSelectionQuery(raw json.RawMessage) (record.SelectionQuery, error) {
 		return query, err
 	}
 	if wire.Filter != nil {
-		query.Filter, err = decodeFilterNode(wire.Filter, "/query/filter")
 		query.FilterPresent = true
+		if string(wire.Filter) != "null" {
+			query.Filter, err = decodeFilterNode(wire.Filter, "/query/filter")
+		}
 	}
 	return query, err
 }
@@ -59,6 +61,9 @@ func decodeSelectionIDs(raw json.RawMessage, path string) ([]string, error) {
 func (s *Server) selectionScope(w http.ResponseWriter, r *http.Request, table string, resolve bool) {
 	if r.Method != http.MethodPost {
 		writeAPIError(w, r, 404, "NOT_FOUND", "resource not found")
+		return
+	}
+	if !s.requireReady(w, r) {
 		return
 	}
 	service, ok := s.records.(selections)

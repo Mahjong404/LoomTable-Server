@@ -65,6 +65,10 @@ type SelectionStore interface {
 	ResolveSelection(context.Context, string, string, SelectionPage, []string) (SelectionResult, error)
 }
 
+type SelectionQueryStore interface {
+	ResolveSelectionQuery(context.Context, string, string, SelectionPage) (QueryMetadata, error)
+}
+
 // Preserve a bounded pre-fold input for revalidation: case folding can expand
 // a valid 500-code-point Search beyond the pre-fold Query input limit.
 func CanonicalSelectionQuery(query SelectionQuery, plan QueryPlan) SelectionQuery {

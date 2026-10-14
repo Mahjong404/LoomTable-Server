@@ -852,4 +852,90 @@ func TestWholeQuerySelection(t *testing.T) {
 			t.Fatal("stored query budget", err)
 		}
 	})
+
+	t.Run("review HTTP null override invalid View and readiness full schemas", func(t *testing.T) {
+		tab := table(t)
+		create(t, tab, "Alpha")
+		create(t, tab, "Beta")
+		view, err := cat.GetView(ctx, actor, tab.InitialView.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := view.Config.(domain.GridViewConfig)
+		cfg.Filter = &domain.FilterNode{Kind: "rule", FieldID: tab.PrimaryField.ID, Operator: "contains", Value: json.RawMessage(`"beta"`)}
+		view, err = cat.UpdateView(ctx, actor, view.ID, catalog.ViewUpdate{ExpectedRevision: view.Revision, Type: view.Type, Config: cfg})
+		if err != nil {
+			t.Fatal(err)
+		}
+		server := httpapi.New(config.Load(), postgres.ReadyChecker(db), httpapi.Dependencies{Authenticator: repo, Catalog: cat, Records: records})
+		call := func(server *httpapi.Server, suffix string, body any, status int, code string) map[string]any {
+			t.Helper()
+			raw, _ := json.Marshal(body)
+			req := httptest.NewRequest("POST", "/v1/tables/"+tab.Table.ID+"/records/"+suffix, bytes.NewReader(raw))
+			req.Header.Set("Authorization", "Bearer "+boot.Token.Secret)
+			req.Header.Set("Content-Type", "application/json")
+			res := httptest.NewRecorder()
+			server.Handler().ServeHTTP(res, req)
+			if res.Code != status {
+				t.Fatalf("%s returned %d, want %d", suffix, res.Code, status)
+			}
+			var value map[string]any
+			if err := json.Unmarshal(res.Body.Bytes(), &value); err != nil {
+				t.Fatal(err)
+			}
+			schema := "#/components/schemas/ErrorResponse"
+			if status == 200 {
+				schema = "#/components/schemas/SelectionResult"
+				if suffix == "query" {
+					schema = "#/components/schemas/QueryResult"
+				}
+			}
+			if err := compileOpenAPIResponseSchema(t, schema).Validate(value); err != nil {
+				t.Fatal("full response schema", err)
+			}
+			if code != "" && value["error"].(map[string]any)["code"] != code {
+				t.Fatal("wrong structured error code")
+			}
+			return value
+		}
+		query := map[string]any{"viewId": view.ID, "filter": nil}
+		result := call(server, "selection-scope", map[string]any{"requestId": requestID(), "query": query}, 200, "")
+		scope := result["scope"].(map[string]any)
+		if scope["count"] != float64(2) {
+			t.Fatal("null did not clear saved Filter")
+		}
+		token := scope["token"].(string)
+		call(server, "selection-scope/resolve", map[string]any{"scopeToken": token, "query": query}, 200, "")
+		page := call(server, "query", map[string]any{"viewId": view.ID, "filter": nil, "selectionScopeToken": token}, 200, "")
+		if page["totalCount"] != float64(2) {
+			t.Fatal("nullable scoped Query disagreed with Scope")
+		}
+		if err = cat.DeleteView(ctx, actor, view.ID, view.Revision); err != nil {
+			t.Fatal(err)
+		}
+		call(server, "query", map[string]any{"viewId": view.ID, "filter": nil, "selectionScopeToken": token}, 410, "QUERY_SNAPSHOT_EXPIRED")
+		call(server, "query", map[string]any{"viewId": view.ID}, 404, "NOT_FOUND")
+		fresh := acquire(t, tab.Table.ID, record.SelectionQuery{})
+		requests := []struct {
+			suffix string
+			body   any
+		}{{"selection-scope", map[string]any{"requestId": requestID(), "query": map[string]any{}}}, {"selection-scope/resolve", map[string]any{"scopeToken": fresh.Scope.Token, "query": map[string]any{}}}, {"query", map[string]any{"selectionScopeToken": fresh.Scope.Token}}}
+		pending := config.Load()
+		pending.MigrationRequired = true
+		explicit := httpapi.New(pending, postgres.ReadyChecker(db), httpapi.Dependencies{Authenticator: repo, Catalog: cat, Records: records})
+		for _, req := range requests {
+			call(explicit, req.suffix, req.body, 503, "MIGRATION_REQUIRED")
+		}
+		if _, err = db.ExecContext(ctx, `DROP TRIGGER tables_revoke_selection_scopes ON tables; DROP TRIGGER bases_revoke_selection_scopes ON bases; DROP TRIGGER workspaces_revoke_selection_scopes ON workspaces; DROP FUNCTION revoke_ancestor_selection_scopes(); DROP TABLE selection_scope_members; DROP TABLE selection_scopes; DELETE FROM schema_migrations WHERE version='009_selection_scopes'`); err != nil {
+			t.Fatal(err)
+		}
+		for _, req := range requests {
+			call(server, req.suffix, req.body, 503, "MIGRATION_REQUIRED")
+		}
+		call(server, "query", map[string]any{}, 200, "")
+		if err = postgres.ApplyMigrations(ctx, db, filepath.Join("..", "..", "..", "migrations")); err != nil {
+			t.Fatal(err)
+		}
+		acquire(t, tab.Table.ID, record.SelectionQuery{})
+	})
 }
