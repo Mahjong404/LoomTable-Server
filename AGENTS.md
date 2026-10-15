@@ -4,6 +4,13 @@ Codex、DSH、Devin 及其他 Agent 开始 Server 任务时必须先读 [docs/ag
 
 工作前阅读 `CONTRIBUTING.md`、`CONTEXT.md`、`docs/wave1.5/README.md`、目标 Gate 合同/交付记录与 `docs/api/openapi.yaml`。核实真实 Git HEAD、当前部署、Migration、capability、权限与测试证据；不得以“源码已合并”冒充“生产已部署”。
 
+## 本地 TODO 收集与阶段规划（强制）
+
+- 用户的新 Bug、功能建议、性能/技术债、运维与发布风险，**先评估归属、优先级、依赖、建议 Gate/开发阶段及验收条件，登记**到 gitignored `docs/local/maintenance/todo.md`；即使本轮可立即解决，也要先记为 Todo/In Progress，完成验证后才改 Done。对未获本轮授权的事项只登记并等待下一次阶段规划，不自行扩张 Gate/迁移/生产发布。
+- 每次 Server 任务规划前先读本地 TODO，并核对正式 G1–G6 合同、当前源码/生产版本、迁移及能力门控；维护台账不替代 Gate 合同或 Plugin 的唯一 Wave 状态。跨仓事项在 Server/Plugin 各自本地台账互相引用稳定 ID，不复制私有细节。
+- 每项记录至少包含来源、日期、复现/风险、稳定 ID、状态（Todo/Planned/In Progress/Blocked/Done/Deferred）、Owner、预计阶段、部署门槛和验收证据。云端缓存清理/生产迁移的 TODO 不意味着获得生产破坏性操作授权。
+- `docs/local/` 保持 Git 忽略；干净 Clone 缺少本地台账时先说明无法访问，向维护者索取，不自行建立第二套受跟踪的权威 TODO。
+
 ## Server 云端运行和测试（强制）
 
 - **不得在开发者本机启动或运行 LoomTable Server、PostgreSQL、Docker/Compose 服务栈或服务端数据库集成测试。** HTTP/DB/并发/迁移/备份恢复/降级等测试在云端专用隔离环境执行。本地只可做不启动服务的源码阅读、纯逻辑单测、编译、格式与静态检查。
