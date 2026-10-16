@@ -8,9 +8,33 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  go:
-    name: Go tests and vet
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.scope.outputs.full }}
+      docker: ${{ steps.scope.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine validation scope and check whitespace
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 .github/scripts/test_ci_scope.py
+          python3 .github/scripts/ci-scope.py
+
+  tests:
+    name: Go unit, HTTP, schema and PostgreSQL integration
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -42,8 +66,30 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
+  go:
+    name: Go tests and vet
+    needs: [scope, tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require scope success and the applicable test result
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          FULL: ${{ needs.scope.outputs.full }}
+          TEST_RESULT: ${{ needs.tests.result }}
+        run: |
+          test "$SCOPE_RESULT" = success
+          if [ "$FULL" = true ]; then
+            test "$TEST_RESULT" = success
+          else
+            test "$FULL" = false
+            test "$TEST_RESULT" = skipped
+          fi
+
   docker:
     name: Docker build and Compose validation
+    needs: scope
+    if: needs.scope.outputs.docker == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

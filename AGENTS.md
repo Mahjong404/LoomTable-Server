@@ -22,8 +22,10 @@ Codex、DSH、Devin 及其他 Agent 开始 Server 任务时必须先读 [docs/ag
 
 ## 跨项目工具、合同和 Git
 
+涉及分支、Worktree、提交身份、Issue/PR、Review、合并、发布、CI 或清理，先读 [Git 工作流](docs/agent-ops/git-workflow.md)。
+
 - Server 一次实施一个明确授权的 API Gate，先冻结领域/OpenAPI/并发/回滚合同。Server 不修改 Plugin 源码、Figma 设计或 Plugin API pin。确需直接读取 Figma 时**只允许已有 Figwright plugin**；**禁止官方 Figma MCP**；不可用时不猜测设计事实。
-- 按 `CONTRIBUTING.md` 使用正常 git/gh 与聚焦的 PR；优先本地完成静态检查、云端完成隔离 QA 后集中推送。不得恢复旧 Codex GitHub MCP，不关闭必需 CI，也不反复制造 PR/重跑工作流。
+- 按 Git 工作流和 `CONTRIBUTING.md` 交付聚焦 PR；本执行环境远端操作默认使用已授权 GitHub connector，失败报告且不自动退回 CLI。本地静态检查、云端隔离 QA 完成后集中推送，保留必需 CI。
 - 测试必须覆盖实际权限、事务、CAS/Receipt/Idempotency/Unknown Outcome、协议兼容与 Migration；破坏性验证只有云端专用隔离环境可执行。
 
 ## Codex Subagent 使用限制

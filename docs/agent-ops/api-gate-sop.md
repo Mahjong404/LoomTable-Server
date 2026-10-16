@@ -22,7 +22,7 @@ Domain→Service→Postgres→HTTP沿既有层和事务seam；业务与必需Aud
 
 本地无服务静态/纯逻辑，云端新可销毁环境完整HTTP/OpenAPI/PG事务/并发/Race、Migration/Restore、旧新binary与重启/丢Response。固定测试源码SHA、证据哈希、隔离环境、真实命令/退出码、SKIP/Not Verified，CI不替代集成。
 
-按CONTRIBUTING检查diff/ignored/untracked并精确stage；私有报告/日志/备份不入Git。成熟后集中push一条主PR，不微改反复CI、不关门禁、不恢复旧GitHub MCP。默认0 Subagent；独立性由正常外部Review提供，作者自审不冒充独立PASS。修具体finding、核最新HEAD的CI/Review，按用户授权与仓库规则合并。Merge与生产Deploy分别记录。
+按 [Git 工作流](git-workflow.md) 与 CONTRIBUTING 检查 diff/ignored/untracked，精确选择本任务文件，集中交付一条主 PR；私有报告/日志/备份不入 Git。默认 0 Subagent，独立性由正常外部 Review 提供，作者自审不冒充独立 PASS。修具体 finding、核最新 HEAD 的 CI/Review，按用户授权与仓库规则合并。Merge 与生产 Deploy 分别记录。
 
 ## Readiness与Plugin handoff
 
